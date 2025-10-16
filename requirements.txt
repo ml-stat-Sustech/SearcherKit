@@ -1,0 +1,4 @@
+crawl4ai
+beautifulsoup4
+openai
+requests
