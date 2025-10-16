@@ -1,12 +1,11 @@
-# Agent_Factory
+# WebAgent
 
-`Agent_Factory` is a reusable multi-agent CLI framework that currently ships **WebWalker** and **WebDancer** web agents. The shared abstraction lives in `src/agents/base.py`, which implements the six-stage workflow (receive request → initial reasoning → action selection → tool execution → observation handling → final answer). Each concrete agent only needs to provide its prompt, tools, and a small amount of agent-specific logic.
+`WebAgent` is a reusable multi-agent CLI framework that currently ships **WebWalker** and **WebDancer** web agents. The shared abstraction lives in `src/agents/base.py`, which implements the six-stage workflow (receive request → initial reasoning → action selection → tool execution → observation handling → final answer). Each concrete agent only needs to provide its prompt, tools, and a small amount of agent-specific logic.
 
 Directory overview:
 
 - `src/agents/`: base class plus concrete agents (`webwalker.py`, `webdancer.py`)
-- `src/common/`: factory helpers (`builder.py`), shared state (`state.py`), reusable utilities (`utils.py`)
-- `src/memory/`: WebWalker memory extraction and critic logic
+- `src/common/`: factory helpers (`builder.py`), shared state (`state.py`), reusable utilities (`utils.py`), and the shared memory manager
 - `src/prompts/`: prompt templates per agent
 - `src/tools/`: reusable tool implementations (WebWalker’s `visit_page`; WebDancer’s `search`/`visit`)
 - `src/cli.py`: unified CLI entry that selects agents via command-line flags
@@ -64,12 +63,12 @@ export OPENAI_API_KEY=local-demo  # any non-empty string
 Now run any agent through the unified CLI:
 
 ```bash
-python -m WebAgent.Agent_Factory.src.cli \
+python -m webagent.src.cli \
   --agent webwalker \
   --website https://example.com \
   --query "Find the latest announcements."
 
-python -m WebAgent.Agent_Factory.src.cli \
+python -m webagent.src.cli \
   --agent webdancer \
   --query "查找ACL 2025行业轨道的截稿时间和会场地址"
 ```
@@ -122,7 +121,6 @@ To add your own agent on top of this framework:
    - Update `src/common/builder.py:create_agent` to route a new `--agent` value and return `AgentRunContext(agent=my_agent, request=...)`.
 
 5. **Invoke from CLI**  
-   - Run `python -m WebAgent.Agent_Factory.src.cli --agent myagent ...`. The unified CLI now streams the new agent’s reasoning/actions without further plumbing.
+   - Run `python -m webagent.src.cli --agent myagent ...`. The unified CLI now streams the new agent’s reasoning/actions without further plumbing.
 
 Both CLIs stream each workflow stage—prompts, model thoughts, tool invocations, tool responses, and final answers—directly to stdout. Interrupt safely with `Ctrl+C`.
-

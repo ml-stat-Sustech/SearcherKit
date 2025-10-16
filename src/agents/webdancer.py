@@ -5,15 +5,8 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .base import (
-    AgentDecision,
-    AgentState,
-    BaseAgent,
-    BaseTool,
-    Message,
-    ToolCall,
-    ToolResult,
-)
+from .base import AgentDecision, AgentState, BaseAgent, Message
+from ..tools.base import BaseTool, ToolCall, ToolResult
 from ..llm.client import LLMClient
 from ..prompts import build_webdancer_system_prompt, build_webdancer_user_prompt
 from ..tools import WEBDANCER_TOOLS

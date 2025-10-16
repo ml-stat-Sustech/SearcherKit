@@ -4,6 +4,8 @@ import abc
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Literal, Optional
 
+from ..tools.base import BaseTool, ToolCall, ToolResult
+
 
 @dataclass
 class Message:
@@ -12,22 +14,6 @@ class Message:
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     metadata: Optional[Dict[str, Any]] = None
-
-
-@dataclass
-class ToolCall:
-    """Normalized representation of a tool invocation requested by the agent."""
-
-    name: str
-    arguments: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ToolResult:
-    """Result returned by an executed tool."""
-
-    call: ToolCall
-    output: str
 
 
 @dataclass
@@ -63,17 +49,6 @@ class AgentState:
     scratchpad: Dict[str, Any] = field(default_factory=dict)
     tool_results: List[ToolResult] = field(default_factory=list)
     steps_taken: int = 0
-
-
-class BaseTool(abc.ABC):
-    """Minimal base class for runtime tool implementations."""
-
-    name: str
-    description: str
-
-    @abc.abstractmethod
-    def run(self, call: ToolCall, state: AgentState) -> str:
-        """Execute the tool with the provided arguments."""
 
 
 class BaseAgent(abc.ABC):

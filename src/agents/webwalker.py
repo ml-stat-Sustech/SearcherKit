@@ -6,17 +6,10 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .base import (
-    AgentDecision,
-    AgentState,
-    BaseAgent,
-    BaseTool,
-    Message,
-    ToolCall,
-    ToolResult,
-)
+from .base import AgentDecision, AgentState, BaseAgent, Message
+from ..tools.base import BaseTool, ToolCall, ToolResult
 from ..llm.client import LLMClient
-from ..memory import MemoryManager
+from ..common.memory_manager import MemoryManager
 from ..prompts import SYSTEM_EXPLORER
 from ..common.state import STATE
 from ..tools import WEBWALKER_TOOLS

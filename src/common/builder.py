@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
-from ..agents.base import BaseAgent, BaseTool
+from ..agents.base import BaseAgent
+from ..tools.base import BaseTool
 from ..llm.client import LLMClient, build_llm_from_env
 
 if TYPE_CHECKING:  # pragma: no cover - only for static type checkers

@@ -1,7 +1,8 @@
 import asyncio
 from typing import Dict
 
-from ..agents.base import AgentState, BaseTool, ToolCall
+from ..agents.base import AgentState
+from .base import BaseTool, ToolCall
 from ..common.state import STATE
 from ..common.utils import extract_links_with_text, get_info
 

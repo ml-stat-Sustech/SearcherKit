@@ -1,5 +1,6 @@
 """Tool registries for different agents."""
 
+from .base import BaseTool, ToolCall, ToolResult
 from .visit_multi_turn import VisitPage
 from .search import SearchTool
 from .visit_single_turn import VisitTool
@@ -11,6 +12,9 @@ WEBDANCER_TOOLS = {
 }
 
 __all__ = [
+    "BaseTool",
+    "ToolCall",
+    "ToolResult",
     "VisitPage",
     "SearchTool",
     "VisitTool",

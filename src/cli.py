@@ -4,7 +4,8 @@ import argparse
 import os
 from typing import IO, List, Optional
 
-from .agents.base import AgentEvent, Message, ToolResult
+from .agents.base import AgentEvent, Message
+from .tools.base import ToolResult
 from .common import AgentRunContext, create_agent
 from .llm import EchoLLM
 

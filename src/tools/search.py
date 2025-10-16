@@ -7,7 +7,8 @@ from typing import List
 
 import requests
 
-from ..agents.base import AgentState, BaseTool, ToolCall
+from ..agents.base import AgentState
+from .base import BaseTool, ToolCall
 
 DEFAULT_MAX_QUERIES = int(os.getenv("MAX_MULTIQUERY_NUM", 3))
 SERPER_KEY = os.getenv("GOOGLE_SEARCH_KEY")

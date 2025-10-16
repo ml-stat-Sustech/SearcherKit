@@ -8,7 +8,8 @@ from typing import Dict, List, Union
 import requests
 from openai import OpenAI
 
-from ..agents.base import AgentState, BaseTool, ToolCall
+from ..agents.base import AgentState
+from .base import BaseTool, ToolCall
 
 DEFAULT_MAX_QUERIES = int(os.getenv("MAX_MULTIQUERY_NUM", 3))
 JINA_API_KEY = os.getenv("JINA_API_KEY")
