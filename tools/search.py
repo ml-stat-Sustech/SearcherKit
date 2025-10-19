@@ -90,11 +90,11 @@ class SearchTool(BaseTool):
 if __name__ == '__main__':
     # --- Configuration ---
     ES_HOST = 'http://192.168.77.12:9200'
-    # INDEX_NAME = 'wiki20251001_qwen3-embedding-0.6b'
-    # MODEL_NAME = 'Qwen3-Embedding-0.6B'
+    INDEX_NAME = 'wiki20251001_qwen3-embedding-0.6b'
+    MODEL_NAME = 'Qwen3-Embedding-0.6B'
 
-    INDEX_NAME = 'wiki20251001_e5-base-v2'
-    MODEL_NAME = 'e5-base-v2' # 
+    # INDEX_NAME = 'wiki20251001_e5-base-v2'
+    # MODEL_NAME = 'e5-base-v2' # 
 
     RETRIEVER_TYPE = 'dense' # Use 'bm25', 'dense'
 

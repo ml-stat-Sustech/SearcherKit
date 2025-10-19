@@ -127,7 +127,7 @@ class VisitTool(BaseTool):
 
 if __name__ == '__main__':
     ES_HOST = 'http://192.168.77.12:9200'
-    INDEX_NAME = 'wiki20251001_e5-base-v2'
+    INDEX_NAME = 'wiki20251001_qwen3-embedding-0.6b'
 
     try:
         print("Connecting to Elasticsearch...")
