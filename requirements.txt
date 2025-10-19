@@ -1,4 +1,9 @@
-crawl4ai
-beautifulsoup4
-openai
-requests
+elasticsearch==8.19.1
+torch==2.8.1
+transformers==4.57.1
+sentence-transformers==5.1.1
+mwparserfromhell==0.7.2
+tqdm
+modelscope
+huggingface_hub
+accelerate
