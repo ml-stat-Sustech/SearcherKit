@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Union
+from typing import Dict, List, Union, TYPE_CHECKING
 
 import requests
 from openai import OpenAI
 
-from ..agents.base import AgentState
 from .base import BaseTool, ToolCall
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..agents.base import AgentState
 
 DEFAULT_MAX_QUERIES = int(os.getenv("MAX_MULTIQUERY_NUM", 3))
 JINA_API_KEY = os.getenv("JINA_API_KEY")
@@ -43,7 +45,7 @@ class VisitTool(BaseTool):
     name = "visit"
     description = "Visit one or more webpages and summarise content relevant to the stated goal."
 
-    def run(self, call: ToolCall, state: AgentState) -> str:
+    def run(self, call: ToolCall, state: "AgentState") -> str:
         if not JINA_API_KEY:
             return "[Visit] Missing JINA_API_KEY environment variable."
         if not DASHSCOPE_KEY:

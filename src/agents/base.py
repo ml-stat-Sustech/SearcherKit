@@ -79,11 +79,14 @@ class BaseAgent(abc.ABC):
     def run(self, user_input: Any) -> Iterator[AgentEvent]:
         """Execute the agent workflow and yield streaming events."""
 
+        # step 1
         state = self.handle_user_message(user_input)
         yield AgentEvent(stage="receive", payload=state.messages[-1])
 
         while state.steps_taken < self.max_steps:
             state.steps_taken += 1
+
+            # step 2
             assistant_reply = self.generate_step_response(state)
             if assistant_reply:
                 state.messages.append(Message(role="assistant", content=assistant_reply))
@@ -94,6 +97,7 @@ class BaseAgent(abc.ABC):
                     yield AgentEvent(stage="final", payload=pending_final)
                     break
 
+            # step 3
             decision = self.decide_next_action(state)
             yield AgentEvent(stage="decision", payload=decision)
 
@@ -102,12 +106,15 @@ class BaseAgent(abc.ABC):
                 yield AgentEvent(stage="final", payload=final_answer)
                 break
 
+            # step 4
             if decision.kind == "tool":
                 if decision.tool_call is None:
                     raise ValueError("Tool decision missing ToolCall details.")
                 result = self.execute_tool(decision.tool_call, state)
                 state.tool_results.append(result)
                 yield AgentEvent(stage="tool_result", payload=result)
+
+                # step 5
                 follow_ups = self.process_tool_result(state, result)
                 if follow_ups:
                     for text in follow_ups:

@@ -46,16 +46,19 @@ You can host Qwen or any other model locally and expose it via the OpenAI API sc
 
 ```bash
 pip install vllm
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
 python -m vllm.entrypoints.openai.api_server \
-  --model /mnt/sharedata/ssd_large/common/LLMs/Qwen2.5-3B-Instruct/ \
-  --port 8000 \
-  --dtype float16
+ --model /mnt/sharedata/ssd_large/common/LLMs/Qwen/Qwen2.5-32B-Instruct/ \
+ --port 8000 \
+ --dtype float16 \
+ --tensor-parallel-size 4 \
+ --gpu-memory-utilization 0.8
 ```
 
 Then configure the CLI to hit the local endpoint:
 
 ```bash
-export OPENAI_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen2.5-3B-Instruct/
+export OPENAI_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen/Qwen2.5-32B-Instruct/
 export OPENAI_MODEL_SERVER=http://127.0.0.1:8000/v1
 export OPENAI_API_KEY=local-demo  # any non-empty string
 ```

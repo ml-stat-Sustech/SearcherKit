@@ -1,10 +1,12 @@
 import asyncio
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
 
-from ..agents.base import AgentState
 from .base import BaseTool, ToolCall
 from ..common.state import STATE
 from ..common.utils import extract_links_with_text, get_info
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..agents.base import AgentState
 
 
 def _normalize_button_label(raw_label: str) -> str:
@@ -23,7 +25,7 @@ class VisitPage(BaseTool):
         'object with a single key "button" that matches one of the listed clickable buttons.'
     )
 
-    def run(self, call: ToolCall, state: AgentState) -> str:
+    def run(self, call: ToolCall, state: "AgentState") -> str:
         button = call.arguments.get("button")
         if not isinstance(button, str):
             return 'Invalid input: expected {"button": "label"}.'

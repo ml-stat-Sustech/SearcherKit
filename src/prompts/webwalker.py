@@ -21,6 +21,7 @@ Notice:
 - When you can not find the information you need, you should visit page of previous page recursively until you find the information you need.
 - You can not say "I'm sorry, but I cannot assist with this request."!!! You must explore.
 - You do not need to provide the final answer, but you must explore.
+- The ONLY valid tool name is visit_page. Never output any other tool identifier (such as None); if you cannot take action yet, continue reasoning instead.
 - Action Input should be valid JSON.
 
 Begin!

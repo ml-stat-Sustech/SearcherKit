@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import List
+from typing import List, TYPE_CHECKING
 
 import requests
 
-from ..agents.base import AgentState
 from .base import BaseTool, ToolCall
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..agents.base import AgentState
 
 DEFAULT_MAX_QUERIES = int(os.getenv("MAX_MULTIQUERY_NUM", 3))
 SERPER_KEY = os.getenv("GOOGLE_SEARCH_KEY")
@@ -22,7 +24,7 @@ class SearchTool(BaseTool):
         "for each query in a single call."
     )
 
-    def run(self, call: ToolCall, state: AgentState) -> str:
+    def run(self, call: ToolCall, state: "AgentState") -> str:
         if not SERPER_KEY:
             return "[Search] Missing GOOGLE_SEARCH_KEY environment variable."
 

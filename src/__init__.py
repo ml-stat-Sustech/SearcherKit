@@ -1,6 +1,6 @@
 """Agent_Factory exposes CLI entry points for multiple web agents."""
 
-from .cli import main
+from .main import main
 
 webwalker_main = main
 webdancer_main = main

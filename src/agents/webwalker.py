@@ -80,6 +80,8 @@ class WebWalkerAgent(BaseAgent):
         action = self._extract_action_block(latest)
         if action:
             tool_name, arguments = action
+            if tool_name.lower() == "none" or tool_name not in self.tools:
+                return AgentDecision(kind="continue", message=None)
             return AgentDecision(kind="tool", tool_call=ToolCall(name=tool_name, arguments=arguments))
 
         return AgentDecision(kind="continue", message=None)

@@ -28,6 +28,7 @@ class WebDancerAgent(BaseAgent):
         super().__init__(tools=list(tools or WEBDANCER_TOOLS.values()), max_steps=max_steps)
         self.llm = llm
 
+    # step 1
     def handle_user_message(self, user_input: WebDancerRequest) -> AgentState:
         state = AgentState(user_input=user_input)
         state.messages.append(Message(role="system", content=build_webdancer_system_prompt()))
@@ -35,9 +36,11 @@ class WebDancerAgent(BaseAgent):
         state.scratchpad["query"] = user_input.query
         return state
 
+    # step 2
     def generate_step_response(self, state: AgentState) -> str:
         return self.llm.complete(self._messages_to_dicts(state.messages))
 
+    # step 3
     def decide_next_action(self, state: AgentState) -> AgentDecision:
         if not state.messages or state.messages[-1].role != "assistant":
             return AgentDecision(kind="continue")
@@ -54,6 +57,7 @@ class WebDancerAgent(BaseAgent):
                 return AgentDecision(kind="tool", tool_call=ToolCall(name=name, arguments=arguments))
         return AgentDecision(kind="continue")
 
+    # step 5
     def process_tool_result(self, state: AgentState, result: ToolResult) -> Optional[List[str]]:
         response = f"<tool_response>\n{result.output}\n</tool_response>"
         state.messages.append(Message(role="user", content=response))
