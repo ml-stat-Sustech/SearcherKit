@@ -1,8 +1,16 @@
 """Agent_Factory exposes CLI entry points for multiple web agents."""
 
-from .main import main
+def main(*args, **kwargs):
+    from .main import main as _main
+    return _main(*args, **kwargs)
 
-webwalker_main = main
-webdancer_main = main
+
+def webwalker_main(*args, **kwargs):
+    return main(*args, **kwargs)
+
+
+def webdancer_main(*args, **kwargs):
+    return main(*args, **kwargs)
+
 
 __all__ = ["main", "webwalker_main", "webdancer_main"]

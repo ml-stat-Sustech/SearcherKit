@@ -16,6 +16,7 @@ def eval_result(
     judge_model: Optional[str] = None,
     judge_prompt: Optional[str] = None,
     skip_existing: bool = True,
+    use_separate_judge_llm: bool = False,
 ) -> None:
     """
     Evaluate prediction results against reference answers and generate a report.
@@ -29,12 +30,15 @@ def eval_result(
         skip_existing: When True, reuse scores already stored in output_path and
             only evaluate unseen questions. When False, re-evaluate all entries
             regardless of existing records.
+        use_separate_judge_llm: When True, instantiate the judge client using
+            OPENAI_JUDGE_* environment variables (falls back to OPENAI_* when False).
     """
     info_lookup = load_webwalker_ground_truth()
     evaluator_fn, _ = create_llm_judge_evaluator(
         dataset=dataset,
         judge_model=judge_model,
         judge_prompt=judge_prompt,
+        use_separate_judge_env=use_separate_judge_llm,
     )
 
     data_list = []
@@ -187,6 +191,11 @@ if __name__ == "__main__":
         dest="force_rejudge",
         help="Re-evaluate all entries even if they already exist in the output file.",
     )
+    parser.add_argument(
+        "--use-separate-judge-llm",
+        action="store_true",
+        help="Use judge-specific OPENAI_JUDGE_* environment variables instead of the default model.",
+    )
     args = parser.parse_args()
 
     eval_result(
@@ -196,4 +205,5 @@ if __name__ == "__main__":
         judge_model=args.judge_model,
         judge_prompt=args.judge_prompt,
         skip_existing=not args.force_rejudge,
+        use_separate_judge_llm=args.use_separate_judge_llm,
     )

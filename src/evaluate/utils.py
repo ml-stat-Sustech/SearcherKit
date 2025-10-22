@@ -58,7 +58,9 @@ Reference Answer:
 Candidate Answer:
 {response}
 
-Respond with either "Correct" if the candidate fully solves the task, or "Incorrect" otherwise. You may optionally add a brief justification after the verdict."""
+Respond with either "Correct" if the candidate fully solves the task, or "Incorrect" otherwise. Please give response 
+with Correct/Incorrect first, then you may optionally add a brief justification after the verdict.
+"""
 
 JUDGE_PROMPT_BROWSECOMP_OFFICIAL = """You are a grading assistant.
 
@@ -104,6 +106,19 @@ dataset: str = ""
 judge_client: Optional[LLMClient] = None
 
 
+def _build_judge_default_kwargs() -> Optional[Dict[str, object]]:
+    """Collect default kwargs for judge completions from the environment."""
+
+    default_kwargs: Dict[str, object] = {}
+    temperature = os.environ.get("OPENAI_JUDGE_TEMPERATURE") or os.environ.get("OPENAI_TEMPERATURE")
+    if temperature:
+        default_kwargs["temperature"] = float(temperature)
+    max_tokens = os.environ.get("OPENAI_JUDGE_MAX_OUTPUT_TOKENS") or os.environ.get("OPENAI_MAX_OUTPUT_TOKENS")
+    if max_tokens:
+        default_kwargs["max_tokens"] = int(max_tokens)
+    return default_kwargs or None
+
+
 def is_correct_judgement(judgement: str) -> bool:
     normalised = (judgement or "").strip().lower()
     if not normalised:
@@ -140,6 +155,7 @@ def configure_llm_judge(
     *,
     model_override: Optional[str] = None,
     prompt_override: Optional[str] = None,
+    use_separate_judge_env: bool = False,
 ) -> None:
     global dataset, judge_prompt, judge_client
 
@@ -155,7 +171,21 @@ def configure_llm_judge(
     if judge_prompt is None:
         raise ValueError("judge_prompt is required for llm_judge evaluations.")
 
-    if model_override:
+    if use_separate_judge_env:
+        model_override = model_override or os.environ.get("OPENAI_JUDGE_MODEL")
+        base_url = os.environ.get("OPENAI_JUDGE_MODEL_SERVER")
+        api_key = os.environ.get("OPENAI_JUDGE_API_KEY")
+        if not model_override:
+            raise ValueError(
+                "OPENAI_JUDGE_MODEL must be set when --use-separate-judge-llm is enabled for evaluation."
+            )
+        judge_client = OpenAIChatClient(
+            model=model_override,
+            base_url=base_url,
+            api_key=api_key,
+            default_kwargs=_build_judge_default_kwargs(),
+        )
+    elif model_override:
         judge_client = OpenAIChatClient(model=model_override)
     else:
         judge_client = build_llm_from_env()
@@ -225,11 +255,13 @@ def create_llm_judge_evaluator(
     dataset: str = "webwalker",
     judge_model: Optional[str] = None,
     judge_prompt: Optional[str] = None,
+    use_separate_judge_env: bool = False,
 ) -> Tuple[Callable[[Dict[str, Any]], Dict[str, Any]], Optional[float]]:
     configure_llm_judge(
         dataset,
         model_override=judge_model,
         prompt_override=judge_prompt,
+        use_separate_judge_env=use_separate_judge_env,
     )
 
     def _llm_judge_eval(data: Dict[str, Any]) -> Dict[str, Any]:

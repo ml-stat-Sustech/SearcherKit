@@ -152,22 +152,6 @@ def run_single_query(
         judge_llm_client=judge_llm_client,
     )
 
-    if not getattr(args, "_printed_llm_info", False):
-        agent_llm = getattr(context.agent, "llm", None)
-        agent_name = None
-        if agent_llm:
-            agent_name = agent_llm.name() if hasattr(agent_llm, "name") else agent_llm.__class__.__name__
-        memory = getattr(context.agent, "memory", None)
-        judge_llm = getattr(memory, "judge_llm", None) if memory else None
-        judge_name = None
-        if judge_llm:
-            judge_name = judge_llm.name() if hasattr(judge_llm, "name") else judge_llm.__class__.__name__
-        if agent_name:
-            emit_func(f"🤖 Agent LLM: {agent_name}")
-        if judge_name:
-            emit_func(f"⚖️ Judge LLM: {judge_name}")
-        setattr(args, "_printed_llm_info", True)
-
     final_answer = ""
 
     for event in context.agent.run(context.request):

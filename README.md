@@ -137,8 +137,8 @@ You can still call the standalone evaluator on any JSONL produced earlier (e.g.,
 
 ```bash
 python -m webagent.src.evaluate.evl \
-  --input_path /tmp/webwalker_predictions.jsonl \
-  --output_path /tmp/webwalker_predictions_scored.jsonl \
+  --input_path /mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions.jsonl \
+  --output_path /mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_scored.jsonl \
   --judge_dataset webwalker \
   --force-rejudge
 ```
@@ -185,6 +185,12 @@ python -m webagent.src.main \
   --agent webwalker \
   --dataset-name ... \
   --output-path ... \
+  --use-separate-judge-llm
+
+# Separate judge LLM for standalone evaluator
+python -m webagent.src.evaluate.evl \
+  --input_path ... \
+  --output_path ... \
   --use-separate-judge-llm
 ```
 

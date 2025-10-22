@@ -120,9 +120,40 @@ def main(argv: Optional[List[str]] = None) -> None:
         emit(text, end=end, log_handle=_LOG_FILE_HANDLE)
 
     try:
+        existing_questions: set[str] = set()
+        if os.path.exists(args.output_path):
+            try:
+                with open(args.output_path, "r", encoding="utf-8") as existing_handle:
+                    for line in existing_handle:
+                        try:
+                            entry = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        question_value = entry.get("question")
+                        if isinstance(question_value, str):
+                            existing_questions.add(question_value)
+                if existing_questions:
+                    emit_func(f"🔁 Found {len(existing_questions)} existing records in {args.output_path}")
+                else:
+                    emit_func(f"🔁 No existing records in {args.output_path}")
+
+            except Exception as read_exc:  # noqa: BLE001
+                emit_func(f"⚠️  Unable to read existing output file: {read_exc}")
+
+        agent_model_name = os.environ.get("OPENAI_MODEL") or os.environ.get("OPENAI_MODEL_NAME")
+        judge_model_name = None
+        if args.use_separate_judge_llm:
+            judge_model_name = os.environ.get("OPENAI_JUDGE_MODEL") or agent_model_name
+        else:
+            judge_model_name = agent_model_name
+
         emit_func(f"🚀 Agent: {args.agent}")
         emit_func(f"📦 Dataset: {args.dataset_name}")
         emit_func(f"🔀 Split: {args.dataset_split}")
+        if agent_model_name:
+            emit_func(f"🤖 Agent LLM: {agent_model_name}")
+        if judge_model_name:
+            emit_func(f"⚖️ Judge LLM: {judge_model_name}")
         emit_func("=" * 80)
 
         dataset = load_dataset(
@@ -133,7 +164,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         if args.max_samples:
             total_samples = min(total_samples, args.max_samples)
 
-        with open(args.output_path, "w", encoding="utf-8") as out_handle:
+        with open(args.output_path, "a", encoding="utf-8") as out_handle:
             processed_count = 0
             for index, item in enumerate(dataset, start=1):
                 if args.max_samples and index > args.max_samples:
@@ -149,6 +180,11 @@ def main(argv: Optional[List[str]] = None) -> None:
                 if args.agent == "webwalker" and not website_value:
                     emit_func(f"⚠️  Sample {index} skipped: missing 'root_url' field.")
                     continue
+
+                if query_value in existing_questions:
+                    emit_func(f"⏭️  Sample {index} skipped: question already processed.")
+                    continue
+
                 processed_count += 1
                 emit_func(f"▶️  Processing sample {processed_count}/{total_samples}")
                 emit_func(f"❓ Query: {query_value}")
@@ -179,6 +215,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 }
                 out_handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 out_handle.flush()
+                existing_questions.add(query_value)
         try:
             with open(args.output_path, "r", encoding="utf-8") as verify_handle:
                 lines = verify_handle.readlines()
