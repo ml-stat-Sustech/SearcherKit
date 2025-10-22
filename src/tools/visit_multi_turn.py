@@ -24,6 +24,7 @@ class VisitPage(BaseTool):
         "Follow a discovered button on the current website. The action input must be a JSON "
         'object with a single key "button" that matches one of the listed clickable buttons.'
     )
+    arguments_schema = {"button": "string; label of the clickable button to press"}
 
     def run(self, call: ToolCall, state: "AgentState") -> str:
         button = call.arguments.get("button")

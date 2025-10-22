@@ -44,6 +44,10 @@ Respond strictly in JSON:
 class VisitTool(BaseTool):
     name = "visit"
     description = "Visit one or more webpages and summarise content relevant to the stated goal."
+    arguments_schema = {
+        "url": ["https://example.com/page", "..."],
+        "goal": "string; description of the information you want to extract from the pages",
+    }
 
     def run(self, call: ToolCall, state: "AgentState") -> str:
         if not JINA_API_KEY:

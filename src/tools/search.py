@@ -23,6 +23,7 @@ class SearchTool(BaseTool):
         "Performs batched web searches. Provide an array field 'query'; the tool retrieves top results "
         "for each query in a single call."
     )
+    arguments_schema = {"query": ["keyword or natural-language search request", "..."]}
 
     def run(self, call: ToolCall, state: "AgentState") -> str:
         if not SERPER_KEY:

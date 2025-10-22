@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import json
+import pdb
 import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -13,7 +13,6 @@ from ..common.memory_manager import MemoryManager
 from ..prompts import SYSTEM_EXPLORER
 from ..common.state import STATE
 from ..tools import WEBWALKER_TOOLS
-from ..common.utils import extract_links_with_text, get_info
 
 
 @dataclass
@@ -22,6 +21,7 @@ class WebWalkerRequest:
 
     website: str
     query: str
+    debug: bool = False
 
 
 class WebWalkerAgent(BaseAgent):
@@ -41,11 +41,11 @@ class WebWalkerAgent(BaseAgent):
     # ---- Stage 1 ---------------------------------------------------------
     def handle_user_message(self, user_input: WebWalkerRequest) -> AgentState:
         STATE.reset(user_input.website)
-        html, markdown, _ = asyncio.run(get_info(user_input.website, screenshot=False))
-        buttons = extract_links_with_text(html)
+        root_button_label = "ROOT"
+        STATE.register_button(root_button_label, user_input.website)
 
-        system_prompt = self._build_system_prompt(user_input.query)
-        user_prompt = self._format_initial_prompt(markdown, buttons, user_input.query, user_input.website)
+        system_prompt = self._build_system_prompt()
+        user_prompt = self._format_initial_prompt(root_button_label, user_input.query, user_input.website)
 
         state = AgentState(user_input=user_input)
         state.messages.append(Message(role="system", content=system_prompt))
@@ -54,11 +54,20 @@ class WebWalkerAgent(BaseAgent):
             {
                 "query": user_input.query,
                 "website": user_input.website,
-                "last_buttons": buttons,
-                "last_markdown": markdown,
+                "root_button": root_button_label,
+                "last_buttons": "",
+                "last_markdown": "",
             }
         )
         self.memory.reset(user_input.query)
+        self._prepend_react_prompt(state)
+        debug_mode = user_input.debug if hasattr(user_input, "debug") else False
+        if debug_mode:
+            formatted_messages = self._messages_to_dicts(state.messages)
+            print("[WebWalker] Initial LLM messages:")
+            for idx, message in enumerate(formatted_messages, start=1):
+                print(f"  {idx}. ({message['role']}) {message['content']}")
+            pdb.set_trace()
         return state
 
     # ---- Stage 2+ --------------------------------------------------------
@@ -89,7 +98,7 @@ class WebWalkerAgent(BaseAgent):
     # ---- Stage 5 ---------------------------------------------------------
     def process_tool_result(self, state: AgentState, result: ToolResult) -> Optional[List[str]]:
         observation_text = result.output
-        observation_message = f"Observation: {observation_text}"
+        observation_message = f"Observation: {observation_text}\nThought: "
         state.messages.append(Message(role="user", content=observation_message))
 
         follow_ups: List[str] = []
@@ -132,38 +141,59 @@ class WebWalkerAgent(BaseAgent):
             f"Consider rerunning with a larger limit. (Query: {query})"
         )
 
-    def _build_system_prompt(self, query: str) -> str:
-        tool_descs: List[str] = []
-        for tool in self.tools.values():
-            tool_descs.append(f"{tool.name}: {tool.description}")
-        return SYSTEM_EXPLORER.format(
-            tool_descs="\n\n".join(tool_descs),
-            tool_names=", ".join(self.tools.keys()),
-            query=f"Question: {query}",
+    def _build_system_prompt(self) -> str:
+        return (
+            "You are WebWalker, a web navigation agent that follows the ReAct reasoning pattern. "
+            "Rely on the latest user message for explicit tool usage rules and available actions."
         )
+
+    def _prepend_react_prompt(self, state: AgentState) -> None:
+        if not state.messages:
+            return
+
+        # Format messages prior to rewriting the final prompt so downstream components
+        # can access both historical and updated content.
+        formatted_prefix = [self._format_as_text_message(message) for message in state.messages[:-1]]
+        original_payload = state.messages[-1].content
+        tool_descs, tool_names = self._render_tool_descriptions()
+
+        react_prompt = SYSTEM_EXPLORER.format(
+            tool_descs=tool_descs,
+            tool_names=tool_names,
+            query=original_payload,
+        )
+        final_message = Message(role="user", content=react_prompt)
+        state.messages[-1] = final_message
+        formatted_prefix.append(self._format_as_text_message(final_message))
+        state.scratchpad["text_messages"] = formatted_prefix
+
+    def _render_tool_descriptions(self) -> Tuple[str, str]:
+        desc_blocks: List[str] = []
+        tool_names: List[str] = []
+        for tool in self.tools.values():
+            tool_names.append(tool.name)
+            schema = getattr(tool, "arguments_schema", None)
+            schema_text = json.dumps(schema, ensure_ascii=False, indent=2) if schema else "{}"
+            desc_blocks.append(f"{tool.name}: {tool.description}\nParameters:\n{schema_text}")
+        return "\n\n".join(desc_blocks), ", ".join(tool_names)
+
+    def _format_as_text_message(self, message: Message) -> str:
+        prefix = message.role.capitalize()
+        return f"{prefix}: {message.content}".strip()
 
     def _format_initial_prompt(
         self,
-        markdown: str,
-        buttons: str,
+        root_button_label: str,
         query: str,
         website: str,
     ) -> str:
-        response = "🧭 website information:\n\n"
-        if markdown:
-            response += markdown + "\n\n"
-        else:
-            response += "🧭 The information of the current page is not accessible\n\n"
-
-        if buttons:
-            response += "🖱 clickable button:\n\n" + buttons + "\n\nEach button is wrapped in a <button> tag"
-        else:
-            response += (
-                "🖱 clickable button:\n\nNo clickable buttons were detected.\n\nEach button is wrapped in a <button> tag"
-            )
-
-        start_prompt = f"query:\n{query} \nofficial website:\n{website}"
-        start_prompt += "\nObservation:" + response + "\n\n"
+        observation = (
+            f"Use the visit_page tool with button \"{root_button_label}\" to open the homepage "
+            "and gather website information."
+        )
+        start_prompt = (
+            f"Question:\n{query}\nOfficial website:\n{website}\n\nObservation:\n{observation}\n\nThought: "
+        )
         return start_prompt
 
     def _messages_to_dicts(self, messages: List[Message]) -> List[Dict[str, str]]:

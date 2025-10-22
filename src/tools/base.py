@@ -29,6 +29,7 @@ class BaseTool(abc.ABC):
 
     name: str
     description: str
+    arguments_schema: Optional[Dict[str, Any]] = None
 
     @abc.abstractmethod
     def run(self, call: ToolCall, state: "AgentState") -> str:
