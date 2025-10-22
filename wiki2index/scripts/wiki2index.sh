@@ -1,13 +1,15 @@
-export CUDA_VISIBLE_DEVICES=$1
-export PATH=~/.conda/envs/webagent/bin:$PATH
-#''
-# Huggingface settings
-export HF_ENDPOINT=https://hf-mirror.com
-export HF_TOKEN="REMOVED_REVOKED_SECRET"
-export HF_HOME=/mnt/sharedata/ssd_large/common/LLMs
-export HF_DATASETS_CACHE=/mnt/sharedata/ssd_large/common/datasets/
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-cd eswiki
+export CUDA_VISIBLE_DEVICES=${1:-0}
+export PATH=~/.conda/envs/webagent/bin:$PATH
+# Huggingface settings
+export HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+export HF_TOKEN=${HF_TOKEN:-"REMOVED_REVOKED_SECRET"}
+export HF_HOME=${HF_HOME:-/mnt/sharedata/ssd_large/common/LLMs}
+export HF_DATASETS_CACHE=${HF_DATASETS_CACHE:-/mnt/sharedata/ssd_large/common/datasets/}
+
+cd "${PROJECT_ROOT}/eswiki"
 
 # vanilla
 # python wiki2index_links.py \
@@ -33,14 +35,14 @@ cd eswiki
 #     --gpu_batch_size 20 \
 #     --dense-vector
 
-MODEL_NAME=Qwen3-Embedding-4B
+MODEL_NAME=${MODEL_NAME:-Qwen3-Embedding-4B}
 python wiki2index_links.py \
-    --model_name ${HF_HOME}/${MODEL_NAME} \
-    --embedding_dim 2560 \
-    --prompt_strategy none \
-    --index_name wiki20251001_${MODEL_NAME,,} \
-    --cpu_batch_size 500 \
-    --gpu_batch_size 4 \
+    --model_name "${HF_HOME}/${MODEL_NAME}" \
+    --embedding_dim "${EMBEDDING_DIM:-2560}" \
+    --prompt_strategy "${PROMPT_STRATEGY:-none}" \
+    --index_name "wiki20251001_${MODEL_NAME,,}" \
+    --cpu_batch_size "${CPU_BATCH_SIZE:-500}" \
+    --gpu_batch_size "${GPU_BATCH_SIZE:-4}" \
     --dense-vector
 
 # MODEL_NAME=Qwen3-Embedding-8B
@@ -62,4 +64,5 @@ python wiki2index_links.py \
 #     --cpu_batch_size 500 \
 #     --gpu_batch_size 8 \
 #     --dense-vector
-cd ..
+
+cd "${PROJECT_ROOT}"
