@@ -1,22 +1,21 @@
 import json
 import os
 import time
-import concurrent.futures
 from typing import Any, Dict, Optional
 
 from tqdm import tqdm
 
-from .utils import create_evaluator, load_webwalker_ground_truth
+from .utils import create_llm_judge_evaluator, load_webwalker_ground_truth
 
 
 def eval_result(
     input_path: str,
     output_path: str,
     *,
-    evaluator_type: str = "langchain",
     dataset: str = "webwalker",
     judge_model: Optional[str] = None,
     judge_prompt: Optional[str] = None,
+    skip_existing: bool = True,
 ) -> None:
     """
     Evaluate prediction results against reference answers and generate a report.
@@ -24,34 +23,36 @@ def eval_result(
     Parameters:
         input_path: Path to the input predictions file.
         output_path: Path to save the evaluation results and report.
-        evaluator_type: Which evaluator to use ('langchain' or 'llm_judge').
         dataset: Dataset name used for llm_judge configuration.
         judge_model: Override model for llm_judge.
         judge_prompt: Override prompt template for llm_judge.
+        skip_existing: When True, reuse scores already stored in output_path and
+            only evaluate unseen questions. When False, re-evaluate all entries
+            regardless of existing records.
     """
     info_lookup = load_webwalker_ground_truth()
-    evaluator_fn, future_timeout = create_evaluator(
-        evaluator_type,
+    evaluator_fn, _ = create_llm_judge_evaluator(
         dataset=dataset,
         judge_model=judge_model,
         judge_prompt=judge_prompt,
     )
 
     data_list = []
-    visited = []
+    visited = set()
 
-    if not os.path.exists(output_path):
+    if not os.path.exists(output_path) or not skip_existing:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("")
 
-    with open(output_path, "r", encoding="utf-8") as f:
-        for line in f:
-            visited.append(json.loads(line)["question"])
+    if skip_existing and os.path.exists(output_path):
+        with open(output_path, "r", encoding="utf-8") as f:
+            for line in f:
+                visited.add(json.loads(line)["question"])
 
     with open(input_path, "r", encoding="utf-8") as f:
         for line in f:
             data = json.loads(line)
-            if data["question"] in visited:
+            if skip_existing and data["question"] in visited:
                 continue
             gt = info_lookup.get(data["question"])
             if gt:
@@ -74,27 +75,25 @@ def eval_result(
     cnt = 0
 
     with tqdm(total=len(data_list)) as pbar:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-            future_to_data = {executor.submit(call, data): data for data in data_list}
-            for future in concurrent.futures.as_completed(future_to_data):
-                try:
-                    outputs = future.result(timeout=future_timeout) if future_timeout else future.result()
-                    data = future_to_data[future]
-                    data["score"] = outputs["score"]
-                    if outputs.get("raw") is not None:
-                        data["judge_details"] = outputs["raw"]
+        for data in data_list:
+            try:
+                outputs = call(data)
+                print(outputs)
+                data["score"] = outputs["score"]
+                if outputs.get("raw") is not None:
+                    data["judge_details"] = outputs["raw"]
 
-                    cnt += data["score"]
-                    s += 1
+                cnt += data["score"]
+                s += 1
 
-                    with open(output_path, "a", encoding="utf-8") as f:
-                        f.write(json.dumps(data, ensure_ascii=False) + "\n")
+                with open(output_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(data, ensure_ascii=False) + "\n")
 
-                    pbar.update(1)
-                    print("Current accuracy:", cnt / s)
+                pbar.update(1)
+                print("Current accuracy:", cnt / s)
 
-                except Exception as e:
-                    print(f"Error processing data: {e}")
+            except Exception as e:
+                print(f"Error processing data: {e}")
 
     single_source_easy, single_source_medium, single_source_hard = [], [], []
     multi_source_easy, multi_source_medium, multi_source_hard = [], [], []
@@ -163,14 +162,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, help="Input prediction result path")
-    parser.add_argument("--output_path", type=str, help="Evaluation output path")
-    parser.add_argument(
-        "--evaluator",
-        type=str,
-        default="langchain",
-        choices=["langchain", "llm_judge"],
-        help="Choose evaluator backend",
-    )
+    parser.add_argument("--output_path", type=str, default='/mnt/sharedata/hdd/beier/Agent/WebWalker/llm_judge_eval.jsonl', help="Evaluation output path")
     parser.add_argument(
         "--judge_dataset",
         type=str,
@@ -189,13 +181,19 @@ if __name__ == "__main__":
         default=None,
         help="Override prompt template for llm_judge",
     )
+    parser.add_argument(
+        "--force-rejudge",
+        action="store_true",
+        dest="force_rejudge",
+        help="Re-evaluate all entries even if they already exist in the output file.",
+    )
     args = parser.parse_args()
 
     eval_result(
         args.input_path,
         args.output_path,
-        evaluator_type=args.evaluator,
         dataset=args.judge_dataset,
         judge_model=args.judge_model,
         judge_prompt=args.judge_prompt,
+        skip_existing=not args.force_rejudge,
     )

@@ -7,7 +7,6 @@ from typing import IO, List, Optional
 from .agents.base import AgentEvent, Message
 from .tools.base import ToolResult
 from .common import AgentRunContext, create_agent
-from .llm import EchoLLM
 
 
 _LOG_FILE_HANDLE: Optional[IO[str]] = None
@@ -70,13 +69,11 @@ def _render_event(event: AgentEvent) -> None:
 
 
 def _build_context(args: argparse.Namespace) -> AgentRunContext:
-    llm_client = EchoLLM() if args.llm == "echo" else None
     return create_agent(
         args.agent,
         query=args.query,
         website=args.website,
         max_rounds=args.max_rounds,
-        llm=llm_client,
     )
 
 
@@ -95,12 +92,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         type=int,
         default=None,
         help="Maximum number of agent actions to perform (defaults depend on agent).",
-    )
-    parser.add_argument(
-        "--llm",
-        choices=["auto", "echo"],
-        default="auto",
-        help="LLM backend to use (auto=environment-based, echo=deterministic fallback).",
     )
     parser.add_argument("--log-file", help="Path to a log file for saving the CLI output.")
     args = parser.parse_args(argv)

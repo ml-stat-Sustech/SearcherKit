@@ -8,15 +8,22 @@ from typing import IO, List, Optional
 
 from datasets import load_dataset
 
-from .llm import EchoLLM
 from .common.runtime import (
     emit,
     ensure_parent_directory,
     run_single_query,
 )
+from .evaluate.evl import eval_result
 
 
 _LOG_FILE_HANDLE: Optional[IO[str]] = None
+
+
+def _default_eval_output_path(prediction_path: str) -> str:
+    base, ext = os.path.splitext(prediction_path)
+    if ext:
+        return f"{base}_eval{ext}"
+    return f"{prediction_path}_eval.jsonl"
 
 
 def main(argv: Optional[List[str]] = None) -> None:
@@ -53,16 +60,37 @@ def main(argv: Optional[List[str]] = None) -> None:
         default=None,
         help="Maximum number of agent actions to perform (defaults depend on agent).",
     )
-    parser.add_argument(
-        "--llm",
-        choices=["auto", "echo"],
-        default="auto",
-        help="LLM backend to use (auto=environment-based, echo=deterministic fallback).",
-    )
     parser.add_argument("--log-file", help="Path to a log file for saving the CLI output.")
+    parser.add_argument(
+        "--run-eval",
+        action="store_true",
+        help="Run evaluation on the generated predictions once the dataset sweep completes.",
+    )
+    parser.add_argument(
+        "--eval-output-path",
+        help="Destination jsonl file for saving evaluation scores (defaults to <output_path> with '_eval' suffix).",
+    )
+    parser.add_argument(
+        "--judge-dataset",
+        default="webwalker",
+        help="Dataset identifier used for evaluation prompts and ground truth lookup.",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default=None,
+        help="Override the evaluation LLM model (defaults to environment configuration).",
+    )
+    parser.add_argument(
+        "--judge-prompt",
+        default=None,
+        help="Override the evaluation prompt template.",
+    )
+    parser.add_argument(
+        "--force-rejudge",
+        action="store_true",
+        help="Re-evaluate all questions even if they already exist in the evaluation output file.",
+    )
     args = parser.parse_args(argv)
-
-    llm_client = EchoLLM() if args.llm == "echo" else None
 
     ensure_parent_directory(args.output_path)
 
@@ -96,12 +124,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             path=args.dataset_name,
             split=args.dataset_split,
         )
-
         total_samples = len(dataset)
         if args.max_samples:
             total_samples = min(total_samples, args.max_samples)
 
         with open(args.output_path, "w", encoding="utf-8") as out_handle:
+            processed_count = 0
             for index, item in enumerate(dataset, start=1):
                 if args.max_samples and index > args.max_samples:
                     break
@@ -116,8 +144,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                 if args.agent == "webwalker" and not website_value:
                     emit_func(f"⚠️  Sample {index} skipped: missing 'root_url' field.")
                     continue
-
-                emit_func(f"▶️  Processing sample {index}/{total_samples}")
+                processed_count += 1
+                emit_func(f"▶️  Processing sample {processed_count}/{total_samples}")
                 emit_func(f"❓ Query: {query_value}")
                 if args.agent == "webwalker":
                     emit_func(f"🌐 Root website: {website_value}")
@@ -128,7 +156,6 @@ def main(argv: Optional[List[str]] = None) -> None:
                         args,
                         query=query_value,
                         website=website_value,
-                        llm_client=llm_client,
                         emit_func=emit_func,
                         verbose=True,
                     )
@@ -147,10 +174,50 @@ def main(argv: Optional[List[str]] = None) -> None:
                 }
                 out_handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 out_handle.flush()
+        try:
+            with open(args.output_path, "r", encoding="utf-8") as verify_handle:
+                lines = verify_handle.readlines()
+            emit_func(f"📊 Records written so far: {len(lines)}")
+            if lines:
+                emit_func(f"🔚 Last record: {lines[-1].strip()}")
+        except Exception as verify_exc:  # noqa: BLE001
+            emit_func(f"⚠️  Unable to read back output file: {verify_exc}")
         abs_output = os.path.abspath(args.output_path)
         emit_func(f"✅ Completed run. Predictions saved to: {abs_output}")
         if log_path:
             emit_func(f"📝 Run log saved to: {os.path.abspath(log_path)}")
+
+        # Evaluation
+        if args.run_eval:
+            eval_output_path = args.eval_output_path or _default_eval_output_path(args.output_path)
+            ensure_parent_directory(eval_output_path)
+            emit_func("=" * 80)
+            emit_func("🧪 Running evaluation with LLM judge...")
+            try:
+                eval_result(
+                    args.output_path,
+                    eval_output_path,
+                    dataset=args.judge_dataset,
+                    judge_model=args.judge_model,
+                    judge_prompt=args.judge_prompt,
+                    skip_existing=not args.force_rejudge,
+                )
+                abs_eval_output = os.path.abspath(eval_output_path)
+                emit_func(f"📈 Evaluation scores saved to: {abs_eval_output}")
+                report_base, _ = os.path.splitext(eval_output_path)
+                report_path = f"{report_base}_report.json"
+                if os.path.exists(report_path):
+                    abs_report = os.path.abspath(report_path)
+                    emit_func(f"🧾 Evaluation summary saved to: {abs_report}")
+                    try:
+                        with open(report_path, "r", encoding="utf-8") as report_handle:
+                            report_data = json.load(report_handle)
+                        emit_func(f"🔢 Overall accuracy: {report_data.get('overall')}")
+                    except Exception as report_exc:  # noqa: BLE001
+                        emit_func(f"⚠️  Unable to read evaluation summary: {report_exc}")
+            except Exception as eval_exc:  # noqa: BLE001
+                emit_func(f"❗ Evaluation failed: {eval_exc}")
+
     except KeyboardInterrupt:
         emit_func("⛔ Session interrupted by user.")
     finally:

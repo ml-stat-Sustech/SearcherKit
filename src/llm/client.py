@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import abc
-import json
 import os
 from typing import Dict, List, Optional
 
@@ -16,27 +15,9 @@ class LLMClient(abc.ABC):
     def complete(self, messages: ChatMessages, **kwargs) -> str:
         """Return the assistant reply for the provided conversation history."""
 
-
-class EchoLLM(LLMClient):
-    """
-    Deterministic fallback model that mirrors the latest observation.
-
-    Useful for offline testing when no real LLM credentials are available.
-    """
-
-    def complete(self, messages: ChatMessages, **kwargs) -> str:
-        if not messages:
-            return "Thought: No conversation context provided.\nFinal Answer: Unable to proceed."
-        response_format = kwargs.get("response_format")
-        last_message = messages[-1]["content"]
-        if isinstance(response_format, dict) and response_format.get("type") == "json_object":
-            if "Accumulated Information" in last_message:
-                return json.dumps({"judge": False})
-            return json.dumps({"usefulness": False})
-        return (
-            "Thought: Using the observation to craft a draft answer.\n"
-            f"Final Answer: {last_message}"
-        )
+    def name(self) -> str:
+        """Human-readable identifier used for logging/debugging."""
+        return self.__class__.__name__  # pragma: no cover
 
 
 class OpenAIChatClient(LLMClient):
@@ -72,13 +53,15 @@ class OpenAIChatClient(LLMClient):
         content = response.choices[0].message.content
         return content.strip() if content else ""
 
+    def name(self) -> str:
+        return self.model
+
 
 def build_llm_from_env() -> LLMClient:
     """
     Convenience factory that inspects environment variables.
 
-    If `OPENAI_MODEL` is defined (or `OPENAI_MODEL_NAME`), an OpenAI-compatible client
-    is returned. Otherwise a simple echo model is used as a safe fallback.
+    An OpenAI-compatible endpoint must be provided via env vars; otherwise an error is raised.
     """
 
     model = (
@@ -86,14 +69,18 @@ def build_llm_from_env() -> LLMClient:
         or os.environ.get("OPENAI_MODEL_NAME")
         or os.environ.get("OPENAI_CHAT_MODEL")
     )
-    if model:
-        base_url = os.environ.get("OPENAI_MODEL_SERVER") or os.environ.get("OPENAI_BASE_URL")
-        default_kwargs: Dict[str, object] = {}
-        temperature = os.environ.get("OPENAI_TEMPERATURE")
-        if temperature:
-            default_kwargs["temperature"] = float(temperature)
-        max_tokens = os.environ.get("OPENAI_MAX_OUTPUT_TOKENS")
-        if max_tokens:
-            default_kwargs["max_tokens"] = int(max_tokens)
-        return OpenAIChatClient(model=model, base_url=base_url, default_kwargs=default_kwargs)
-    return EchoLLM()
+    if not model:
+        raise ValueError(
+            "No OpenAI-compatible model configured. "
+            "Set OPENAI_MODEL or OPENAI_MODEL_NAME (optionally OPENAI_MODEL_SERVER)."
+        )
+
+    base_url = os.environ.get("OPENAI_MODEL_SERVER") or os.environ.get("OPENAI_BASE_URL")
+    default_kwargs: Dict[str, object] = {}
+    temperature = os.environ.get("OPENAI_TEMPERATURE")
+    if temperature:
+        default_kwargs["temperature"] = float(temperature)
+    max_tokens = os.environ.get("OPENAI_MAX_OUTPUT_TOKENS")
+    if max_tokens:
+        default_kwargs["max_tokens"] = int(max_tokens)
+    return OpenAIChatClient(model=model, base_url=base_url, default_kwargs=default_kwargs)

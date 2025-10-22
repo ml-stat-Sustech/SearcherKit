@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import os
+import json
 from typing import Callable, IO, Optional, TYPE_CHECKING
 
 from .builder import AgentRunContext, create_agent
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ..agents.base import AgentEvent, Message
+    from ..agents.base import AgentDecision, AgentEvent, Message
     from ..llm import LLMClient
     from ..tools.base import ToolResult
 
@@ -20,11 +21,59 @@ def emit(text: str = "", *, end: str = "\n", log_handle: Optional[IO[str]] = Non
         log_handle.flush()
 
 
+def _format_arguments(arguments: Optional[dict]) -> str:
+    if not arguments:
+        return "{}"
+    try:
+        return json.dumps(arguments, ensure_ascii=False)
+    except TypeError:
+        return repr(arguments)
+
+
 def render_event(event: "AgentEvent", *, emit_func: Callable[[str], None]) -> None:
-    """Render only the final event; suppress intermediate details."""
-    if event.stage == "final":
+    """
+    Render key details for each agent event when verbose logging is enabled.
+
+    Shows incoming messages, assistant replies, tool usage, and final answers.
+    """
+    stage = event.stage
+
+    if stage == "receive":
+        message: "Message" = event.payload
+        emit_func(f"👤 {message.role.capitalize()} message:")
+        emit_func(message.content)
+        return
+
+    if stage == "response":
+        emit_func("🤖 Assistant response:")
+        emit_func(str(event.payload))
+        return
+
+    if stage == "decision":
+        decision: "AgentDecision" = event.payload
+        if decision.kind == "tool" and decision.tool_call:
+            emit_func(
+                f"🧭 Decision: call tool '{decision.tool_call.name}' "
+                f"with args {_format_arguments(decision.tool_call.arguments)}"
+            )
+        elif decision.kind == "final":
+            emit_func("🧭 Decision: produce final answer.")
+        else:
+            emit_func(f"🧭 Decision: {decision.kind}")
+        return
+
+    if stage == "tool_result":
+        result: "ToolResult" = event.payload
+        emit_func(f"🛠 Tool '{result.call.name}' output:")
+        emit_func(result.output)
+        return
+
+    if stage == "final":
         emit_func("🎯 Final Answer:")
-        emit_func(event.payload)
+        emit_func(str(event.payload))
+        return
+
+    emit_func(f"ℹ️ Event [{stage}]: {event.payload}")
 
 
 def build_context(
@@ -32,7 +81,7 @@ def build_context(
     *,
     query: str,
     website: Optional[str],
-    llm_client: Optional["LLMClient"],
+    llm_client: Optional["LLMClient"] = None,
 ) -> AgentRunContext:
     """Instantiate the requested agent with the provided query and website."""
     return create_agent(
@@ -56,12 +105,11 @@ def run_single_query(
     *,
     query: str,
     website: Optional[str],
-    llm_client: Optional["LLMClient"],
     emit_func: Callable[[str], None],
     verbose: bool = True,
 ) -> str:
     """Execute one agent run and return the final answer."""
-    context = build_context(args, query=query, website=website, llm_client=llm_client)
+    context = build_context(args, query=query, website=website)
     final_answer = ""
 
     for event in context.agent.run(context.request):
