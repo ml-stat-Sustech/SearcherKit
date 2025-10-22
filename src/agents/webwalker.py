@@ -33,10 +33,12 @@ class WebWalkerAgent(BaseAgent):
         *,
         tools: Optional[Iterable[BaseTool]] = None,
         max_steps: int = 20,
+        judge_llm: Optional[LLMClient] = None,
     ) -> None:
         super().__init__(tools=list(tools or WEBWALKER_TOOLS.values()), max_steps=max_steps)
         self.llm = llm
-        self.memory = MemoryManager(llm=llm, query="")
+        # Critique/judge stage falls back to the agent LLM unless `judge_llm` is supplied.
+        self.memory = MemoryManager(llm=llm, query="", judge_llm=judge_llm)
 
     # ---- Stage 1 ---------------------------------------------------------
     def handle_user_message(self, user_input: WebWalkerRequest) -> AgentState:

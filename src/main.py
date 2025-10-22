@@ -86,6 +86,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Override the evaluation prompt template.",
     )
     parser.add_argument(
+        "--use-separate-judge-llm",
+        action="store_true",
+        help="Use a dedicated judge LLM during runtime (configured via OPENAI_JUDGE_* env vars).",
+    )
+    parser.add_argument(
         "--force-rejudge",
         action="store_true",
         help="Re-evaluate all questions even if they already exist in the evaluation output file.",

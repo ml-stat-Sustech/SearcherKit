@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import json
-from typing import Callable, IO, Optional, TYPE_CHECKING
+from typing import Callable, Dict, IO, Optional, TYPE_CHECKING
 
 from .builder import AgentRunContext, create_agent
 
@@ -76,12 +76,43 @@ def render_event(event: "AgentEvent", *, emit_func: Callable[[str], None]) -> No
     emit_func(f"ℹ️ Event [{stage}]: {event.payload}")
 
 
+def _build_judge_llm_from_env() -> "LLMClient":
+    """Construct a judge-specific LLM client using OPENAI_JUDGE_* environment variables."""
+
+    from ..llm.client import OpenAIChatClient  # Lazy import to avoid circular deps
+
+    model = os.environ.get("OPENAI_JUDGE_MODEL") or os.environ.get("OPENAI_MODEL")
+    if not model:
+        raise ValueError(
+            "No judge model configured. Set OPENAI_JUDGE_MODEL (or OPENAI_MODEL) before enabling "
+            "the separate judge LLM."
+        )
+    base_url = os.environ.get("OPENAI_JUDGE_MODEL_SERVER") or os.environ.get("OPENAI_MODEL_SERVER")
+    api_key = os.environ.get("OPENAI_JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
+
+    default_kwargs: Dict[str, object] = {}
+    temperature = os.environ.get("OPENAI_JUDGE_TEMPERATURE")
+    if temperature:
+        default_kwargs["temperature"] = float(temperature)
+    max_tokens = os.environ.get("OPENAI_JUDGE_MAX_OUTPUT_TOKENS")
+    if max_tokens:
+        default_kwargs["max_tokens"] = int(max_tokens)
+
+    return OpenAIChatClient(
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        default_kwargs=default_kwargs or None,
+    )
+
+
 def build_context(
     args,
     *,
     query: str,
     website: Optional[str],
     llm_client: Optional["LLMClient"] = None,
+    judge_llm_client: Optional["LLMClient"] = None,
 ) -> AgentRunContext:
     """Instantiate the requested agent with the provided query and website."""
     return create_agent(
@@ -90,6 +121,7 @@ def build_context(
         website=website,
         max_rounds=args.max_rounds,
         llm=llm_client,
+        judge_llm=judge_llm_client,
     )
 
 
@@ -109,7 +141,33 @@ def run_single_query(
     verbose: bool = True,
 ) -> str:
     """Execute one agent run and return the final answer."""
-    context = build_context(args, query=query, website=website)
+    judge_llm_client = None
+    if getattr(args, "use_separate_judge_llm", False):
+        judge_llm_client = _build_judge_llm_from_env()
+
+    context = build_context(
+        args,
+        query=query,
+        website=website,
+        judge_llm_client=judge_llm_client,
+    )
+
+    if not getattr(args, "_printed_llm_info", False):
+        agent_llm = getattr(context.agent, "llm", None)
+        agent_name = None
+        if agent_llm:
+            agent_name = agent_llm.name() if hasattr(agent_llm, "name") else agent_llm.__class__.__name__
+        memory = getattr(context.agent, "memory", None)
+        judge_llm = getattr(memory, "judge_llm", None) if memory else None
+        judge_name = None
+        if judge_llm:
+            judge_name = judge_llm.name() if hasattr(judge_llm, "name") else judge_llm.__class__.__name__
+        if agent_name:
+            emit_func(f"🤖 Agent LLM: {agent_name}")
+        if judge_name:
+            emit_func(f"⚖️ Judge LLM: {judge_name}")
+        setattr(args, "_printed_llm_info", True)
+
     final_answer = ""
 
     for event in context.agent.run(context.request):

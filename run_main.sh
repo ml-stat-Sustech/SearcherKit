@@ -2,10 +2,11 @@
 set -euo pipefail
 
 AGENT=webwalker
+USE_SEPARATE_JUDGE_LLM=1
 DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/WebWalkerQA
 DATASET_SPLIT=main
 OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions.jsonl
-MAX_SAMPLES=10
+MAX_SAMPLES=1
 MAX_ROUNDS=10
 LOG_FILE=/mnt/sharedata/hdd/beier/Agent/logs/
 EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_scored.jsonl}
@@ -41,6 +42,10 @@ fi
 if [[ -n "${LOG_FILE}" ]]; then
   mkdir -p "$(dirname "${LOG_FILE}")"
   ARGS+=(--log-file "${LOG_FILE}")
+fi
+
+if [[ "${USE_SEPARATE_JUDGE_LLM:-0}" == "1" ]]; then
+  ARGS+=(--use-separate-judge-llm)
 fi
 
 if [[ -n "${JUDGE_MODEL}" ]]; then

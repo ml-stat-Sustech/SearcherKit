@@ -46,7 +46,7 @@ You can host Qwen or any other model locally and expose it via the OpenAI API sc
 pip install vllm
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
 python -m vllm.entrypoints.openai.api_server \
- --model /mnt/sharedata/ssd_large/common/LLMs/Qwen/Qwen2.5-32B-Instruct/ \
+ --model /mnt/sharedata/ssd_large/common/LLMs/Qwen/WebDancer-32B/ \
  --port 8000 \
  --dtype float16 \
  --tensor-parallel-size 4 \
@@ -56,7 +56,7 @@ python -m vllm.entrypoints.openai.api_server \
 Then configure the CLI to hit the local endpoint:
 
 ```bash
-export OPENAI_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen/Qwen2.5-32B-Instruct/
+export OPENAI_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen/WebDancer-32B/
 export OPENAI_MODEL_SERVER=http://127.0.0.1:8000/v1
 export OPENAI_API_KEY=local-demo  # any non-empty string
 ```
@@ -149,6 +149,46 @@ Both workflows create:
 - A companion summary report (`*_report.json`) with aggregate accuracy broken down by difficulty and source type.
 
 Make sure the relevant LLM judge environment variables (OpenAI-compatible endpoint, keys, etc.) are configured before running either evaluation flow.
+
+### Running a separate judge model with vLLM
+
+You can dedicate a different GPU pool/model to the judge while the agent continues to use its own deployment. Run two OpenAI-compatible vLLM servers (one per model) and wire them into the agent factory:
+
+```bash
+# Agent model on GPUs 0-3
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m vllm.entrypoints.openai.api_server \
+  --model /mnt/sharedata/ssd_large/common/LLMs/Qwen/WebDancer-32B/ \
+   --dtype float16 \
+ --tensor-parallel-size 4 \
+ --gpu-memory-utilization 0.8 \
+  --port 8000
+
+# Judge model on GPUs 4-7
+CUDA_VISIBLE_DEVICES=4 python -m vllm.entrypoints.openai.api_server \
+  --model /mnt/sharedata/ssd_large/common/LLMs/Qwen/Qwen2.5-7B-Instruct/ \
+  --tensor-parallel-size 1 \
+  --port 8001
+```
+
+For the dataset runner (`src/main.py`), export the relevant environment variables and add `--use-separate-judge-llm`:
+
+```bash
+export OPENAI_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen/WebDancer-32B/
+export OPENAI_MODEL_SERVER=http://127.0.0.1:8000/v1
+export OPENAI_API_KEY=local-demo
+
+export OPENAI_JUDGE_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen/Qwen2.5-7B-Instruct/
+export OPENAI_JUDGE_MODEL_SERVER=http://127.0.0.1:8001/v1
+export OPENAI_JUDGE_API_KEY=local-demo
+
+python -m webagent.src.main \
+  --agent webwalker \
+  --dataset-name ... \
+  --output-path ... \
+  --use-separate-judge-llm
+```
+
+If you already have a context, call `context.agent.memory.configure_judge_llm(...)` with either a pre-built `LLMClient` or a `model` + `base_url` pair to rebind only the judge. When no override is provided, the judge automatically falls back to the agent’s LLM.
 
 ## Creating a custom agent
 

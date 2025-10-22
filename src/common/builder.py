@@ -27,6 +27,7 @@ def build_webwalker_agent(
     max_rounds: int = 10,
     llm: Optional[LLMClient] = None,
     tools: Optional[list[BaseTool]] = None,
+    judge_llm: Optional[LLMClient] = None,
 ) -> AgentRunContext:
     """
     Convenience helper used by the CLI.
@@ -40,7 +41,7 @@ def build_webwalker_agent(
 
     llm_client = llm or build_llm_from_env()
     tool_list = tools or list(WEBWALKER_TOOLS.values())
-    agent = WebWalkerAgent(llm=llm_client, tools=tool_list, max_steps=max_rounds)
+    agent = WebWalkerAgent(llm=llm_client, tools=tool_list, max_steps=max_rounds, judge_llm=judge_llm)
     request = WebWalkerRequest(website=website, query=query)
     return AgentRunContext(agent=agent, request=request)
 
@@ -70,6 +71,7 @@ def create_agent(
     max_rounds: Optional[int] = None,
     llm: Optional[LLMClient] = None,
     tools: Optional[list[BaseTool]] = None,
+    judge_llm: Optional[LLMClient] = None,
 ) -> AgentRunContext:
     """
     Factory helper that instantiates the requested agent.
@@ -86,6 +88,8 @@ def create_agent(
         Override the default step budget for the selected agent.
     llm/tools:
         Optional overrides for the language model client or tool list.
+    judge_llm:
+        Optional override for the critiquing/judge LLM. Defaults to the agent LLM.
     """
 
     name = agent_name.lower()
@@ -98,6 +102,7 @@ def create_agent(
             max_rounds=max_rounds or 10,
             llm=llm,
             tools=tools,
+            judge_llm=judge_llm,
         )
 
     if name == "webdancer":
