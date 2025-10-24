@@ -70,21 +70,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Destination jsonl file for saving evaluation scores (defaults to <output_path> with '_eval' suffix).",
     )
     parser.add_argument(
-        "--judge-dataset",
-        default="webwalker",
-        help="Dataset identifier used for evaluation prompts and ground truth lookup.",
-    )
-    parser.add_argument(
-        "--judge-model",
-        default=None,
-        help="Override the evaluation LLM model (defaults to environment configuration).",
-    )
-    parser.add_argument(
-        "--judge-prompt",
-        default=None,
-        help="Override the evaluation prompt template.",
-    )
-    parser.add_argument(
         "--use-separate-judge-llm",
         action="store_true",
         help="Use a dedicated judge LLM during runtime (configured via OPENAI_JUDGE_* env vars).",
@@ -288,9 +273,6 @@ def main(argv: Optional[List[str]] = None) -> None:
             run_llm_judge_evaluation(
                 input_path=args.output_path,
                 output_path=eval_output_path,
-                dataset=args.judge_dataset,
-                judge_model=args.judge_model,
-                judge_prompt=args.judge_prompt,
                 skip_existing=not args.force_rejudge,
                 use_separate_judge_llm=args.use_separate_judge_llm,
                 emit_func=emit_func,

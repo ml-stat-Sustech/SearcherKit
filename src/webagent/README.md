@@ -158,8 +158,7 @@ python -m src.webagent.main \
   --local-wiki-es-host http://127.0.0.1:9200 \
   --local-wiki-retriever dense \
   --local-wiki-model-name /path/to/embedding/model \
-  --run-eval \
-  --judge-dataset gaia
+  --run-eval
 ```
 
 Switching datasets is just a matter of pointing `--dataset-name` at the desired source (e.g. `callanwu/WebWalkerQA`, `./GAIA`, `./my_experiments/questions.jsonl`) and adjusting `--dataset-split` accordingly. The loader normalises common field names (`Question`, `Final answer`, `Annotator Metadata`, etc.), so mixed datasets can share the same runner.
@@ -185,7 +184,6 @@ python -m src.webagent.main \
   --max-rounds 15 \
   --run-eval \
   --eval-output-path /tmp/webwalker_predictions_scored.jsonl \
-  --judge-dataset webwalker \
   --force-rejudge
 ```
 
@@ -193,7 +191,7 @@ Flags of note:
 
 - `--run-eval` enables evaluation once inference completes.
 - `--eval-output-path` (optional) controls where the scored JSONL is written. Default: append `_eval` to `--output-path`.
-- `--judge-dataset`, `--judge-model`, `--judge-prompt`, and `--force-rejudge` mirror the evaluator's parameters for dataset-specific prompts, model overrides, and re-scoring behaviour.
+- `--force-rejudge` forces the judge to rescore questions even if results already exist in the output file. All evaluations use the WebWalkerQA-style prompt by default.
 
 The helper script `run_main.sh` now uses this integrated path by default—adjust the environment variables at the top of the script and run `bash run_main.sh`.
 
@@ -205,7 +203,6 @@ You can still call the standalone evaluator on any JSONL produced earlier (e.g.,
 python -m src.webagent.evaluate.evl \
   --input_path /mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions.jsonl \
   --output_path /mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_scored.jsonl \
-  --judge_dataset webwalker \
   --force-rejudge
 ```
 

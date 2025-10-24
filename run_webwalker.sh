@@ -5,14 +5,11 @@ AGENT=webwalker
 USE_SEPARATE_JUDGE_LLM=1
 DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/WebWalkerQA
 DATASET_SPLIT=main
-OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions.jsonl
-MAX_SAMPLES=680
+OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_demo.jsonl
+MAX_SAMPLES=${MAX_SAMPLES:-}
 MAX_ROUNDS=10
 LOG_FILE=/mnt/sharedata/hdd/beier/Agent/logs/
-EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_scored.jsonl}
-JUDGE_DATASET=${JUDGE_DATASET:-webwalker}
-JUDGE_MODEL=${JUDGE_MODEL:-}
-JUDGE_PROMPT=${JUDGE_PROMPT:-}
+EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_scored_demp.jsonl}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
@@ -27,7 +24,6 @@ ARGS=(
   --output-path "${OUTPUT_PATH}"
   --run-eval
   --eval-output-path "${EVAL_OUTPUT}"
-  --judge-dataset "${JUDGE_DATASET}"
   --force-rejudge
 )
 
@@ -46,14 +42,6 @@ fi
 
 if [[ "${USE_SEPARATE_JUDGE_LLM:-0}" == "1" ]]; then
   ARGS+=(--use-separate-judge-llm)
-fi
-
-if [[ -n "${JUDGE_MODEL}" ]]; then
-  ARGS+=(--judge-model "${JUDGE_MODEL}")
-fi
-
-if [[ -n "${JUDGE_PROMPT}" ]]; then
-  ARGS+=(--judge-prompt "${JUDGE_PROMPT}")
 fi
 
 python -m src.webagent.main "${ARGS[@]}" "$@"
