@@ -56,4 +56,4 @@ if [[ -n "${JUDGE_PROMPT}" ]]; then
   ARGS+=(--judge-prompt "${JUDGE_PROMPT}")
 fi
 
-python -m src.main "${ARGS[@]}" "$@"
+python -m src.webagent.main "${ARGS[@]}" "$@"
