@@ -16,9 +16,16 @@ def use_local_wiki_tools() -> bool:
 
 @lru_cache(maxsize=1)
 def build_webwalker_tools() -> Dict[str, BaseTool]:
-    from .visit_multi_turn import VisitPage
+    if use_local_wiki_tools():
+        from .local_wiki import WebWalkerLocalWikiVisitTool
 
-    return {VisitPage.name: VisitPage()}
+        visit_tool: BaseTool = WebWalkerLocalWikiVisitTool()
+    else:
+        from .visit_multi_turn import VisitPage
+
+        visit_tool = VisitPage()
+
+    return {visit_tool.name: visit_tool}
 
 
 @lru_cache(maxsize=1)

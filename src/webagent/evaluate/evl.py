@@ -1,12 +1,14 @@
 import json
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from tqdm import tqdm
 
 from ..datasets import load_webwalker_ground_truth
 from .utils import create_llm_judge_evaluator
+
+__all__ = ["eval_result", "run_llm_judge_evaluation"]
 
 
 def eval_result(
@@ -60,6 +62,7 @@ def eval_result(
                 visited.add(json.loads(line)["question"])
 
     with open(input_path, "r", encoding="utf-8") as f:
+        print('=============Loading Inference Results=============')
         for line in f:
             data = json.loads(line)
             if skip_existing and data["question"] in visited:
@@ -71,6 +74,9 @@ def eval_result(
             data["answer"] = answer_value
             if gt and "info" in gt and "info" not in data:
                 data["info"] = gt["info"]
+
+            prediction = data.get("prediction", data.get("pred"))
+            data['prediction'] = prediction
             data_list.append(data)
 
     def call(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -169,6 +175,51 @@ def eval_result(
     abs_report = os.path.abspath(report_path)
     print(f"[evl] Evaluation log saved to: {abs_output}")
     print(f"[evl] Summary report saved to: {abs_report}")
+
+def run_llm_judge_evaluation(
+    *,
+    input_path: str,
+    output_path: str,
+    dataset: str = "webwalker",
+    judge_prompt: Optional[str] = None,
+    skip_existing: bool,
+    use_separate_judge_llm: bool,
+    emit_func: Optional[Callable[..., None]] = None,
+) -> None:
+    """Execute the LLM judge evaluation workflow and emit progress logs."""
+
+    def _emit(message: str, *, end: str = "\n") -> None:
+        if emit_func is not None:
+            emit_func(message, end=end)
+        else:
+            print(message, end=end)
+
+    _emit("=" * 80)
+    _emit("🧪 Running evaluation with LLM judge...")
+    try:
+        eval_result(
+            input_path,
+            output_path,
+            dataset=dataset,
+            judge_prompt=judge_prompt,
+            skip_existing=skip_existing,
+            use_separate_judge_llm=use_separate_judge_llm,
+        )
+        abs_eval_output = os.path.abspath(output_path)
+        _emit(f"📈 Evaluation scores saved to: {abs_eval_output}")
+        report_base, _ = os.path.splitext(output_path)
+        report_path = f"{report_base}_report.json"
+        if os.path.exists(report_path):
+            abs_report = os.path.abspath(report_path)
+            _emit(f"🧾 Evaluation summary saved to: {abs_report}")
+            try:
+                with open(report_path, "r", encoding="utf-8") as report_handle:
+                    report_data = json.load(report_handle)
+                _emit(f"🔢 Overall accuracy: {report_data.get('overall')}")
+            except Exception as report_exc:  # noqa: BLE001
+                _emit(f"⚠️  Unable to read evaluation summary: {report_exc}")
+    except Exception as eval_exc:  # noqa: BLE001
+        _emit(f"❗ Evaluation failed: {eval_exc}")
 
 
 if __name__ == "__main__":

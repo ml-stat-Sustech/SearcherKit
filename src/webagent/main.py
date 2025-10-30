@@ -19,7 +19,7 @@ from .common.utils import (
     write_prediction_record,
 )
 from .datasets import load_dataset_records
-from .evaluate.utils import run_llm_judge_evaluation
+from .evaluate.evl import run_llm_judge_evaluation
 
 
 _LOG_FILE_HANDLE: Optional[IO[str]] = None
@@ -267,6 +267,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             emit_func(f"📝 Run log saved to: {os.path.abspath(log_path)}")
 
         # Evaluation
+        print('====================================== Evaluate ======================================')
         if args.run_eval:
             eval_output_path = args.eval_output_path or default_eval_output_path(args.output_path)
             ensure_parent_directory(eval_output_path)

@@ -263,10 +263,14 @@ def create_llm_judge_evaluator(
     )
 
     def _llm_judge_eval(data: Dict[str, Any]) -> Dict[str, Any]:
+        reference_answer = data.get("reference_answer", data.get("answer"))
+        if reference_answer is None:
+            raise KeyError("reference_answer")
+        prediction_value = data.get("prediction", data.get("pred"))
         item = {
             "question": data["question"],
-            "answer": data["answer"],
-            "prediction": data["pred"],
+            "answer": reference_answer,
+            "prediction": prediction_value or "",
         }
         judge_response = call_llm_judge(item)
         is_correct = is_correct_judgement(judge_response.get("judgement", ""))
@@ -278,59 +282,10 @@ def create_llm_judge_evaluator(
     return _llm_judge_eval, None
 
 
-def run_llm_judge_evaluation(
-    *,
-    input_path: str,
-    output_path: str,
-    dataset: str = "webwalker",
-    judge_prompt: Optional[str] = None,
-    skip_existing: bool,
-    use_separate_judge_llm: bool,
-    emit_func: Optional[Callable[..., None]] = None,
-) -> None:
-    """Execute the LLM judge evaluation workflow and emit progress logs."""
-
-    def _emit(message: str, *, end: str = "\n") -> None:
-        if emit_func is not None:
-            emit_func(message, end=end)
-        else:
-            print(message, end=end)
-
-    _emit("=" * 80)
-    _emit("🧪 Running evaluation with LLM judge...")
-    try:
-        from .evl import eval_result  # Local import to avoid circular dependency
-
-        eval_result(
-            input_path,
-            output_path,
-            dataset=dataset,
-            judge_prompt=judge_prompt,
-            skip_existing=skip_existing,
-            use_separate_judge_llm=use_separate_judge_llm,
-        )
-        abs_eval_output = os.path.abspath(output_path)
-        _emit(f"📈 Evaluation scores saved to: {abs_eval_output}")
-        report_base, _ = os.path.splitext(output_path)
-        report_path = f"{report_base}_report.json"
-        if os.path.exists(report_path):
-            abs_report = os.path.abspath(report_path)
-            _emit(f"🧾 Evaluation summary saved to: {abs_report}")
-            try:
-                with open(report_path, "r", encoding="utf-8") as report_handle:
-                    report_data = json.load(report_handle)
-                _emit(f"🔢 Overall accuracy: {report_data.get('overall')}")
-            except Exception as report_exc:  # noqa: BLE001
-                _emit(f"⚠️  Unable to read evaluation summary: {report_exc}")
-    except Exception as eval_exc:  # noqa: BLE001
-        _emit(f"❗ Evaluation failed: {eval_exc}")
-
-
 __all__ = [
     "DEFAULT_JUDGE_CONFIGS",
     "call_llm_judge",
     "configure_llm_judge",
     "create_llm_judge_evaluator",
     "is_correct_judgement",
-    "run_llm_judge_evaluation",
 ]

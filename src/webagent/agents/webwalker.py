@@ -75,12 +75,14 @@ class WebWalkerAgent(BaseAgent):
 
     # ---- Stage 2+ --------------------------------------------------------
     def generate_step_response(self, state: AgentState) -> str:
-        return self.llm.complete(self._messages_to_dicts(state.messages))
+        raw_output = self.llm.complete(self._messages_to_dicts(state.messages))
+        return self._normalise_action_blocks(raw_output)
 
     # ---- Stage 3 ---------------------------------------------------------
     def decide_next_action(self, state: AgentState) -> AgentDecision:
-        if not state.messages or state.messages[-1].role != "assistant":
-            return AgentDecision(kind="continue", message=None)
+        if state.steps_taken > 1:
+            if not state.messages or state.messages[-1].role != "assistant":
+                return AgentDecision(kind="continue", message=None)
 
         latest = state.messages[-1].content
         final_answer = self._extract_final_answer(latest)
@@ -95,7 +97,6 @@ class WebWalkerAgent(BaseAgent):
             if tool_name.lower() == "none" or tool_name not in self.tools:
                 return AgentDecision(kind="continue", message=None)
             return AgentDecision(kind="tool", tool_call=ToolCall(name=tool_name, arguments=arguments))
-
         return AgentDecision(kind="continue", message=None)
 
     # ---- Stage 5 ---------------------------------------------------------
@@ -190,33 +191,89 @@ class WebWalkerAgent(BaseAgent):
         query: str,
         website: str,
     ) -> str:
-        observation = (
-            f"Use the visit_page tool with button \"{root_button_label}\" to open the homepage "
-            "and gather website information."
-        )
         start_prompt = (
-            f"Question:\n{query}\nOfficial website:\n{website}\n\nObservation:\n{observation}\n\nThought: "
+            f"Question:\n{query}\nOfficial website:\n{website}\n\nThought: I will visit the root website.\n\n"
+            f"Action: visit_page\n\nAction Input: {{\"url\": [\"{website}\"], "
+            f"\"goal\": \"{query}\"}}\n"
         )
+
         return start_prompt
+
+    def _normalise_action_blocks(self, content: str) -> str:
+        """
+        Ensure each action input line terminates before any observation text.
+
+        Some model responses append 'Observation:' directly after the action input.
+        Splitting them keeps the environment-generated observation separate from the
+        tool invocation issued by the agent.
+        """
+
+        prefix_lines: List[str] = []
+        action_lines: List[str] = []
+        captured_primary_action = False
+        captured_action_input = False
+
+        for line in content.splitlines():
+            stripped = line.lstrip()
+            lower = stripped.lower()
+
+            if lower.startswith("observation:"):
+                continue
+
+            if lower.startswith("action:"):
+                if captured_primary_action:
+                    break
+                captured_primary_action = True
+                action_lines.append(line)
+                continue
+
+            if lower.startswith("action input:"):
+                if not captured_primary_action:
+                    prefix_lines.append(line)
+                    continue
+                if captured_action_input:
+                    break
+                action_lines.append(line)
+                captured_action_input = True
+                continue
+
+            if captured_primary_action:
+                if not captured_action_input:
+                    action_lines.append(line)
+                continue
+
+            prefix_lines.append(line)
+
+        combined = prefix_lines + action_lines
+        return "\n".join(combined).strip()
 
     def _messages_to_dicts(self, messages: List[Message]) -> List[Dict[str, str]]:
         return [{"role": message.role, "content": message.content} for message in messages]
 
     def _extract_final_answer(self, content: str) -> Optional[str]:
-        match = re.search(
-            r"(?is)(?:^|\n)\s*(?:\*\*)?(?:Final\s+)?Answer(?:\s*\*\*)?\s*[:：](?:\*\*)?\s*(.+)",
-            content,
+        matches = list(
+            re.finditer(
+                r"(?is)(?:^|\n)\s*(?:\*\*)?(?:Final\s+)?Answer(?:\s*\*\*)?\s*[:：](?:\*\*)?\s*(.+?)(?=\n\s*(?:\*\*)?(?:Final\s+)?Answer(?:\s*\*\*)?\s*[:：]|$)",
+                content,
+            )
         )
-        if not match:
+        if not matches:
             return None
-        return match.group(1).strip()
+        if len(matches) < 2:
+            return None
+        return matches[1].group(1).strip()
 
     def _extract_action_block(self, content: str) -> Optional[Tuple[str, Dict[str, object]]]:
-        action_match = re.search(r"Action\s*:\s*([a-zA-Z0-9_]+)", content)
-        if not action_match:
+        action_matches = list(re.finditer(r"Action\s*:\s*([a-zA-Z0-9_]+)", content))
+        if not action_matches:
             return None
-        name = action_match.group(1).strip()
-        input_match = re.search(r"Action Input\s*:\s*(.*)", content, re.IGNORECASE | re.DOTALL)
+        last_action = action_matches[-1]
+        name = last_action.group(1).strip()
+        input_match = re.search(
+            r"Action Input\s*:\s*(.*)",
+            content[last_action.end() :],
+            re.IGNORECASE | re.DOTALL,
+        )
         if not input_match:
             return name, {}
         raw_input = input_match.group(1).strip()

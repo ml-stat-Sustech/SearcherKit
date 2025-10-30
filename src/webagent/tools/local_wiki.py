@@ -4,6 +4,7 @@ import functools
 import os
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Union
+from urllib.parse import urlparse, unquote
 
 from elasticsearch import Elasticsearch, ConnectionError
 
@@ -39,7 +40,7 @@ def _env_flag(name: str) -> bool:
 
 
 def use_local_wiki_tools() -> bool:
-    return _env_flag("WEBDANCER_USE_LOCAL_WIKI")
+    return _env_flag("WEBDANCER_USE_LOCAL_WIKI") or _env_flag("WEBWALKER_USE_LOCAL_WIKI")
 
 
 def _initialization_error(message: str) -> str:
@@ -54,11 +55,11 @@ def _build_context() -> LocalWikiContext:
             "Ensure dependencies from requirements.txt are installed."
         )
 
-    index_name = os.getenv("LOCAL_WIKI_INDEX")
+    index_name = os.getenv("LOCAL_WIKI_INDEX", 'wiki20251001_qwen3-embedding-0.6b')
     if not index_name:
         raise RuntimeError("LOCAL_WIKI_INDEX environment variable is required for local wiki tools.")
 
-    es_host = os.getenv("LOCAL_WIKI_ES_HOST", "http://127.0.0.1:9200")
+    es_host = os.getenv("LOCAL_WIKI_ES_HOST", "http://192.168.77.12:9200")
     timeout = os.getenv("LOCAL_WIKI_ES_TIMEOUT")
     es_kwargs: Dict[str, Union[int, float]] = {}
     if timeout:
@@ -73,12 +74,13 @@ def _build_context() -> LocalWikiContext:
         raise RuntimeError(f"Failed to create Elasticsearch client for host {es_host}: {exc}") from exc
 
     try:
-        if not es.ping():
-            raise RuntimeError(f"Unable to connect to Elasticsearch at {es_host}.")
-    except ConnectionError as exc:  # noqa: F841
-        raise RuntimeError(f"Unable to connect to Elasticsearch at {es_host}.") from exc
+        es = Elasticsearch(es_host, request_timeout=100, retry_on_timeout=True, max_retries=3)
+        info = es.info()
+    except ConnectionError as e:
+        print(f"Unable to connect to Elasticsearch. Error: {e}")
+        exit(1)
 
-    retriever_type = os.getenv("LOCAL_WIKI_RETRIEVER", "bm25").lower()
+    retriever_type = os.getenv("LOCAL_WIKI_RETRIEVER", "dense").lower()
     retriever: Optional[BaseRetriever] = None
 
     if retriever_type not in {"bm25", "dense", "hybrid"}:
@@ -86,7 +88,7 @@ def _build_context() -> LocalWikiContext:
 
     encoder: Optional[BaseEncoder] = None
     if retriever_type in {"dense", "hybrid"}:
-        model_name = os.getenv("LOCAL_WIKI_MODEL_NAME")
+        model_name = os.getenv("LOCAL_WIKI_MODEL_NAME", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
         if not model_name:
             raise RuntimeError(
                 f"LOCAL_WIKI_MODEL_NAME is required when LOCAL_WIKI_RETRIEVER={retriever_type}."
@@ -124,7 +126,7 @@ def _safe_int(value: object, default: int) -> int:
     try:
         parsed = int(value)  # type: ignore[arg-type]
         return parsed if parsed > 0 else default
-    except Exception:  # noqa: BLE001
+    except Exception:  # _coerce_queriesnoqa: BLE001
         return default
 
 
@@ -220,7 +222,20 @@ class LocalWikiVisitTool(BaseTool):
         titles = _coerce_queries(raw_titles)
         if not titles:
             return "[LocalWiki Visit] Provide at least one valid page title."
+        processed_titles: List[str] = []
+        for title in titles:
+            trimmed = title.strip()
+            parsed = urlparse(trimmed)
+            if parsed.scheme and parsed.path:
+                last_segment = parsed.path.rstrip("/").split("/")[-1]
+                if last_segment:
+                    trimmed = unquote(last_segment).replace("_", " ")
+                else:
+                    trimmed = unquote(parsed.path).replace("_", " ")
+            processed_titles.append(trimmed)
+        titles = processed_titles
         titles = titles[: min(len(titles), DEFAULT_MAX_QUERIES)]
+        print(titles)
 
         max_links = _safe_int(call.arguments.get("max_links"), DEFAULT_MAX_LINKS)
         body_limit = call.arguments.get("body_max_tokens")
@@ -250,6 +265,7 @@ class LocalWikiVisitTool(BaseTool):
         hits = (response.get("hits") or {}).get("hits", [])
         if not hits:
             return f"[LocalWiki Visit] Page titled '{title}' was not found in index '{context.index_name}'."
+            # raise SystemExit(f"Page titled '{title}' not found")
 
         source = hits[0].get("_source", {})
         page_title = source.get("title") or title
@@ -300,8 +316,38 @@ class LocalWikiVisitTool(BaseTool):
         return rendered
 
 
+class WebWalkerLocalWikiVisitTool(LocalWikiVisitTool):
+    """
+    WebWalker-compatible wrapper around the local wiki visit tool.
+
+    Keeps the legacy `visit_page` tool name while accepting either `button` or `url`
+    arguments, so prompts written for the original crawler-based tool continue to work.
+    """
+
+    name = "visit_page"
+    description = (
+        "Fetches local wiki content. Provide the page title via either 'url' or 'button'. "
+        "Optionally include 'goal' to describe what information you are looking for."
+    )
+
+    def run(self, call: ToolCall, state) -> str:  # type: ignore[override]
+        normalised_args: Dict[str, object] = dict(call.arguments)
+        button_value = normalised_args.pop("button", None)
+        if "url" not in normalised_args and isinstance(button_value, str):
+            normalised_args["url"] = button_value
+
+        if "goal" not in normalised_args:
+            user_query = getattr(getattr(state, "user_input", None), "query", None)
+            if isinstance(user_query, str) and user_query.strip():
+                normalised_args["goal"] = user_query.strip()
+
+        proxy_call = ToolCall(name="visit", arguments=normalised_args)
+        return super().run(proxy_call, state)
+
+
 __all__ = [
     "LocalWikiSearchTool",
     "LocalWikiVisitTool",
+    "WebWalkerLocalWikiVisitTool",
     "use_local_wiki_tools",
 ]

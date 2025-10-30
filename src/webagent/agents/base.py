@@ -36,6 +36,7 @@ class AgentEvent:
         "tool_result",
         "response",
         "final",
+        "log"
     ]
     payload: Any
 
@@ -55,7 +56,7 @@ class BaseAgent(abc.ABC):
     """
     Base implementation of the six-stage agent workflow.
 
-    Sub-classes implement the abstract hooks to provide model-specific logic.
+    Subclasses implement the abstract hooks to provide model-specific logic.
     The `run` method orchestrates the standard loop and streams `AgentEvent`s.
     """
 
@@ -82,22 +83,26 @@ class BaseAgent(abc.ABC):
         # step 1
         state = self.handle_user_message(user_input)
         yield AgentEvent(stage="receive", payload=state.messages[-1])
+        yield AgentEvent(stage="log", payload="Prepare User Message")
 
         while state.steps_taken < self.max_steps:
             state.steps_taken += 1
 
             # step 2
-            assistant_reply = self.generate_step_response(state)
-            if assistant_reply:
-                state.messages.append(Message(role="assistant", content=assistant_reply))
-                yield AgentEvent(stage="response", payload=assistant_reply)
-                pending_final = state.scratchpad.pop("final_answer", None)
-                if pending_final:
-                    state.messages.append(Message(role="assistant", content=pending_final))
-                    yield AgentEvent(stage="final", payload=pending_final)
-                    break
+            if state.steps_taken > 1:
+                print('================== Response =====================')
+                assistant_reply = self.generate_step_response(state)
+                if assistant_reply:
+                    state.messages.append(Message(role="assistant", content=assistant_reply))
+                    yield AgentEvent(stage="response", payload=assistant_reply)
+                    pending_final = state.scratchpad.pop("final_answer", None)
+                    if pending_final:
+                        state.messages.append(Message(role="assistant", content=pending_final))
+                        yield AgentEvent(stage="final", payload=pending_final)
+                        break
 
             # step 3
+            print('================== Decision =====================')
             decision = self.decide_next_action(state)
             yield AgentEvent(stage="decision", payload=decision)
 
@@ -107,6 +112,7 @@ class BaseAgent(abc.ABC):
                 break
 
             # step 4
+            print('================== Leverage Tools =====================')
             if decision.kind == "tool":
                 if decision.tool_call is None:
                     raise ValueError("Tool decision missing ToolCall details.")
@@ -115,6 +121,7 @@ class BaseAgent(abc.ABC):
                 yield AgentEvent(stage="tool_result", payload=result)
 
                 # step 5
+                print('================== Processing Tools Results =====================')
                 follow_ups = self.process_tool_result(state, result)
                 if follow_ups:
                     for text in follow_ups:

@@ -3,13 +3,14 @@ set -euo pipefail
 
 AGENT=webwalker
 USE_SEPARATE_JUDGE_LLM=1
-DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/WebWalkerQA
+WEBWALKER_USE_LOCAL_WIKI=1
+DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/Agent/single_depth5.jsonl
 DATASET_SPLIT=main
-OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_demo.jsonl
+OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebWalker/LocalWiki/Depth-5/Qwen2.5-32B-Instruct/webwalker_predictions.jsonl
 MAX_SAMPLES=${MAX_SAMPLES:-}
 MAX_ROUNDS=10
-LOG_FILE=/mnt/sharedata/hdd/beier/Agent/logs/
-EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebWalker/webwalker_predictions_scored_demp.jsonl}
+LOG_FILE=/mnt/sharedata/hdd/beier/Agent/WebWalker/LocalWiki/Depth-5/Qwen2.5-32B-Instruct/
+EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebWalker/LocalWiki/Depth-5/Qwen2.5-32B-Instruct/webwalker_predictions_scored.jsonl}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
@@ -42,6 +43,10 @@ fi
 
 if [[ "${USE_SEPARATE_JUDGE_LLM:-0}" == "1" ]]; then
   ARGS+=(--use-separate-judge-llm)
+fi
+
+if [[ "${WEBWALKER_USE_LOCAL_WIKI:-0}" == "1" ]]; then
+  ARGS+=(--use-local-wiki-tools)
 fi
 
 python -m src.webagent.main "${ARGS[@]}" "$@"
