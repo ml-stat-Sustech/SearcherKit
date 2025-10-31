@@ -25,16 +25,17 @@ def build_system_prompt() -> str:
     )
 
 
-GUIDANCE_TEMPLATE = """The assistant communicates using tagged blocks:
-<think> internal reasoning about the next action </think>
-<tool_call>{{"name": "...", "arguments": {{...}}}}</tool_call>
-<tool_response>tool output</tool_response>
-Repeat as needed, then finish with:
-<think>...</think>
-<answer>final answer</answer>
-
+GUIDANCE_TEMPLATE = """
 Available tools (use exact names and valid JSON arguments):
 {tool_descs}
+
+Use the following format:
+Thought: internal reasoning about the next action 
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action, should be in the json format
+Observation: tool output
+Repeat (Thought, Action, Observation) as needed, then finish with:
+Final Answer:
 
 Never invent new tool names. The `name` field must be one of: {tool_names}.
 """
@@ -57,4 +58,4 @@ def _render_tool_descriptions() -> Tuple[str, str]:
 def build_user_prompt(query: str) -> str:
     tool_descs, tool_names = _render_tool_descriptions()
     guidance = GUIDANCE_TEMPLATE.format(tool_descs=tool_descs, tool_names=tool_names)
-    return f"{guidance}\nUser: {query}"
+    return f"{guidance}\nQuestion: {query}\nThought: "

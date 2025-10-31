@@ -9,14 +9,14 @@ export PYTHONPATH="${PYTHONPATH:-}:${REPO_ROOT}"
 
 AGENT=webdancer
 USE_SEPARATE_JUDGE_LLM=1
-DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/GAIA
+DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/Agent/WebSailor.json
 DATASET_SPLIT="${DATASET_SPLIT:-validation}"
-OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebDancer/gaia_webdancer.jsonl
-MAX_ROUNDS="${MAX_ROUNDS:-20}"
+OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/WebSailor/WebDancer-32B/webdancer_results.jsonl
+MAX_ROUNDS="${MAX_ROUNDS:-10}"
 MAX_SAMPLES="${MAX_SAMPLES:-}"
-LOG_FILE="${LOG_FILE:-}"
+LOG_FILE="${LOG_FILE:-/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/WebSailor/WebDancer-32B/}"
 RUN_EVAL="${RUN_EVAL:-1}"
-EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebDancer/webdancer_predictions_scored.jsonl}
+EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/WebSailor/WebDancer-32B/webdancer_predictions_scored.jsonl}
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 

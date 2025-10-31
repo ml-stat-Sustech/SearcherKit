@@ -227,16 +227,6 @@ class WebWalkerAgent(BaseAgent):
                 action_lines.append(line)
                 continue
 
-            if lower.startswith("action input:"):
-                if not captured_primary_action:
-                    prefix_lines.append(line)
-                    continue
-                if captured_action_input:
-                    break
-                action_lines.append(line)
-                captured_action_input = True
-                continue
-
             if captured_primary_action:
                 if not captured_action_input:
                     action_lines.append(line)

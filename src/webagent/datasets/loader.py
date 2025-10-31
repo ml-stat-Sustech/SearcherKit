@@ -35,6 +35,23 @@ def _load_local_json_dataset(path: Path) -> List[Dict[str, Any]]:
             raise ValueError(f"Unable to parse JSON dataset: {path}") from exc
 
         if isinstance(loaded, dict):
+            verified_pairs = loaded.get("verified_qa_pairs")
+            if isinstance(verified_pairs, list):
+                print('1111')
+                for entry in verified_pairs:
+                    if not isinstance(entry, dict):
+                        continue
+                    question = entry.get("question")
+                    answer = entry.get("answer")
+                    if question is None or answer is None:
+                        continue
+                    record = dict(entry)
+                    record["question"] = question
+                    record["answer"] = answer
+                    records.append(record)
+                if records:
+                    return records
+
             candidate = loaded.get("data")
             if isinstance(candidate, list):
                 loaded = candidate
