@@ -10,6 +10,7 @@ from ..llm.client import LLMClient, build_llm_from_env
 if TYPE_CHECKING:  # pragma: no cover - only for static type checkers
     from ..agents.webwalker import WebWalkerAgent, WebWalkerRequest
     from ..agents.webdancer import WebDancerAgent, WebDancerRequest
+    from ..agents.vanilla import VanillaAgent, VanillaRequest
 
 
 @dataclass
@@ -63,6 +64,20 @@ def build_webdancer_agent(
     return AgentRunContext(agent=agent, request=request)
 
 
+def build_vanilla_agent(
+    *,
+    query: str,
+    max_rounds: int = 4,
+    llm: Optional[LLMClient] = None,
+) -> AgentRunContext:
+    from ..agents.vanilla import VanillaAgent, VanillaRequest
+
+    llm_client = llm or build_llm_from_env()
+    agent = VanillaAgent(llm=llm_client, max_steps=max_rounds)
+    request = VanillaRequest(query=query)
+    return AgentRunContext(agent=agent, request=request)
+
+
 def create_agent(
     agent_name: str,
     *,
@@ -79,7 +94,7 @@ def create_agent(
     Parameters
     ----------
     agent_name:
-        Identifier of the agent to build. Supported values: ``webwalker``, ``webdancer``.
+        Identifier of the agent to build. Supported values: ``webwalker``, ``webdancer``, ``vanilla``.
     query:
         User query to investigate.
     website:
@@ -113,4 +128,11 @@ def create_agent(
             tools=tools,
         )
 
-    raise ValueError(f"Unsupported agent '{agent_name}'. Available agents: webwalker, webdancer.")
+    if name == "vanilla":
+        return build_vanilla_agent(
+            query=query,
+            max_rounds=max_rounds or 4,
+            llm=llm,
+        )
+
+    raise ValueError(f"Unsupported agent '{agent_name}'. Available agents: webwalker, webdancer, vanilla.")

@@ -37,7 +37,6 @@ def _load_local_json_dataset(path: Path) -> List[Dict[str, Any]]:
         if isinstance(loaded, dict):
             verified_pairs = loaded.get("verified_qa_pairs")
             if isinstance(verified_pairs, list):
-                print('1111')
                 for entry in verified_pairs:
                     if not isinstance(entry, dict):
                         continue

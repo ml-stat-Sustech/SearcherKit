@@ -29,7 +29,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Run agents against a Hugging Face dataset.")
     parser.add_argument(
         "--agent",
-        choices=["webwalker", "webdancer"],
+        choices=["webwalker", "webdancer", "vanilla"],
         default="webwalker",
         help="Agent to invoke (default: webwalker).",
     )
@@ -163,8 +163,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                 retriever_name = os.environ.get("LOCAL_WIKI_RETRIEVER")
                 if retriever_name:
                     emit_func(f"🔍 Local wiki retriever: {retriever_name}")
-        else:
+        elif args.agent == "webwalker":
             emit_func("📚 Local wiki tools: disabled (pass --use-local-wiki-tools to enable).")
+        else:
+            emit_func("📚 Local wiki tools: not applicable.")
 
         dataset = load_dataset_records(args.dataset_name, args.dataset_split)
         total_samples = len(dataset)

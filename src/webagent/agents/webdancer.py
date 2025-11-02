@@ -149,7 +149,6 @@ class WebDancerAgent(BaseAgent):
 
     def _extract_answer(self, content: str) -> Optional[str]:
         marker = re.search(r"Final Answer:\s*", content, re.IGNORECASE)
-        print(marker)
         if not marker:
             return None
 
