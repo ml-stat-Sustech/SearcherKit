@@ -1,10 +1,10 @@
 # WebAgent
 
-`WebAgent` is a reusable multi-agent CLI framework that currently ships **WebWalker** and **WebDancer** web agents. The shared abstraction lives in `src/webagent/agents/base.py`, which implements the six-stage workflow (receive request → initial reasoning → action selection → tool execution → observation handling → final answer). Each concrete agent only needs to provide its prompt, tools, and a small amount of agent-specific logic.
+`WebAgent` is a reusable multi-agent CLI framework that currently ships **WebWalker**, **WebDancer**, a single-round **RAG** agent, and a lightweight **Vanilla** baseline. The shared abstraction lives in `src/webagent/agents/base.py`, which implements the six-stage workflow (receive request → initial reasoning → action selection → tool execution → observation handling → final answer). Each concrete agent only needs to provide its prompt, tools, and a small amount of agent-specific logic.
 
 Directory overview:
 
-- `src/webagent/agents/`: base class plus concrete agents (`webwalker.py`, `webdancer.py`)
+- `src/webagent/agents/`: base class plus concrete agents (`webwalker.py`, `webdancer.py`, `rag.py`, `vanilla.py`)
 - `src/webagent/common/`: factory helpers (`builder.py`), shared state (`state.py`), reusable utilities (`utils.py`), and the shared memory manager
 - `src/webagent/prompts/`: prompt templates per agent
 - `src/webagent/tools/`: reusable tool implementations (WebWalker’s `visit_page`; WebDancer’s `search`/`visit`)
@@ -53,6 +53,8 @@ You can replace the default web search/visit tools with the local Wikipedia retr
    export LOCAL_WIKI_ES_HOST=http://192.168.77.12:9200             # optional; defaults to this value
    export LOCAL_WIKI_RETRIEVER=dense                            # bm25, dense, or hybrid
    export LOCAL_WIKI_MODEL_NAME=/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B/   # required for dense/hybrid
+   # Optional agent-specific toggle when using the single-round RAG agent:
+   export RAG_USE_LOCAL_WIKI=1
    # Optional overrides:
    # export LOCAL_WIKI_SEARCH_TOP_K=10
    # export LOCAL_WIKI_MAX_LINKS=50
@@ -98,7 +100,19 @@ python -m src.webagent.demo --agent webwalker \
 
 python -m src.webagent.demo --agent webdancer \
   --query "查找ACL 2025行业轨道的截稿时间和会场地址"
+
+python -m src.webagent.demo --agent rag \
+  --query "概述最新的星舰试飞进展，并列出两个主要信息来源"
+
+# 使用本地 Wiki 检索运行 RAG：
+RAG_USE_LOCAL_WIKI=1 \
+LOCAL_WIKI_INDEX=wiki20251001_qwen3-embedding-0.6b \
+python -m src.webagent.demo \
+  --agent rag \
+  --query "简要介绍三体问题在经典力学中的意义"
 ```
+
+Setting `RAG_USE_LOCAL_WIKI=1` switches the RAG agent to the local search/visit toolchain (shared with WebDancer).
 
 This workflow also works with other OpenAI-compatible gateways (FastChat, text-generation-inference, llama.cpp server, LMDeploy, etc.).
 
@@ -122,9 +136,9 @@ python -m src.webagent.cli \
 
 Flags:
 
-- `--agent` selects either `webwalker` or `webdancer` (default `webwalker`).
+- `--agent` selects `webwalker`, `webdancer`, `rag`, or `vanilla` (default `webwalker`).
 - `--website` is required when `--agent webwalker` is chosen.
-- `--max-rounds` controls the step budget (defaults: 10 for WebWalker, 20 for WebDancer if omitted).
+- `--max-rounds` controls the step budget (defaults: 10 for WebWalker, 20 for WebDancer, 8 for RAG, 4 for Vanilla if omitted).
 
 Ensure the additional tool-related environment variables are present when running WebDancer.
 

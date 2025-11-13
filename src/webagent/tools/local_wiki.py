@@ -23,7 +23,7 @@ else:
 
 DEFAULT_MAX_QUERIES = max(1, int(os.getenv("MAX_MULTIQUERY_NUM", "3")))
 DEFAULT_TOP_K = max(1, int(os.getenv("LOCAL_WIKI_SEARCH_TOP_K", "10")))
-DEFAULT_MAX_LINKS = max(1, int(os.getenv("LOCAL_WIKI_MAX_LINKS", "100")))
+DEFAULT_MAX_LINKS = max(0, int(os.getenv("LOCAL_WIKI_MAX_LINKS", "100")))
 DEFAULT_BODY_MAX_CHARS = max(1, int(os.getenv("LOCAL_WIKI_BODY_MAX_CHARS", "8000")))
 
 
@@ -40,7 +40,14 @@ def _env_flag(name: str) -> bool:
 
 
 def use_local_wiki_tools() -> bool:
-    return _env_flag("WEBDANCER_USE_LOCAL_WIKI") or _env_flag("WEBWALKER_USE_LOCAL_WIKI")
+    return (
+        _env_flag("WEBDANCER_USE_LOCAL_WIKI")
+        or _env_flag("WEBWALKER_USE_LOCAL_WIKI")
+        or _env_flag("RAG_USE_LOCAL_WIKI")
+    )
+
+
+DISABLE_ACTIONABLE_LINKS = _env_flag("LOCAL_WIKI_DISABLE_LINKS")
 
 
 def _initialization_error(message: str) -> str:
@@ -122,10 +129,14 @@ def _coerce_queries(raw: Union[str, Sequence[str]]) -> List[str]:
     return [query.strip() for query in queries if query and query.strip()]
 
 
-def _safe_int(value: object, default: int) -> int:
+def _safe_int(value: object, default: int, *, allow_zero: bool = False) -> int:
     try:
         parsed = int(value)  # type: ignore[arg-type]
-        return parsed if parsed > 0 else default
+        if parsed > 0:
+            return parsed
+        if allow_zero and parsed == 0:
+            return 0
+        return default
     except Exception:  # _coerce_queriesnoqa: BLE001
         return default
 
@@ -237,7 +248,9 @@ class LocalWikiVisitTool(BaseTool):
         titles = titles[: min(len(titles), DEFAULT_MAX_QUERIES)]
         print(titles)
 
-        max_links = _safe_int(call.arguments.get("max_links"), DEFAULT_MAX_LINKS)
+        max_links = _safe_int(call.arguments.get("max_links"), DEFAULT_MAX_LINKS, allow_zero=True)
+        if DISABLE_ACTIONABLE_LINKS:
+            max_links = 0
         body_limit = call.arguments.get("body_max_tokens")
         body_max = _safe_int(body_limit, DEFAULT_BODY_MAX_CHARS)
         goal = str(call.arguments.get("goal", "") or "")
@@ -284,6 +297,9 @@ class LocalWikiVisitTool(BaseTool):
         lines.append(page_text or "No content available.")
         lines.append("------------------")
 
+        if max_links == 0:
+            return "\n".join(lines).strip()
+
         actionable_links = self._render_links(links, max_links)
         if actionable_links:
             lines.append("Actionable Links:")
@@ -295,6 +311,8 @@ class LocalWikiVisitTool(BaseTool):
 
     @staticmethod
     def _render_links(links: Iterable[Dict[str, str]], max_links: int) -> List[str]:
+        if max_links <= 0:
+            return []
         prefixes_to_skip = ("File:", "Category:")
         actionable: List[Dict[str, str]] = []
         for link in links:

@@ -63,7 +63,7 @@ class VanillaAgent(BaseAgent):
         return AgentDecision(kind="continue")
 
     # Stage 5 -----------------------------------------------------------------
-    def process_tool_result(self, state: AgentState, result) -> Optional[List[str]]:  # type: ignore[override]
+    def process_tool_result(self, state: AgentState, result) -> Optional[List[object]]:  # type: ignore[override]
         return None
 
     # Stage 6 -----------------------------------------------------------------

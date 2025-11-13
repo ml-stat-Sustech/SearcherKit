@@ -24,7 +24,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Run WebAgent on a single query.")
     parser.add_argument(
         "--agent",
-        choices=["webwalker", "webdancer"],
+        choices=["webwalker", "webdancer", "rag"],
         default="webwalker",
         help="Agent to invoke (default: webwalker).",
     )
@@ -102,6 +102,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                 _emit(f"🔍 Local wiki retriever: {retriever_name}")
         else:
             _emit("📚 Local wiki tools: disabled (pass --use-local-wiki-tools to enable).")
+    elif args.agent == "rag":
+        _emit("📚 Local wiki tools: not applicable (single-round search).")
 
     _emit("=" * 80)
 

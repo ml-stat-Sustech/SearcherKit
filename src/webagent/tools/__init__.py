@@ -51,6 +51,24 @@ def build_webdancer_tools() -> Dict[str, BaseTool]:
     return tool_map
 
 
+@lru_cache(maxsize=1)
+def build_rag_tools() -> Dict[str, BaseTool]:
+    if use_local_wiki_tools():
+        from .local_wiki import LocalWikiSearchTool, LocalWikiVisitTool
+
+        search_tool: BaseTool = LocalWikiSearchTool()
+        visit_tool: BaseTool = LocalWikiVisitTool()
+        return {
+            search_tool.name: search_tool,
+            visit_tool.name: visit_tool,
+        }
+
+    from .search import SearchTool
+
+    search_tool: BaseTool = SearchTool()
+    return {search_tool.name: search_tool}
+
+
 __all__ = [
     "BaseTool",
     "ToolCall",
@@ -58,4 +76,5 @@ __all__ = [
     "use_local_wiki_tools",
     "build_webwalker_tools",
     "build_webdancer_tools",
+    "build_rag_tools",
 ]

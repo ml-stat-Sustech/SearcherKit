@@ -90,7 +90,7 @@ class BaseAgent(abc.ABC):
 
             # step 2
             if state.steps_taken > 1:
-                print('================== Response =====================')
+                yield AgentEvent(stage="log", payload="================== Response =====================")
                 assistant_reply = self.generate_step_response(state)
                 if assistant_reply:
                     state.messages.append(Message(role="assistant", content=assistant_reply))
@@ -102,7 +102,8 @@ class BaseAgent(abc.ABC):
                         break
 
             # step 3
-            print('================== Decision =====================')
+            yield AgentEvent(stage="log", payload="================== Decision =====================")
+
             decision = self.decide_next_action(state)
             yield AgentEvent(stage="decision", payload=decision)
 
@@ -112,7 +113,8 @@ class BaseAgent(abc.ABC):
                 break
 
             # step 4
-            print('================== Leverage Tools =====================')
+            yield AgentEvent(stage="log", payload="================== Leveraging Tools =====================")
+
             if decision.kind == "tool":
                 if decision.tool_call is None:
                     raise ValueError("Tool decision missing ToolCall details.")
@@ -121,12 +123,25 @@ class BaseAgent(abc.ABC):
                 yield AgentEvent(stage="tool_result", payload=result)
 
                 # step 5
-                print('================== Processing Tools Results =====================')
+                yield AgentEvent(stage="log", payload="================== Processing Tool Results =====================")
+
                 follow_ups = self.process_tool_result(state, result)
+
                 if follow_ups:
-                    for text in follow_ups:
-                        state.messages.append(Message(role="assistant", content=text))
-                        yield AgentEvent(stage="response", payload=text)
+                    for entry in follow_ups:
+                        if isinstance(entry, dict):
+                            text = str(entry.get("text", "")).strip()
+                            append_to_dialogue = bool(entry.get("append_to_dialogue", True))
+                            stage = str(entry.get("stage", "response"))
+                        else:
+                            text = str(entry).strip()
+                            append_to_dialogue = True
+                            stage = "response"
+                        if not text:
+                            continue
+                        if append_to_dialogue:
+                            state.messages.append(Message(role="assistant", content=text))
+                        yield AgentEvent(stage=stage, payload=text)
                 pending_final = state.scratchpad.pop("final_answer", None)
                 if pending_final:
                     state.messages.append(Message(role="assistant", content=pending_final))
@@ -168,8 +183,12 @@ class BaseAgent(abc.ABC):
         """Stage 3: decide whether to invoke a tool or reply directly."""
 
     @abc.abstractmethod
-    def process_tool_result(self, state: AgentState, result: ToolResult) -> Optional[List[str]]:
-        """Stage 5: incorporate the tool output back into the conversation."""
+    def process_tool_result(self, state: AgentState, result: ToolResult) -> Optional[List[object]]:
+        """
+        Stage 5: incorporate the tool output back into the conversation.
+
+        Return a list of follow-up payloads (strings or dictionaries) to emit.
+        """
 
     @abc.abstractmethod
     def finalize_response(self, state: AgentState, decision: AgentDecision) -> str:

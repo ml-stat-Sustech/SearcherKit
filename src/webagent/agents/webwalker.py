@@ -100,28 +100,46 @@ class WebWalkerAgent(BaseAgent):
         return AgentDecision(kind="continue", message=None)
 
     # ---- Stage 5 ---------------------------------------------------------
-    def process_tool_result(self, state: AgentState, result: ToolResult) -> Optional[List[str]]:
+    def process_tool_result(self, state: AgentState, result: ToolResult) -> Optional[List[object]]:
         observation_text = result.output
         observation_message = f"Observation: {observation_text}\nThought: "
         state.messages.append(Message(role="user", content=observation_message))
 
-        follow_ups: List[str] = []
+        follow_ups: List[object] = []
         try:
-            extracted = self.memory.analyze_observation(observation_text)
+            useful, extracted, _ = self.memory.analyze_observation(observation_text)
         except Exception as exc:  # noqa: BLE001
             state.scratchpad.setdefault("memory_errors", []).append(str(exc))
-            extracted = None
+            useful, extracted = None, None
 
+        if useful is not None:
+            follow_ups.append(
+                {
+                    "text": f"[Memory] Usefulness judgement: {useful}",
+                    "append_to_dialogue": False,
+                }
+            )
         if extracted:
-            memory_lines = "\n".join(f"- {entry}" for entry in self.memory.entries)
-            follow_ups.append(f"Memory:\n{memory_lines}")
+            follow_ups.append(
+                {
+                    "text": f"[Memory] New entry:\n- {extracted}",
+                    "append_to_dialogue": False,
+                }
+            )
             try:
-                final = self.memory.judge_completion()
+                judge_flag, answer, _ = self.memory.judge_completion()
             except Exception as exc:  # noqa: BLE001
                 state.scratchpad.setdefault("memory_errors", []).append(str(exc))
-                final = None
-            if final:
-                final_text = f"Final Answer: {final}"
+                judge_flag, answer = None, None
+            if judge_flag is not None:
+                follow_ups.append(
+                    {
+                        "text": f"[Memory] Final judge: {judge_flag}",
+                        "append_to_dialogue": False,
+                    }
+                )
+            if judge_flag and answer:
+                final_text = f"Final Answer: {answer}"
                 state.scratchpad["final_answer"] = final_text
 
         return follow_ups or None

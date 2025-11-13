@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..llm.client import LLMClient, OpenAIChatClient
 from ..prompts import STSTEM_CRITIIC_ANSWER, STSTEM_CRITIIC_INFORMATION
@@ -89,38 +89,63 @@ class MemoryManager:
                 delay *= 2
         return None
 
-    def analyze_observation(self, observation: str) -> Optional[str]:
-        """Return extracted info if observation is deemed useful."""
+    def analyze_observation(
+        self,
+        observation: str,
+    ) -> Tuple[Optional[bool], Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Evaluate whether an observation is useful and extract a memory snippet if so.
+
+        Returns
+        -------
+        Tuple[Optional[bool], Optional[str], Optional[Dict[str, Any]]]
+            (useful flag, extracted memory, raw payload). The useful flag is ``None`` when
+            the LLM response could not be parsed.
+        """
 
         user_prompt = f"- Query: {self.query}\n- Observation: {observation}"
         payload = self._run_json_completion(STSTEM_CRITIIC_INFORMATION, user_prompt)
         if not payload:
-            return None
+            return None, None, None
         usefulness = payload.get("usefulness")
         if isinstance(usefulness, str):
             usefulness = usefulness.lower() == "true"
+        if usefulness is None:
+            return None, None, payload
         if usefulness:
             information = payload.get("information")
             if isinstance(information, str):
                 self.entries.append(information.strip())
-                return information.strip()
-        return None
+                return True, information.strip(), payload
+            return True, None, payload
+        return False, None, payload
 
-    def judge_completion(self) -> Optional[str]:
-        """Return final answer if accumulated memory suffices."""
+    def judge_completion(self) -> Tuple[Optional[bool], Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Decide whether the accumulated memory is sufficient to answer the query.
+
+        Returns
+        -------
+        Tuple[Optional[bool], Optional[str], Optional[Dict[str, Any]]]
+            (judge flag, answer text, raw payload). The flag is ``None`` when judging
+            could not be performed.
+        """
 
         if not self.entries:
-            return None
+            return None, None, None
         joined = "-".join(self.entries)
         user_prompt = f"- Query: {self.query}\n- Accumulated Information: {joined}"
         payload = self._run_json_completion(STSTEM_CRITIIC_ANSWER, user_prompt, client=self.judge_llm)
         if not payload:
-            return None
+            return None, None, None
         judge = payload.get("judge")
         if isinstance(judge, str):
             judge = judge.lower() == "true"
+        if judge is None:
+            return None, None, payload
         if judge:
             answer = payload.get("answer")
             if isinstance(answer, str):
-                return answer.strip()
-        return None
+                return True, answer.strip(), payload
+            return True, None, payload
+        return False, None, payload

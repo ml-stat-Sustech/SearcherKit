@@ -7,6 +7,7 @@ from ..tools.base import BaseTool, ToolCall, ToolResult
 from .webwalker import WebWalkerAgent, WebWalkerRequest
 from .webdancer import WebDancerAgent, WebDancerRequest
 from .vanilla import VanillaAgent, VanillaRequest
+from .rag import RAGAgent, RAGRequest
 
 __all__ = [
     "AgentDecision",
@@ -23,4 +24,6 @@ __all__ = [
     "WebDancerRequest",
     "VanillaAgent",
     "VanillaRequest",
+    "RAGAgent",
+    "RAGRequest",
 ]

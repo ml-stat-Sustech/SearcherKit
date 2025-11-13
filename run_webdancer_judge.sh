@@ -7,17 +7,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}"
 export PYTHONPATH="${PYTHONPATH:-}:${REPO_ROOT}"
 
-AGENT=webwalker
+AGENT=vanilla
 USE_SEPARATE_JUDGE_LLM=1
-DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/Agent/single_depth5.jsonl
+DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/Agent/single_depth2.jsonl
 DATASET_SPLIT="${DATASET_SPLIT:-validation}"
-OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebWalker/LocalWiki/Depth-5/WebDancer-32B/webwalker_predictions.jsonl
+OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/Depth-2/Qwen2.5-32B-Instruct/webdancer_results.jsonl
 MAX_ROUNDS="${MAX_ROUNDS:-10}"
 MAX_SAMPLES="${MAX_SAMPLES:-}"
-LOG_FILE="${LOG_FILE:-/mnt/sharedata/hdd/beier/Agent/WebWalker/LocalWiki/Depth-5/WebDancer-32B/}"
+LOG_FILE="${LOG_FILE:-/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/Depth-2/Qwen2.5-32B-Instruct/}"
 RUN_EVAL="${RUN_EVAL:-1}"
 FORCE_REJUDGE="${FORCE_REJUDGE:-1}"
-EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebWalker/LocalWiki/Depth-5/WebDancer-32B/webwalker_predictions_scored.jsonl}
+EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/Depth-2/Qwen2.5-32B-Instruct/webdancer_results_scored.jsonl}
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 

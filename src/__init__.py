@@ -11,4 +11,8 @@ def webdancer_main(*args, **kwargs):
     return main(*args, **kwargs)
 
 
-__all__ = ["main", "webwalker_main", "webdancer_main"]
+def rag_main(*args, **kwargs):
+    return main(*args, **kwargs)
+
+
+__all__ = ["main", "webwalker_main", "webdancer_main", "rag_main"]

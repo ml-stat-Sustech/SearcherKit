@@ -7,6 +7,7 @@
 node_modules/
 dist/
 DeepResearch/
+Search-R1/
 
 # Compiled Java class files
 *.class

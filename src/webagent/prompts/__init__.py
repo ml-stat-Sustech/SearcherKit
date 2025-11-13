@@ -4,6 +4,11 @@ from .webwalker import STSTEM_CRITIIC_ANSWER, STSTEM_CRITIIC_INFORMATION, SYSTEM
 from .webdancer import build_system_prompt as build_webdancer_system_prompt
 from .webdancer import build_user_prompt as build_webdancer_user_prompt
 from .vanilla import build_vanilla_system_prompt, build_vanilla_user_prompt
+from .rag import (
+    build_rag_context_prompt,
+    build_rag_system_prompt,
+    build_rag_user_prompt,
+)
 
 __all__ = [
     "SYSTEM_EXPLORER",
@@ -13,4 +18,7 @@ __all__ = [
     "build_webdancer_user_prompt",
     "build_vanilla_system_prompt",
     "build_vanilla_user_prompt",
+    "build_rag_system_prompt",
+    "build_rag_user_prompt",
+    "build_rag_context_prompt",
 ]
