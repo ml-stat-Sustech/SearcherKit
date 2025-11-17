@@ -6,12 +6,12 @@ set -euo pipefail
 AGENT=vanilla
 DATASET_NAME=${DATASET_NAME:-/mnt/sharedata/ssd_large/common/datasets/Agent/walker_multi_10.jsonl}
 DATASET_SPLIT=${DATASET_SPLIT:-validation}
-OUTPUT_PATH=${OUTPUT_PATH:-/mnt/sharedata/hdd/beier/Agent/Vanilla/LocalWiki/walker_multi_10/DeepResearch-30B/webdancer_results.jsonl}
+OUTPUT_PATH=${OUTPUT_PATH:-/mnt/sharedata/hdd/beier/Agent/Vanilla/LocalWiki/walker_multi_10/Qwen2.5-32B-Instruct/webdancer_results.jsonl}
 MAX_SAMPLES=${MAX_SAMPLES:-}
 MAX_ROUNDS=${MAX_ROUNDS:-4}
 LOG_FILE=${LOG_FILE:-}
 RUN_EVAL=${RUN_EVAL:-1}
-EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/Vanilla/DeepResearch-30B/vanilla_predictions_eval.jsonl}
+EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/Vanilla/Qwen2.5-32B-Instruct/vanilla_predictions_eval.jsonl}
 FORCE_REJUDGE=${FORCE_REJUDGE:-1}
 USE_SEPARATE_JUDGE_LLM=${USE_SEPARATE_JUDGE_LLM:-1}
 

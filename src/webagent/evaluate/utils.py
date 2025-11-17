@@ -45,7 +45,7 @@ extracted_answer_format_for_xbench = {
     },
 }
 
-JUDGE_PROMPT_GAIA = """You are an impartial expert who decides whether a candidate answer matches the reference.
+JUDGE_PROMPT_GAIA = """You are an impartial expert who decides whether a candidate answer matches the reference meaning.
 
 Question:
 {question}
@@ -56,8 +56,7 @@ Reference Answer:
 Candidate Answer:
 {response}
 
-Respond with either "Correct" if the candidate fully solves the task, or "Incorrect" otherwise. Please give response 
-with Correct/Incorrect first, then you may optionally add a brief justification after the verdict.
+If the candidate conveys the same meaning as the reference (even with different wording or order), respond exactly with "Correct". If the meaning diverges, is incomplete, or contradicts the reference, respond exactly with "Incorrect". Always start your reply with Correct/Incorrect, then you may optionally add a brief justification.
 """
 
 JUDGE_PROMPT_BROWSECOMP_OFFICIAL = """You are a grading assistant.
@@ -200,6 +199,23 @@ def call_llm_judge(item: Dict[str, Any]) -> Dict[str, Any]:
     correct_answer = item["answer"]
     response = (item.get("prediction") or item.get("pred") or "").strip()
     prompt = judge_prompt.format(question=question, correct_answer=correct_answer, response=response)
+
+    # prompt_log_path = os.environ.get("LLM_JUDGE_PROMPT_LOG")
+    log_entry = "\n".join(
+        [
+            f"[llm judge] Question: {question}",
+            "[llm judge] Prompt:",
+            prompt,
+            "",
+        ]
+    )
+    print(log_entry)
+    # if prompt_log_path:
+    #     log_dir = os.path.dirname(prompt_log_path)
+    #     if log_dir:
+    #         os.makedirs(log_dir, exist_ok=True)
+    #     with open(prompt_log_path, "a", encoding="utf-8") as log_file:
+    #         log_file.write(log_entry)
 
     for attempt in range(100):
         try:

@@ -141,7 +141,7 @@ class BaseAgent(abc.ABC):
                             continue
                         if append_to_dialogue:
                             state.messages.append(Message(role="assistant", content=text))
-                        yield AgentEvent(stage=stage, payload=text)
+                        # yield AgentEvent(stage=stage, payload=text)
                 pending_final = state.scratchpad.pop("final_answer", None)
                 if pending_final:
                     state.messages.append(Message(role="assistant", content=pending_final))
