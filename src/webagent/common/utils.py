@@ -140,6 +140,7 @@ QUESTION_FIELD_CANDIDATES: Tuple[str, ...] = (
     "query",
     "prompt",
     "instruction",
+    "problem"
 )
 ANSWER_FIELD_CANDIDATES: Tuple[str, ...] = (
     "answer",

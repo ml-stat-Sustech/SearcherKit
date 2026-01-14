@@ -39,9 +39,9 @@ def render_event(event: "AgentEvent", *, emit_func: Callable[[str], None]) -> No
     stage = event.stage
 
     if stage == "receive":
-        message: "Message" = event.payload
-        emit_func(f"👤 {message.role.capitalize()} message:")
-        emit_func(message.content)
+        for message in event.payload:
+            emit_func(f"👤 {message.role.capitalize()} message:")
+            emit_func(message.content)
         return
 
     if stage == "response":
@@ -106,7 +106,7 @@ def _build_judge_llm_from_env() -> "LLMClient":
     )
 
 
-def build_context(
+async def build_context(
     args,
     *,
     query: str,
@@ -115,7 +115,7 @@ def build_context(
     judge_llm_client: Optional["LLMClient"] = None,
 ) -> AgentRunContext:
     """Instantiate the requested agent with the provided query and website."""
-    return create_agent(
+    return await create_agent(
         args.agent,
         query=query,
         website=website,
@@ -132,7 +132,7 @@ def ensure_parent_directory(path: str) -> None:
         os.makedirs(directory, exist_ok=True)
 
 
-def run_single_query(
+async def run_single_query(
     args,
     *,
     query: str,
@@ -145,7 +145,7 @@ def run_single_query(
     if getattr(args, "use_separate_judge_llm", False):
         judge_llm_client = _build_judge_llm_from_env()
 
-    context = build_context(
+    context = await build_context(
         args,
         query=query,
         website=website,
@@ -154,7 +154,7 @@ def run_single_query(
 
     final_answer = ""
 
-    for event in context.agent.run(context.request):
+    async for event in context.agent.run(context.request):
         if verbose:
             render_event(event, emit_func=emit_func)
         if event.stage == "final":

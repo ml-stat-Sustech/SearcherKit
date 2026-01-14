@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
+import asyncio
 import os
+import traceback
 from datetime import datetime
-from typing import IO, Any, Dict, List, Optional
+from typing import IO, Any, Dict, List, Optional, Callable
 
 from .common.runtime import (
     emit,
@@ -18,14 +19,17 @@ from .common.utils import (
     load_existing_questions,
     write_prediction_record,
 )
-from .datasets import load_dataset_records
+from .dataset_utils import load_dataset_records
 from .evaluate.evl import run_llm_judge_evaluation
 
 
 _LOG_FILE_HANDLE: Optional[IO[str]] = None
 
+NUM_CONCURRENT_QUERIES = 16
 
-def main(argv: Optional[List[str]] = None) -> None:
+sem = asyncio.Semaphore(NUM_CONCURRENT_QUERIES) # ！！过大的并行度会导致vllm engine的KV Cache 被discard，降低速度，尤其是在超长上下文的agent中。请根据vllm在超长序列(32k-128k)下的可用并行度设定
+
+async def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Run agents against a Hugging Face dataset.")
     parser.add_argument(
         "--agent",
@@ -178,6 +182,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         # Inference
         with open(args.output_path, "a", encoding="utf-8") as out_handle:
             processed_count = 0
+            tasks = []
+            contexts = []
             for index, item in enumerate(dataset, start=1):
                 if args.max_samples and index > args.max_samples:
                     break
@@ -231,20 +237,56 @@ def main(argv: Optional[List[str]] = None) -> None:
                 if args.agent == "webwalker":
                     emit_func(f"🌐 Root website: {website_value}")
                 emit_func("-" * 80)
-
-                try:
-                    pred_answer = run_single_query(
-                        args,
-                        query=query_value,
-                        website=website_value,
-                        emit_func=emit_func,
-                        verbose=True,
-                    )
-                except Exception as exc:
-                    emit_func(f"❗ Error while processing sample {index}: {exc}")
-                    pred_answer = ""
+                
+                async def run_single(
+                    args,
+                    query: str,
+                    website: str,
+                    emit_func: Callable[[str], None],
+                    verbose: bool = False,
+                ):
+                    async with sem:
+                        return await run_single_query(
+                            args,
+                            query=query,
+                            website=website,
+                            emit_func=emit_func,
+                            verbose=verbose,
+                        )
+                
+                pred_answer_coroutine = run_single(
+                    args,
+                    query=query_value,
+                    website=website_value,
+                    emit_func=emit_func,
+                    verbose=True,
+                )
+                tasks.append(pred_answer_coroutine) 
+                contexts.append({
+                    "query_value":  query_value,
+                    "answer_value" : answer_value,
+                    "website_value": website_value,
+                    "info_value": info_value,
+                    "metadata_value": metadata_value or None,
+                    "fallback_task_id": item_dict.get("task_id"),
+                })
+                
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+            for item, pred_answer in zip(contexts, results):
+                if isinstance(item, Exception):
+                    emit_func(f"❗ Error while processing sample {index}: {item}\n{traceback.format_exception(item)}")
+                    continue
+                assert isinstance(item, dict)
                 emit_func(f"🎯 Final Answer: {pred_answer or '[empty]'}")
                 emit_func("-" * 80)
+                
+                query_value = item["query_value"]
+                answer_value = item["answer_value"]
+                website_value = item["website_value"]
+                info_value = item["info_value"]
+                metadata_value = item["metadata_value"]
+                fallback_task_id = item["fallback_task_id"]
 
                 write_prediction_record(
                     out_handle,
@@ -254,7 +296,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                     root_url=website_value,
                     info=info_value,
                     metadata=metadata_value or None,
-                    fallback_task_id=item_dict.get("task_id"),
+                    fallback_task_id=fallback_task_id,
                 )
                 existing_questions.add(query_value)
         try:
@@ -275,7 +317,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         if args.run_eval:
             eval_output_path = args.eval_output_path or default_eval_output_path(args.output_path)
             ensure_parent_directory(eval_output_path)
-            run_llm_judge_evaluation(
+            await run_llm_judge_evaluation(
                 input_path=args.output_path,
                 output_path=eval_output_path,
                 skip_existing=not args.force_rejudge,
@@ -289,7 +331,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         if log_handle:
             log_handle.close()
         _LOG_FILE_HANDLE = None
-
+    
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

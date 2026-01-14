@@ -1,17 +1,17 @@
 import json
 import os
-import time
+import asyncio
 from typing import Any, Callable, Dict, Optional
 
 from tqdm import tqdm
 
-from ..datasets import load_webwalker_ground_truth
+from ..dataset_utils import load_webwalker_ground_truth
 from .utils import create_llm_judge_evaluator
 
 __all__ = ["eval_result", "run_llm_judge_evaluation"]
 
 
-def eval_result(
+async def eval_result(
     input_path: str,
     output_path: str,
     *,
@@ -79,25 +79,23 @@ def eval_result(
             data['prediction'] = prediction
             data_list.append(data)
 
-    def call(data: Dict[str, Any]) -> Dict[str, Any]:
-        max_retries = 10
-        for attempt in range(max_retries):
-            try:
-                return evaluator_fn(data)
-            except Exception as e:
-                print(f"Error during evaluation: {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(1 * (2 ** attempt))
-                else:
-                    raise e
+    async def call(data: Dict[str, Any]) -> Dict[str, Any]:
+        return await evaluator_fn(data)
+    
+    # TODO: remove the above wrapper
 
     s = 0
     cnt = 0
 
     with tqdm(total=len(data_list)) as pbar:
-        for data in data_list:
-            try:
-                outputs = call(data)
+        pending = (asyncio.create_task(call(data)) for data in data_list)
+
+        while pending:
+            done, pending = await asyncio.wait(list(pending), return_when=asyncio.FIRST_COMPLETED)
+            for outputs in done:
+                outputs = outputs.result()
+                data = outputs["data"]
+                del outputs["data"]
                 print(outputs)
                 data["score"] = outputs["score"]
                 if outputs.get("raw") is not None:
@@ -111,9 +109,6 @@ def eval_result(
 
                 pbar.update(1)
                 print("Current accuracy:", cnt / s)
-
-            except Exception as e:
-                print(f"Error processing data: {e}")
 
     single_source_easy, single_source_medium, single_source_hard = [], [], []
     multi_source_easy, multi_source_medium, multi_source_hard = [], [], []
@@ -176,7 +171,7 @@ def eval_result(
     print(f"[evl] Evaluation log saved to: {abs_output}")
     print(f"[evl] Summary report saved to: {abs_report}")
 
-def run_llm_judge_evaluation(
+async def run_llm_judge_evaluation(
     *,
     input_path: str,
     output_path: str,
@@ -196,30 +191,24 @@ def run_llm_judge_evaluation(
 
     _emit("=" * 80)
     _emit("🧪 Running evaluation with LLM judge...")
-    try:
-        eval_result(
-            input_path,
-            output_path,
-            dataset=dataset,
-            judge_prompt=judge_prompt,
-            skip_existing=skip_existing,
-            use_separate_judge_llm=use_separate_judge_llm,
-        )
-        abs_eval_output = os.path.abspath(output_path)
-        _emit(f"📈 Evaluation scores saved to: {abs_eval_output}")
-        report_base, _ = os.path.splitext(output_path)
-        report_path = f"{report_base}_report.json"
-        if os.path.exists(report_path):
-            abs_report = os.path.abspath(report_path)
-            _emit(f"🧾 Evaluation summary saved to: {abs_report}")
-            try:
-                with open(report_path, "r", encoding="utf-8") as report_handle:
-                    report_data = json.load(report_handle)
-                _emit(f"🔢 Overall accuracy: {report_data.get('overall')}")
-            except Exception as report_exc:  # noqa: BLE001
-                _emit(f"⚠️  Unable to read evaluation summary: {report_exc}")
-    except Exception as eval_exc:  # noqa: BLE001
-        _emit(f"❗ Evaluation failed: {eval_exc}")
+    await eval_result(
+        input_path,
+        output_path,
+        dataset=dataset,
+        judge_prompt=judge_prompt,
+        skip_existing=skip_existing,
+        use_separate_judge_llm=use_separate_judge_llm,
+    )
+    abs_eval_output = os.path.abspath(output_path)
+    _emit(f"📈 Evaluation scores saved to: {abs_eval_output}")
+    report_base, _ = os.path.splitext(output_path)
+    report_path = f"{report_base}_report.json"
+    if os.path.exists(report_path):
+        abs_report = os.path.abspath(report_path)
+        _emit(f"🧾 Evaluation summary saved to: {abs_report}")
+        with open(report_path, "r", encoding="utf-8") as report_handle:
+            report_data = json.load(report_handle)
+        _emit(f"🔢 Overall accuracy: {report_data.get('overall')}")
 
 
 if __name__ == "__main__":
@@ -259,7 +248,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    eval_result(
+    asyncio.run(eval_result(
         args.input_path,
         args.output_path,
         dataset=args.judge_dataset,
@@ -267,4 +256,4 @@ if __name__ == "__main__":
         judge_prompt=args.judge_prompt,
         skip_existing=not args.force_rejudge,
         use_separate_judge_llm=args.use_separate_judge_llm,
-    )
+    ))

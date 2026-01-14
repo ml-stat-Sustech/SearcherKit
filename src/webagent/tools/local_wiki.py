@@ -5,7 +5,7 @@ import os
 import json
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, quote
 
 from elasticsearch import Elasticsearch, ConnectionError
 from openai import OpenAI
@@ -23,7 +23,7 @@ except Exception as exc:  # noqa: BLE001
 else:
     _IMPORT_ERROR = None
 
-DEFAULT_MAX_QUERIES = max(1, int(os.getenv("MAX_MULTIQUERY_NUM", "3")))
+DEFAULT_MAX_QUERIES = max(1, int(os.getenv("MAX_MULTIQUERY_NUM", "1")))
 DEFAULT_TOP_K = max(1, int(os.getenv("LOCAL_WIKI_SEARCH_TOP_K", "10")))
 DEFAULT_MAX_LINKS = max(0, int(os.getenv("LOCAL_WIKI_MAX_LINKS", "100")))
 DEFAULT_BODY_MAX_CHARS = max(1, int(os.getenv("LOCAL_WIKI_BODY_MAX_CHARS", "8000")))
@@ -62,7 +62,6 @@ Instructions:
 1. Extract information that best answers or relates to the search query.
 2. Write at most two concise sentences (<= 80 words total).
 3. Avoid markdown links; quote concrete facts when possible.
-4. If you notice inline `[link: ...]` markers that likely contain additional helpful details, mention the most relevant ones and why following them could help.
 
 Respond strictly in JSON format:
 {{
@@ -70,31 +69,25 @@ Respond strictly in JSON format:
 }}
 """
 
-VISIT_SUMMARY_PROMPT = """Please process the following local wiki page and user goal to extract useful evidence and a concise summary.
+VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information:
 
-## Page Title
-{title}
-
-## Page URL
-{url}
-
-## User Goal
-{goal}
-
-## Page Content
+## **Webpage Content** 
 {content}
 
-## Instructions
-1. Locate the portions that directly support the goal.
-2. Extract the most relevant evidence.
-3. Provide a concise summary and judge usefulness.
-4. If you see inline `[link: ...]` references that may lead to valuable follow-up information, highlight the most pertinent ones and explain why they might be worth visiting next.
+## **User Goal**
+{goal}
 
-Respond strictly in JSON format:
+## **Task Guidelines**
+1. **Content Scanning**: Locate the **specific sections/data** directly related to the user's goal within the webpage content.
+2. **Key Extraction**: Identify and extract the **most relevant information** from the content, output the **full original context** of the content as far as possible, it can be more than three paragraphs.
+3. **Summary Output**: Organize into a concise paragraph with logical flow, prioritizing clarity and judge the contribution of the information to the goal.
+
+
+**Final Output Format using JSON format**:
 {{
-  "rational": "...",
-  "evidence": "...",
-  "summary": "..."
+  "rational": "string",
+  "evidence": "string",
+  "summary": "string",
 }}
 """
 
@@ -109,14 +102,6 @@ class LocalWikiContext:
 def _env_flag(name: str) -> bool:
     value = os.getenv(name, "")
     return value.lower() in {"1", "true", "yes", "on"}
-
-
-def use_local_wiki_tools() -> bool:
-    return (
-        _env_flag("WEBDANCER_USE_LOCAL_WIKI")
-        or _env_flag("WEBWALKER_USE_LOCAL_WIKI")
-        or _env_flag("RAG_USE_LOCAL_WIKI")
-    )
 
 
 DISABLE_ACTIONABLE_LINKS = _env_flag("LOCAL_WIKI_DISABLE_LINKS")
@@ -352,6 +337,8 @@ class LocalWikiVisitTool(BaseTool):
                     trimmed = unquote(last_segment).replace("_", " ")
                 else:
                     trimmed = unquote(parsed.path).replace("_", " ")
+            else:
+                trimmed = trimmed.replace("_", " ")
             processed_titles.append(trimmed)
         titles = processed_titles[: min(len(processed_titles), DEFAULT_MAX_QUERIES)]
 
@@ -395,7 +382,9 @@ class LocalWikiVisitTool(BaseTool):
         page_text = str(source.get("text", "") or "")
         links = source.get("links") or []
 
-        annotated_text = _inject_inline_links(page_text, links, max_links)
+        annotated_text = _inject_inline_links(page_text, links, max_links, page_url)
+        print(100*'=')
+        print(annotated_text)
 
         if annotated_text and len(annotated_text) > body_max:
             annotated_text = f"{annotated_text[:body_max]}..."
@@ -587,9 +576,6 @@ def _format_visit_summary_block(
         f"The useful information in {source_label} for user goal {goal_label} as follows:",
         "",
     ]
-    if rational:
-        lines.append(f"Reasoning: {rational}")
-        lines.append("")
     lines.append("Evidence in page:")
     lines.append(evidence or "No evidence extracted.")
     lines.append("")
@@ -601,7 +587,7 @@ def _format_visit_summary_block(
     return "\n".join(lines).strip()
 
 
-def _inject_inline_links(content: str, links: Iterable[Dict[str, str]], limit: int) -> str:
+def _inject_inline_links(content: str, links: Iterable[Dict[str, str]], limit: int, page_url: str) -> str:
     if not content or not links:
         return content
     if limit == 0:
@@ -621,11 +607,64 @@ def _inject_inline_links(content: str, links: Iterable[Dict[str, str]], limit: i
         if normalised_limit and len(actionable) >= normalised_limit:
             break
 
+    base_url = _derive_link_base(page_url)
     updated = content
     for text, target in actionable:
-        idx = updated.find(text)
-        if idx == -1:
-            continue
-        marker = f"{text} [link: {target}]"
-        updated = f"{updated[:idx]}{marker}{updated[idx + len(text):]}"
+        link_url = _build_link_url(target, base_url)
+        marker = f"[{text}]({link_url})"
+        start = 0
+        pieces: List[str] = []
+        replaced = False
+        while True:
+            idx = updated.find(text, start)
+            if idx == -1:
+                break
+            pieces.append(updated[start:idx])
+            pieces.append(marker)
+            start = idx + len(text)
+            replaced = True
+        if replaced:
+            pieces.append(updated[start:])
+            updated = "".join(pieces)
     return updated
+
+
+def _derive_link_base(page_url: str) -> Optional[str]:
+    parsed = urlparse(page_url or "")
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    if "/wiki/" in (parsed.path or ""):
+        return f"{parsed.scheme}://{parsed.netloc}/wiki/"
+
+    path = parsed.path or ""
+    slash_idx = path.rfind("/")
+    if slash_idx == -1:
+        base_path = "/"
+    else:
+        base_path = path[: slash_idx + 1] or "/"
+    if not base_path.startswith("/"):
+        base_path = f"/{base_path}"
+    if not base_path.endswith("/"):
+        base_path = f"{base_path}/"
+    return f"{parsed.scheme}://{parsed.netloc}{base_path}"
+
+
+def _build_link_url(target: str, base_url: Optional[str]) -> str:
+    cleaned = (target or "").strip()
+    if not cleaned:
+        return ""
+    parsed = urlparse(cleaned)
+    if parsed.scheme:
+        return cleaned
+
+    if "#" in cleaned:
+        title_part, fragment = cleaned.split("#", 1)
+    else:
+        title_part, fragment = cleaned, ""
+    slug = quote(title_part.replace(" ", "_"))
+    fragment_suffix = f"#{quote(fragment.replace(' ', '_'))}" if fragment else ""
+
+    if base_url:
+        base = base_url if base_url.endswith("/") else f"{base_url}/"
+        return f"{base}{slug}{fragment_suffix}"
+    return f"localwiki://{slug}{fragment_suffix}"

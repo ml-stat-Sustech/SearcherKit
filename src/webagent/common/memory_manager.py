@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..llm.client import LLMClient, OpenAIChatClient
-from ..prompts import STSTEM_CRITIIC_ANSWER, STSTEM_CRITIIC_INFORMATION
+from ..agents.prompts import STSTEM_CRITIIC_ANSWER, STSTEM_CRITIIC_INFORMATION
 
 
 @dataclass

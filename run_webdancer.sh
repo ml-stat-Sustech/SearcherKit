@@ -5,24 +5,39 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}"
-export PYTHONPATH="${PYTHONPATH:-}:${REPO_ROOT}"
+export PYTHONPATH="${PYTHONPATH:-}:$(cd "${REPO_ROOT}/.."; pwd)"
 
+USE_LOCAL_WIKI=0
 # Local wiki summary model configuration (edit values or export before running)
-export LOCAL_WIKI_SUMMARY_MODEL="${LOCAL_WIKI_SUMMARY_MODEL:-qwen/qwen-2.5-72b-instruct}"
-export LOCAL_WIKI_SUMMARY_API_KEY="${LOCAL_WIKI_SUMMARY_API_KEY:-REMOVED_REVOKED_SECRET}"
-export LOCAL_WIKI_SUMMARY_BASE_URL="${LOCAL_WIKI_SUMMARY_BASE_URL:-https://openrouter.ai/api/v1}"
+# export LOCAL_WIKI_SUMMARY_MODEL="${LOCAL_WIKI_SUMMARY_MODEL:-Qwen/Qwen3-8B}"
+# export LOCAL_WIKI_SUMMARY_API_KEY="${LOCAL_WIKI_SUMMARY_API_KEY:-sk-iuseapibjpdeahdvmxquvitungchbbtzhqsjhkhlfrpwevef}"
+# export LOCAL_WIKI_SUMMARY_BASE_URL="${LOCAL_WIKI_SUMMARY_BASE_URL:-https://api.siliconflow.cn/v1}"
+
+export OPENAI_MODEL='/mnt/sharedata/ssd_large/common/LLMs/WebSailor-7B'
+export OPENAI_API_KEY="a"
+export OPENAI_BASE_URL="http://127.0.0.1:8000/v1"
+# export OPENAI_TEMPERATURE=0.6
+
+# export OPENAI_MODEL='/mnt/sharedata/ssd_large/common/LLMs/WebSailor-7B'
+# export OPENAI_BASE_URL="http://192.168.77.12:8000/v1"
+# export OPENAI_API_KEY="1"
+
+export OPENAI_JUDGE_MODEL='qwen3-32b'
+export OPENAI_JUDGE_API_KEY="a"
+export OPENAI_JUDGE_MODEL_SERVER="https://www.dmxapi.cn/v1"
 
 AGENT=webdancer
 USE_SEPARATE_JUDGE_LLM=1
-DATASET_NAME=/mnt/sharedata/ssd_large/common/datasets/Agent/WebSailor.json
-DATASET_SPLIT="${DATASET_SPLIT:-validation}"
-OUTPUT_PATH=/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/WebSailor/Qwen2.5-32B-Instruct/webdancer_results_test.jsonl
-MAX_ROUNDS="${MAX_ROUNDS:-10}"
-MAX_SAMPLES="${MAX_SAMPLES:-3}"
-LOG_FILE="${LOG_FILE:-/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/WebSailor/Qwen2.5-32B-Instruct/}"
-RUN_EVAL="${RUN_EVAL:-1}"
-FORCE_REJUDGE="${FORCE_REJUDGE:-1}"
-EVAL_OUTPUT=${EVAL_OUTPUT:-/mnt/sharedata/hdd/beier/Agent/WebDancer/LocalWiki/WebSailor/Qwen2.5-32B-Instruct/webdancer_predictions_scored_test.jsonl}
+DATASET_NAME=../agent_data/browsecomp_plus_decrypted_simple.jsonl
+DATASET_SPLIT="${DATASET_SPLIT:-train}"
+OUTPUT_PATH=./results/websailor_browsecomp_plus_simple_results.jsonl
+MAX_ROUNDS="${MAX_ROUNDS:-30}"
+# MAX_SAMPLES="${MAX_SAMPLES:-4}"
+MAX_SAMPLES="100"
+LOG_FILE=./log
+RUN_EVAL=1
+FORCE_REJUDGE=1
+EVAL_OUTPUT=./results/websailor_browsecomp_plus_simple_predictions_scored_test.jsonl
 
 mkdir -p "$(dirname "${OUTPUT_PATH}")"
 

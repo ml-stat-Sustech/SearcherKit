@@ -1,9 +1,13 @@
 import json
 import os
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+import asyncio
+from typing import Any, Awaitable, Dict, Optional, Tuple, Callable
 
-from ..datasets import load_webwalker_ground_truth
+import backoff
+from openai import RateLimitError
+
+from ..dataset_utils import load_webwalker_ground_truth
 from ..llm import LLMClient, OpenAIChatClient, build_llm_from_env
 
 
@@ -45,6 +49,20 @@ extracted_answer_format_for_xbench = {
     },
 }
 
+# JUDGE_PROMPT_GAIA = """You are an impartial expert who decides whether a candidate answer matches the reference meaning.
+
+# Question:
+# {question}
+
+# Reference Answer:
+# {correct_answer}
+
+# Candidate Answer:
+# {response}
+
+# If the candidate conveys the same meaning as the reference (even with different wording or order), respond exactly with "Correct". If the meaning diverges, is incomplete, or contradicts the reference, respond exactly with "Incorrect". Always start your reply with Correct/Incorrect, then you may optionally add a brief justification.
+# """
+
 JUDGE_PROMPT_GAIA = """You are an impartial expert who decides whether a candidate answer matches the reference meaning.
 
 Question:
@@ -56,7 +74,7 @@ Reference Answer:
 Candidate Answer:
 {response}
 
-If the candidate conveys the same meaning as the reference (even with different wording or order), respond exactly with "Correct". If the meaning diverges, is incomplete, or contradicts the reference, respond exactly with "Incorrect". Always start your reply with Correct/Incorrect, then you may optionally add a brief justification.
+If the candidate answers the question correctly as implied in the reference (even with different wording or order), respond exactly with "Correct". If the meaning diverges, is incomplete, or contradicts the reference, respond exactly with "Incorrect". Always start your reply with Correct/Incorrect, then you may optionally add a brief justification.
 """
 
 JUDGE_PROMPT_BROWSECOMP_OFFICIAL = """You are a grading assistant.
@@ -189,7 +207,7 @@ def configure_llm_judge(
     print(f"[llm judge] Using model: {judge_client.name()}")
 
 
-def call_llm_judge(item: Dict[str, Any]) -> Dict[str, Any]:
+async def call_llm_judge(item: Dict[str, Any]) -> Dict[str, Any]:
     global judge_prompt, dataset, judge_client
 
     if judge_client is None or judge_prompt is None:
@@ -216,52 +234,39 @@ def call_llm_judge(item: Dict[str, Any]) -> Dict[str, Any]:
     #         os.makedirs(log_dir, exist_ok=True)
     #     with open(prompt_log_path, "a", encoding="utf-8") as log_file:
     #         log_file.write(log_entry)
+    raw_details: Optional[Dict[str, Any]] = None
+    complete = backoff.on_exception(backoff.expo, RateLimitError)(judge_client.complete)
+    raw_reply = await complete(
+        [{"role": "user", "content": prompt}]
+    )
 
-    for attempt in range(100):
+    if dataset.startswith("xbench"):
         try:
-            raw_details: Optional[Dict[str, Any]] = None
-            raw_reply = judge_client.complete(
-                [{"role": "user", "content": prompt}]
-            )
+            parsed = json.loads(raw_reply)
+        except json.JSONDecodeError:
+            parsed = {}
+        raw_details = parsed if isinstance(parsed, dict) else {"raw": raw_reply}
+        conclusion = (parsed or {}).get("结论", "")
+        judgement = "Correct" if isinstance(conclusion, str) and conclusion.strip() == "正确" else ""
+    elif "browsecomp" in dataset:
+        try:
+            parsed = json.loads(raw_reply)
+        except json.JSONDecodeError:
+            parsed = {}
+        raw_details = parsed if isinstance(parsed, dict) else {"raw": raw_reply}
+        correct_flag = (parsed or {}).get("correct", "")
+        judgement = "Correct" if isinstance(correct_flag, str) and correct_flag.lower() == "yes" else ""
+    else:
+        judgement = raw_reply
+        raw_details = {"response": raw_reply}
 
-            if dataset.startswith("xbench"):
-                try:
-                    parsed = json.loads(raw_reply)
-                except json.JSONDecodeError:
-                    parsed = {}
-                raw_details = parsed if isinstance(parsed, dict) else {"raw": raw_reply}
-                conclusion = (parsed or {}).get("结论", "")
-                judgement = "Correct" if isinstance(conclusion, str) and conclusion.strip() == "正确" else ""
-            elif "browsecomp" in dataset:
-                try:
-                    parsed = json.loads(raw_reply)
-                except json.JSONDecodeError:
-                    parsed = {}
-                raw_details = parsed if isinstance(parsed, dict) else {"raw": raw_reply}
-                correct_flag = (parsed or {}).get("correct", "")
-                judgement = "Correct" if isinstance(correct_flag, str) and correct_flag.lower() == "yes" else ""
-            else:
-                judgement = raw_reply
-                raw_details = {"response": raw_reply}
-
-            return {
-                "question": question,
-                "answer": correct_answer,
-                'prediction': response,
-                "judgement": judgement,
-                "details": raw_details,
-            }
-        except Exception as e:
-            if attempt == 4:
-                return {
-                    "question": question,
-                    "answer": correct_answer,
-                    'prediction': response,
-                    "judgement": "Error",
-                    "error": str(e),
-                }
-            time.sleep(3)
-            continue
+    return {
+        "question": question,
+        "answer": correct_answer,
+        'prediction': response,
+        "judgement": judgement,
+        "details": raw_details,
+    }
 
 
 def create_llm_judge_evaluator(
@@ -270,7 +275,7 @@ def create_llm_judge_evaluator(
     judge_model: Optional[str] = None,
     judge_prompt: Optional[str] = None,
     use_separate_judge_env: bool = False,
-) -> Tuple[Callable[[Dict[str, Any]], Dict[str, Any]], Optional[float]]:
+) -> Tuple[Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]], Optional[float]]:
     configure_llm_judge(
         dataset,
         model_override=judge_model,
@@ -278,7 +283,7 @@ def create_llm_judge_evaluator(
         use_separate_judge_env=use_separate_judge_env,
     )
 
-    def _llm_judge_eval(data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _llm_judge_eval(data: Dict[str, Any]) -> Dict[str, Any]:
         reference_answer = data.get("reference_answer", data.get("answer"))
         if reference_answer is None:
             raise KeyError("reference_answer")
@@ -288,9 +293,10 @@ def create_llm_judge_evaluator(
             "answer": reference_answer,
             "prediction": prediction_value or "",
         }
-        judge_response = call_llm_judge(item)
+        judge_response = await call_llm_judge(item)
         is_correct = is_correct_judgement(judge_response.get("judgement", ""))
         return {
+            "data": data,
             "score": 1.0 if is_correct else 0.0,
             "raw": judge_response,
         }

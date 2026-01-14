@@ -4,15 +4,13 @@ import abc
 import os
 from typing import Dict, List, Optional
 
-
 ChatMessages = List[Dict[str, str]]
-
 
 class LLMClient(abc.ABC):
     """Minimal chat-completion interface required by the WebWalker agent."""
 
     @abc.abstractmethod
-    def complete(self, messages: ChatMessages, **kwargs) -> str:
+    async def complete(self, messages: ChatMessages, **kwargs) -> str:
         """Return the assistant reply for the provided conversation history."""
 
     def name(self) -> str:
@@ -31,7 +29,8 @@ class OpenAIChatClient(LLMClient):
         base_url: Optional[str] = None,
         default_kwargs: Optional[Dict[str, object]] = None,
     ) -> None:
-        from openai import OpenAI
+        from openai import AsyncOpenAI, RateLimitError
+        import backoff
 
         api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not api_key:
@@ -39,19 +38,22 @@ class OpenAIChatClient(LLMClient):
         client_kwargs: Dict[str, object] = {"api_key": api_key}
         if base_url:
             client_kwargs["base_url"] = base_url
-        self.client = OpenAI(**client_kwargs)
+        self.client = AsyncOpenAI(**client_kwargs)
         self.model = model
+        self.query = backoff.on_exception(backoff.expo, RateLimitError)(self.client.chat.completions.create)
+        
         self.default_kwargs = default_kwargs or {}
 
-    def complete(self, messages: ChatMessages, **kwargs) -> str:
+    async def complete(self, messages: ChatMessages, **kwargs) -> str:
         payload = {**self.default_kwargs, **kwargs}
-        response = self.client.chat.completions.create(
+        response = await self.query(
             model=self.model,
             messages=messages,
             **payload,
         )
         content = response.choices[0].message.content
-        return content.strip() if content else ""
+        assert content, f"Model returned empty content {content} from messages {messages}."
+        return content
 
     def name(self) -> str:
         return self.model

@@ -7,8 +7,6 @@ from typing import List, TYPE_CHECKING
 
 import requests
 
-from .base import BaseTool, ToolCall
-
 if TYPE_CHECKING:  # pragma: no cover
     from ..agents.base import AgentState
 

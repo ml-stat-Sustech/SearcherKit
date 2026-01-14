@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from .base import AgentDecision, AgentState, BaseAgent, Message
 from ..llm.client import LLMClient
-from ..prompts import build_vanilla_system_prompt, build_vanilla_user_prompt
+from ..agents.prompts import build_vanilla_system_prompt, build_vanilla_user_prompt
 
 
 @dataclass

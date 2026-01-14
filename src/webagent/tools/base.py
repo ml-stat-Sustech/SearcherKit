@@ -7,7 +7,6 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..agents.base import AgentState
 
-
 @dataclass
 class ToolCall:
     """Normalized representation of a tool invocation requested by the agent."""
@@ -23,14 +22,16 @@ class ToolResult:
     call: ToolCall
     output: str
 
-
 class BaseTool(abc.ABC):
     """Minimal base class for runtime tool implementations."""
 
     name: str
-    description: str
+    description: Optional[str]
     arguments_schema: Optional[Dict[str, Any]] = None
+    
+    async def init(self, *args, **kwargs) -> None:
+        """Initialize the tool."""
 
     @abc.abstractmethod
-    def run(self, call: ToolCall, state: "AgentState") -> str:
+    async def run(self, call: ToolCall, state: "AgentState") -> str:
         """Execute the tool with the provided arguments."""

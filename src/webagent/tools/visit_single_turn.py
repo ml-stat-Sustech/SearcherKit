@@ -18,11 +18,9 @@ JINA_API_KEY = os.getenv("JINA_API_KEY")
 DASHSCOPE_KEY = os.getenv("DASHSCOPE_API_KEY")
 DASHSCOPE_BASE = os.getenv("DASHSCOPE_MODEL_SERVER", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 SUMMARY_MODEL = os.getenv("WEBDANCER_VISIT_MODEL", "qwen2.5-72b-instruct")
+SUMMERY_MAX_TOKENS = int(os.getenv("WEBDANCER_VISIT_MAX_TOKENS", 128024))
 
 EXTRACT_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
-
-## Webpage Content
-{webpage_content}
 
 ## User Goal
 {goal}
@@ -38,6 +36,9 @@ Respond strictly in JSON:
   "evidence": "...",
   "summary": "..."
 }}
+
+## Webpage Content
+{webpage_content}
 """
 
 
@@ -95,7 +96,9 @@ class VisitTool(BaseTool):
             response = requests.get(f"https://r.jina.ai/{url}", headers=headers, timeout=15)
             if response.status_code == 200:
                 return response.text
-        except Exception:
+            print(f"[Visit] Error fetching {url}: {response.status_code} {response.reason}")
+        except Exception as e:
+            print(f"[Visit] Error fetching {url}: {e}")
             return ""
         return ""
 
@@ -104,12 +107,15 @@ class VisitTool(BaseTool):
         try:
             response = client.chat.completions.create(
                 model=SUMMARY_MODEL,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": prompt[:SUMMERY_MAX_TOKENS]}],
                 response_format={"type": "json_object"},
             )
             payload = response.choices[0].message.content
+            assert payload
+            payload = payload.strip().lstrip("```json").rstrip("```").strip()
             return json.loads(payload)
-        except Exception:
+        except Exception as e:
+            print(f"[Visit] Error summarizing: {e}")
             return {}
 
     def _format_summary(self, url: str, goal: str, data: Dict[str, str]) -> str:
@@ -137,3 +143,10 @@ class VisitTool(BaseTool):
             "Evidence:\nUnable to access the page.\n\n"
             "Summary:\nNo information available."
         )
+
+def main():
+    tool = VisitTool()
+    print(tool.run(ToolCall(name='visit', arguments={"url": "https://www.baidu.com", "goal": "Summarize the content of the page."}), None))
+
+if __name__ == "__main__":
+    main()

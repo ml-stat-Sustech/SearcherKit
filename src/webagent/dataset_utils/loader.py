@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List
 
 from datasets import load_dataset as hf_load_dataset
+from datasets import load_from_disk
 
 from .gaia import is_gaia_dataset_root, load_gaia_records
 
@@ -76,12 +78,14 @@ def load_dataset_records(dataset_name: str, split: str):
     if is_gaia_dataset_root(dataset_path):
         return load_gaia_records(dataset_path, split)
 
-    if dataset_path.exists():
+    if dataset_path.exists() and not dataset_path.is_dir():
         if suffix in {".json", ".jsonl"}:
             print(f"===================== Loading local datasets =====================")
             return _load_local_json_dataset(dataset_path)
         dataset_name = str(dataset_path)
     elif suffix in {".json", ".jsonl"}:
         raise FileNotFoundError(f"JSON dataset path does not exist: {dataset_path}")
-
+    elif dataset_path.is_dir():
+        print(f"===================== Loading local datasets =====================")
+        return load_from_disk(dataset_path)
     return hf_load_dataset(path=dataset_name, split=split)

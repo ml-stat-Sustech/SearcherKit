@@ -5,7 +5,7 @@ from typing import Dict, Iterable, List, Optional
 
 from .base import AgentDecision, AgentState, BaseAgent, Message
 from ..llm.client import LLMClient
-from ..prompts import (
+from ..agents.prompts import (
     build_rag_context_prompt,
     build_rag_system_prompt,
     build_rag_user_prompt,

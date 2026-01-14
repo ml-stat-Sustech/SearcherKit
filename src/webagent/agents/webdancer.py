@@ -9,7 +9,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 from .base import AgentDecision, AgentState, BaseAgent, Message
 from ..tools.base import BaseTool, ToolCall, ToolResult
 from ..llm.client import LLMClient
-from ..prompts import build_webdancer_system_prompt, build_webdancer_user_prompt
+from .prompts import build_webdancer_system_prompt, build_webdancer_user_prompt
 from ..tools import build_webdancer_tools
 
 FORMAT_REMINDER = (
@@ -40,28 +40,42 @@ class WebDancerAgent(BaseAgent):
         tools: Optional[Iterable[BaseTool]] = None,
         max_steps: int = 20,
     ) -> None:
-        default_tools = list(tools) if tools is not None else list(build_webdancer_tools().values())
+        default_tools = list(tools) if tools is not None else None
         super().__init__(tools=default_tools, max_steps=max_steps)
         self.llm = llm
+        
+    async def init_tools(self):
+        tools = (await build_webdancer_tools()).values()
+        for tool in tools:
+            self.register_tool(tool)  
 
     # step 1
     def handle_user_message(self, user_input: WebDancerRequest) -> AgentState:
         state = AgentState(user_input=user_input)
-        state.messages.append(Message(role="system", content=build_webdancer_system_prompt()))
+        state.messages.append(Message(role="system", content=build_webdancer_system_prompt(self)))
         state.messages.append(Message(role="user", content=build_webdancer_user_prompt(user_input.query)))
         state.scratchpad["query"] = user_input.query
         return state
 
     # step 2
-    def generate_step_response(self, state: AgentState) -> str:
+    async def generate_step_response(self, state: AgentState) -> str:
         if (
-            state.steps_taken == self.max_steps
-            and not state.scratchpad.get("final_round_prompted")
+            state.steps_taken >= self.max_steps - 1
+            # and not state.scratchpad.get("final_round_prompted")
         ):
             state.messages.append(Message(role="user", content=FINAL_ROUND_REMINDER))
-            state.scratchpad["final_round_prompted"] = True
+            # state.scratchpad["final_round_prompted"] = True
 
-        raw_output = self.llm.complete(self._messages_to_dicts(state.messages))
+        raw_output = await self.llm.complete(
+            self._messages_to_dicts(state.messages), 
+            temperature=0.7,
+            top_p=0.8,
+            presence_penalty=1.5,
+            extra_body={
+                "top_k": 20, 
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+            stop=["</tool_call>"])
         return self._normalise_action_blocks(raw_output)
 
     # step 3

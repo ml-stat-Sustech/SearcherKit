@@ -10,7 +10,7 @@ from .base import AgentDecision, AgentState, BaseAgent, Message
 from ..tools.base import BaseTool, ToolCall, ToolResult
 from ..llm.client import LLMClient
 from ..common.memory_manager import MemoryManager
-from ..prompts import SYSTEM_EXPLORER
+from ..agents.prompts import SYSTEM_EXPLORER
 from ..common.state import STATE
 from ..tools import build_webwalker_tools
 

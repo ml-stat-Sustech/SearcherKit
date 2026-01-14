@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Literal, Optional
+from typing import Any, Dict, AsyncIterator, List, Literal, Optional
 
 from ..tools.base import BaseTool, ToolCall, ToolResult
 
@@ -77,12 +77,12 @@ class BaseAgent(abc.ABC):
 
         self.tools[tool.name] = tool
 
-    def run(self, user_input: Any) -> Iterator[AgentEvent]:
+    async def run(self, user_input: Any) -> AsyncIterator[AgentEvent]:
         """Execute the agent workflow and yield streaming events."""
 
         # step 1
         state = self.handle_user_message(user_input)
-        yield AgentEvent(stage="receive", payload=state.messages[-1])
+        yield AgentEvent(stage="receive", payload=state.messages)
         yield AgentEvent(stage="log", payload="Prepare User Message")
 
         while state.steps_taken < self.max_steps:
@@ -91,7 +91,7 @@ class BaseAgent(abc.ABC):
             # step 2
             if state.steps_taken > 1:
                 yield AgentEvent(stage="log", payload="================== Response =====================")
-                assistant_reply = self.generate_step_response(state)
+                assistant_reply = await self.generate_step_response(state)
                 if assistant_reply:
                     state.messages.append(Message(role="assistant", content=assistant_reply))
                     yield AgentEvent(stage="response", payload=assistant_reply)
@@ -118,7 +118,7 @@ class BaseAgent(abc.ABC):
             if decision.kind == "tool":
                 if decision.tool_call is None:
                     raise ValueError("Tool decision missing ToolCall details.")
-                result = self.execute_tool(decision.tool_call, state)
+                result = await self.execute_tool(decision.tool_call, state)
                 state.tool_results.append(result)
                 yield AgentEvent(stage="tool_result", payload=result)
 
@@ -157,12 +157,12 @@ class BaseAgent(abc.ABC):
             fallback = self.on_max_steps(state)
             yield AgentEvent(stage="final", payload=fallback)
 
-    def execute_tool(self, call: ToolCall, state: AgentState) -> ToolResult:
+    async def execute_tool(self, call: ToolCall, state: AgentState) -> ToolResult:
         """Execute the requested tool using the registry."""
 
         if call.name not in self.tools:
             raise KeyError(f"Tool '{call.name}' is not registered.")
-        output = self.tools[call.name].run(call, state)
+        output = await self.tools[call.name].run(call, state)
         return ToolResult(call=call, output=output)
 
     def on_max_steps(self, state: AgentState) -> str:
@@ -175,7 +175,7 @@ class BaseAgent(abc.ABC):
         """Stage 1: receive and normalize the user request."""
 
     @abc.abstractmethod
-    def generate_step_response(self, state: AgentState) -> str:
+    async def generate_step_response(self, state: AgentState) -> str:
         """Stage 2+: call the LLM to extend the assistant side of the dialogue."""
 
     @abc.abstractmethod

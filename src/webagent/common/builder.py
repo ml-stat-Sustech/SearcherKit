@@ -48,7 +48,7 @@ def build_webwalker_agent(
     return AgentRunContext(agent=agent, request=request)
 
 
-def build_webdancer_agent(
+async def build_webdancer_agent(
     *,
     query: str,
     max_rounds: int = 20,
@@ -56,11 +56,11 @@ def build_webdancer_agent(
     tools: Optional[list[BaseTool]] = None,
 ) -> AgentRunContext:
     from ..agents.webdancer import WebDancerAgent, WebDancerRequest
-    from ..tools import build_webdancer_tools
 
     llm_client = llm or build_llm_from_env()
-    tool_list = tools or list(build_webdancer_tools().values())
+    tool_list = tools
     agent = WebDancerAgent(llm=llm_client, tools=tool_list, max_steps=max_rounds)
+    await agent.init_tools()
     request = WebDancerRequest(query=query)
     return AgentRunContext(agent=agent, request=request)
 
@@ -96,7 +96,7 @@ def build_vanilla_agent(
     return AgentRunContext(agent=agent, request=request)
 
 
-def create_agent(
+async def create_agent(
     agent_name: str,
     *,
     query: str,
@@ -139,7 +139,7 @@ def create_agent(
         )
 
     if name == "webdancer":
-        return build_webdancer_agent(
+        return await build_webdancer_agent(
             query=query,
             max_rounds=max_rounds or 20,
             llm=llm,

@@ -17,6 +17,8 @@ Search-R1/
 
 # Log files
 *.log
+/log
+/results
 
 # Package files
 *.jar
@@ -50,3 +52,7 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Python related
+__pycache__
+.venv
+*.pyc
