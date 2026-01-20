@@ -272,12 +272,14 @@ async def main(argv: Optional[List[str]] = None) -> None:
                 })
                 
             results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+            
+            e = None
             for item, pred_answer in zip(contexts, results):
-                if isinstance(item, Exception):
-                    emit_func(f"❗ Error while processing sample {index}: {item}\n{traceback.format_exception(item)}")
+                if isinstance(pred_answer, Exception):
+                    emit_func(f"❗ Error while processing sample {index}: {pred_answer}\n{traceback.format_exception(pred_answer)}")
+                    e = pred_answer
                     continue
-                assert isinstance(item, dict)
+                assert isinstance(pred_answer, str)
                 emit_func(f"🎯 Final Answer: {pred_answer or '[empty]'}")
                 emit_func("-" * 80)
                 
@@ -311,6 +313,10 @@ async def main(argv: Optional[List[str]] = None) -> None:
         emit_func(f"✅ Completed run. Predictions saved to: {abs_output}")
         if log_path:
             emit_func(f"📝 Run log saved to: {os.path.abspath(log_path)}")
+
+        if e:
+            print("At least one error occurred during the run. Check log for details.\nLatest error:")
+            raise e
 
         # Evaluation
         print('====================================== Evaluate ======================================')
