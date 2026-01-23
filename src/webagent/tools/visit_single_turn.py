@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 from typing import Dict, List, Union, TYPE_CHECKING
 
 import requests
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .base import BaseTool, ToolCall
 
@@ -29,12 +29,20 @@ EXTRACT_PROMPT = """Please process the following webpage content and user goal t
 1. Locate the portions that directly support the goal.
 2. Extract the most relevant evidence.
 3. Provide a concise summary and judge usefulness.
+4. Find and provide (if any) urls to other pages that may be relevant.
 
 Respond strictly in JSON:
 {{
   "rational": "...",
   "evidence": "...",
-  "summary": "..."
+  "summary": "...",
+  "urls": [
+      {{
+          "url": "...",
+          "title": "...",
+      }},
+      {{...}}
+  ]
 }}
 
 ## Webpage Content
@@ -50,9 +58,9 @@ class VisitTool(BaseTool):
         "goal": "string; description of the information you want to extract from the pages",
     }
 
-    def run(self, call: ToolCall, state: "AgentState") -> str:
-        if not JINA_API_KEY:
-            return "[Visit] Missing JINA_API_KEY environment variable."
+    async def run(self, call: ToolCall, state: "AgentState") -> str:
+        # if not JINA_API_KEY:
+        #     return "[Visit] Missing JINA_API_KEY environment variable."
         if not DASHSCOPE_KEY:
             return "[Visit] Missing DASHSCOPE_API_KEY environment variable."
 
@@ -67,33 +75,45 @@ class VisitTool(BaseTool):
 
         limit = min(len(urls), DEFAULT_MAX_QUERIES)
         urls = urls[:limit]
+        
+        futures= [self._process_single(url, goal) for url in urls]
+        results = await asyncio.gather(*futures, return_exceptions=True)
+        
+        summaries = []
+        for i, res in enumerate(results):
+            if isinstance(res, BaseException):
+                summaries.append(f"[Visit] Error while processing sample {i}: {res}")
 
-        with ThreadPoolExecutor(max_workers=limit) as pool:
-            futures = {pool.submit(self._process_single, url, goal): url for url in urls}
-            summaries: List[str] = []
-            for future in as_completed(futures):
-                try:
-                    summaries.append(future.result())
-                except Exception as exc:  # noqa: BLE001
-                    summaries.append(f"[Visit] Error fetching {futures[future]}: {exc}")
+        # with ThreadPoolExecutor(max_workers=limit) as pool:
+        #     futures = {pool.submit(self._process_single, url, goal): url for url in urls}
+        #     summaries: List[str] = []
+        #     for future in as_completed(futures):
+        #         try:
+        #             summaries.append(future.result())
+        #         except Exception as exc:  # noqa: BLE001
+        #             summaries.append(f"[Visit] Error fetching {futures[future]}: {exc}")
         return "\n=======\n".join(summaries)
 
-    def _process_single(self, url: str, goal: str) -> str:
+    async def _process_single(self, url: str, goal: str) -> str:
         content = self._fetch_via_jina(url)
         if not content:
             return self._fallback_summary(url, goal)
 
         prompt = EXTRACT_PROMPT.format(webpage_content=content, goal=goal)
-        summary = self._summarize(prompt)
+        summary = await self._summarize(prompt)
         if not summary:
             return self._fallback_summary(url, goal)
 
         return self._format_summary(url, goal, summary)
 
     def _fetch_via_jina(self, url: str) -> str:
-        headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
+        if JINA_API_KEY:
+            headers = {"Authorization": f"Bearer {JINA_API_KEY}"}
+        else:
+            print("[Visit] Missing JINA_API_KEY, using Jina in no-key mode. Fetch may be rate-limited.")
+            headers = None
         try:
-            response = requests.get(f"https://r.jina.ai/{url}", headers=headers, timeout=15)
+            response = requests.get(f"https://r.jina.ai/{url}", headers=headers)
             if response.status_code == 200:
                 return response.text
             print(f"[Visit] Error fetching {url}: {response.status_code} {response.reason}")
@@ -102,10 +122,10 @@ class VisitTool(BaseTool):
             return ""
         return ""
 
-    def _summarize(self, prompt: str) -> Dict[str, str]:
-        client = OpenAI(api_key=DASHSCOPE_KEY, base_url=DASHSCOPE_BASE)
+    async def _summarize(self, prompt: str) -> Dict[str, str]:
+        client = AsyncOpenAI(api_key=DASHSCOPE_KEY, base_url=DASHSCOPE_BASE)
         try:
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=SUMMARY_MODEL,
                 messages=[{"role": "user", "content": prompt[:SUMMERY_MAX_TOKENS]}],
                 response_format={"type": "json_object"},
@@ -122,6 +142,7 @@ class VisitTool(BaseTool):
         rational = data.get("rational", "")
         evidence = data.get("evidence", "")
         summary = data.get("summary", "")
+        links = data.get("urls", [])
 
         lines = [
             f"Useful information in {url} for goal '{goal}':",
@@ -135,7 +156,18 @@ class VisitTool(BaseTool):
         lines.append("")
         lines.append("Summary:")
         lines.append(summary or "No summary available.")
+        lines.append("Related Links:")
+        lines.append(self._format_links(links) if links else "No related links found.")
+        
         return "\n".join(lines).strip()
+    
+    def _format_links(self, links: List[Dict[str, str]]) -> str:
+        return "\n".join(
+            [
+                f"- [{link.get('text', '') or link.get('title', '')}]({link.get('url', '')})"
+                for link in links
+            ]
+        )
 
     def _fallback_summary(self, url: str, goal: str) -> str:
         return (

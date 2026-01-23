@@ -26,7 +26,7 @@ class VisitPage(BaseTool):
     )
     arguments_schema = {"button": "string; label of the clickable button to press"}
 
-    def run(self, call: ToolCall, state: "AgentState") -> str:
+    async def run(self, call: ToolCall, state: "AgentState") -> str:
         button = call.arguments.get("button")
         if not isinstance(button, str):
             return 'Invalid input: expected {"button": "label"}.'

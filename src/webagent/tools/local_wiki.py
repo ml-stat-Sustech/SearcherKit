@@ -212,9 +212,9 @@ class LocalWikiSearchTool(BaseTool):
         "max_queries": "optional integer limit on how many query entries to execute in a single call",
     }
 
-    def run(self, call: ToolCall, state) -> str:  # type: ignore[override]
-        if not use_local_wiki_tools():
-            return "[LocalWiki Search] Local wiki tools are disabled. Set WEBDANCER_USE_LOCAL_WIKI=1 to enable."
+    async def run(self, call: ToolCall, state) -> str:  # type: ignore[override]
+        # if not use_local_wiki_tools():
+        #     return "[LocalWiki Search] Local wiki tools are disabled. Set WEBDANCER_USE_LOCAL_WIKI=1 to enable."
         try:
             context = _build_context()
         except Exception as exc:  # noqa: BLE001
@@ -312,9 +312,9 @@ class LocalWikiVisitTool(BaseTool):
         "body_max_tokens": "optional integer limit on characters returned from the page body",
     }
 
-    def run(self, call: ToolCall, state) -> str:  # type: ignore[override]
-        if not use_local_wiki_tools():
-            return "[LocalWiki Visit] Local wiki tools are disabled. Set WEBDANCER_USE_LOCAL_WIKI=1 to enable."
+    async def run(self, call: ToolCall, state) -> str:  # type: ignore[override]
+        # if not use_local_wiki_tools():
+        #     return "[LocalWiki Visit] Local wiki tools are disabled. Set WEBDANCER_USE_LOCAL_WIKI=1 to enable."
         try:
             context = _build_context()
         except Exception as exc:  # noqa: BLE001
@@ -457,7 +457,7 @@ __all__ = [
     "LocalWikiSearchTool",
     "LocalWikiVisitTool",
     "WebWalkerLocalWikiVisitTool",
-    "use_local_wiki_tools",
+    # "use_local_wiki_tools",
 ]
 
 

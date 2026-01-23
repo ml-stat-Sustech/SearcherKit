@@ -4,6 +4,7 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, TYPE_CHECKING
+from .base import BaseTool, ToolCall
 
 import requests
 
@@ -23,7 +24,7 @@ class SearchTool(BaseTool):
     )
     arguments_schema = {"query": ["keyword or natural-language search request", "..."]}
 
-    def run(self, call: ToolCall, state: "AgentState") -> str:
+    async def run(self, call: ToolCall, state: "AgentState") -> str:
         if not SERPER_KEY:
             return "[Search] Missing GOOGLE_SEARCH_KEY environment variable."
 

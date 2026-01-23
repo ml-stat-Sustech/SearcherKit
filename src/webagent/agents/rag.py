@@ -10,7 +10,7 @@ from ..agents.prompts import (
     build_rag_system_prompt,
     build_rag_user_prompt,
 )
-from ..tools import build_rag_tools, use_local_wiki_tools
+from ..tools import build_rag_tools
 from ..tools.base import BaseTool, ToolCall, ToolResult
 
 
@@ -41,7 +41,8 @@ class RAGAgent(BaseAgent):
             raise ValueError("RAGAgent requires at least one search-capable tool.")
         super().__init__(tools=default_tools, max_steps=max(max_steps, 2))
         self.llm = llm
-        self.local_mode = use_local_wiki_tools()
+        # self.local_mode = use_local_wiki_tools()
+        self.local_mode = False
         self.max_local_visits = 3 if self.local_mode else 0
         self.search_tool_name = self._find_tool_name("search")
         if not self.search_tool_name:

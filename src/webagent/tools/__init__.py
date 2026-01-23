@@ -22,35 +22,32 @@ def use_local_wiki_tools() -> bool:
 
 @lru_cache(maxsize=1)
 def build_webwalker_tools() -> Dict[str, BaseTool]:
-    if use_local_wiki_tools():
-        from .local_wiki import WebWalkerLocalWikiVisitTool
+    # if use_local_wiki_tools():
+    #     from .local_wiki import WebWalkerLocalWikiVisitTool
 
-        visit_tool: BaseTool = WebWalkerLocalWikiVisitTool()
-    else:
-        from .visit_multi_turn import VisitPage
+    #     visit_tool: BaseTool = WebWalkerLocalWikiVisitTool()
+    # else:
+    from .visit_multi_turn import VisitPage
 
-        visit_tool = VisitPage()
+    visit_tool = VisitPage()
 
     return {visit_tool.name: visit_tool}
 
 
 # @lru_cache(maxsize=1)
 async def build_webdancer_tools() -> Dict[str, BaseTool]:
-
-    if use_local_wiki_tools():
-        from .local_wiki import LocalWikiSearchTool, LocalWikiVisitTool
-        search_tool: BaseTool = LocalWikiSearchTool()
-        visit_tool: BaseTool = LocalWikiVisitTool()
-    else:
-        # from .search import SearchTool
-        # from .visit_single_turn import VisitTool
-        # from .BrowseCompP import SearchTool, VisitTool
-        from .BrowseCompP import FakeSearchTool as SearchTool
-        from .BrowseCompP import FakeVisitTool as VisitTool
-        search_tool = SearchTool()
-        visit_tool = VisitTool()
-        await search_tool.init("http://192.168.77.12:8100/mcp")
-        await visit_tool.init("http://192.168.77.12:8100/mcp")
+    from .local_wiki import LocalWikiSearchTool, LocalWikiVisitTool
+    search_tool: BaseTool = LocalWikiSearchTool()
+    visit_tool: BaseTool = LocalWikiVisitTool()
+    # from .search import SearchTool
+    # from .visit_single_turn import VisitTool
+    # from .BrowseCompP import SearchTool, VisitTool
+    # from .BrowseCompP import FakeSearchTool as SearchTool
+    # from .BrowseCompP import FakeVisitTool as VisitTool
+    # search_tool = SearchTool()
+    # visit_tool = VisitTool()
+    # await search_tool.init("http://192.168.77.15:8100/mcp")
+    # await visit_tool.init("http://192.168.77.15:8100/mcp")
 
     tool_map = {
         search_tool.name: search_tool,
@@ -64,15 +61,15 @@ async def build_webdancer_tools() -> Dict[str, BaseTool]:
 
 @lru_cache(maxsize=1)
 def build_rag_tools() -> Dict[str, BaseTool]:
-    if use_local_wiki_tools():
-        from .local_wiki import LocalWikiSearchTool, LocalWikiVisitTool
+    # if use_local_wiki_tools():
+    #     from .local_wiki import LocalWikiSearchTool, LocalWikiVisitTool
 
-        search_tool: BaseTool = LocalWikiSearchTool()
-        visit_tool: BaseTool = LocalWikiVisitTool()
-        return {
-            search_tool.name: search_tool,
-            visit_tool.name: visit_tool,
-        }
+    #     search_tool: BaseTool = LocalWikiSearchTool()
+    #     visit_tool: BaseTool = LocalWikiVisitTool()
+    #     return {
+    #         search_tool.name: search_tool,
+    #         visit_tool.name: visit_tool,
+    #     }
 
     from .search import SearchTool
 
@@ -84,7 +81,7 @@ __all__ = [
     "BaseTool",
     "ToolCall",
     "ToolResult",
-    "use_local_wiki_tools",
+    # "use_local_wiki_tools",
     "build_webwalker_tools",
     "build_webdancer_tools",
     "build_rag_tools",
