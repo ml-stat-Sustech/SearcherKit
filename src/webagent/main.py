@@ -276,7 +276,7 @@ async def main(argv: Optional[List[str]] = None) -> None:
             e = None
             for item, pred_answer in zip(contexts, results):
                 if isinstance(pred_answer, Exception):
-                    emit_func(f"❗ Error while processing sample {index}: {pred_answer}\n{traceback.format_exception(pred_answer)}")
+                    emit_func(f"❗ Error while processing sample {index}: {pred_answer}\n{traceback.format_exception(pred_answer)[0]}")
                     e = pred_answer
                     continue
                 assert isinstance(pred_answer, str)
