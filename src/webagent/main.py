@@ -25,6 +25,8 @@ from .evaluate.evl import run_llm_judge_evaluation
 
 _LOG_FILE_HANDLE: Optional[IO[str]] = None
 
+AGENT_COCURRENT_SEM = asyncio.Semaphore(32)
+
 async def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Run agents against a Hugging Face dataset.")
     parser.add_argument(
@@ -234,7 +236,17 @@ async def main(argv: Optional[List[str]] = None) -> None:
                     emit_func(f"🌐 Root website: {website_value}")
                 emit_func("-" * 80)
                 
-                pred_answer_coroutine = run_single_query(
+                async def run_single(args, query, website, emit_func, verbose):
+                    async with AGENT_COCURRENT_SEM:
+                        return await run_single_query(
+                            args,
+                            query=query,
+                            website=website,
+                            emit_func=emit_func,
+                            verbose=verbose,
+                        )
+                
+                pred_answer_coroutine = run_single(
                     args,
                     query=query_value,
                     website=website_value,
