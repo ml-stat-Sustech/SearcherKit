@@ -25,10 +25,6 @@ from .evaluate.evl import run_llm_judge_evaluation
 
 _LOG_FILE_HANDLE: Optional[IO[str]] = None
 
-NUM_CONCURRENT_QUERIES = 16
-
-sem = asyncio.Semaphore(NUM_CONCURRENT_QUERIES) # ！！过大的并行度会导致vllm engine的KV Cache 被discard，降低速度，尤其是在超长上下文的agent中。请根据vllm在超长序列(32k-128k)下的可用并行度设定
-
 async def main(argv: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description="Run agents against a Hugging Face dataset.")
     parser.add_argument(
@@ -238,23 +234,7 @@ async def main(argv: Optional[List[str]] = None) -> None:
                     emit_func(f"🌐 Root website: {website_value}")
                 emit_func("-" * 80)
                 
-                async def run_single(
-                    args,
-                    query: str,
-                    website: str,
-                    emit_func: Callable[[str], None],
-                    verbose: bool = False,
-                ):
-                    async with sem:
-                        return await run_single_query(
-                            args,
-                            query=query,
-                            website=website,
-                            emit_func=emit_func,
-                            verbose=verbose,
-                        )
-                
-                pred_answer_coroutine = run_single(
+                pred_answer_coroutine = run_single_query(
                     args,
                     query=query_value,
                     website=website_value,

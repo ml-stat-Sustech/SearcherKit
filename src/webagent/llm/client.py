@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import abc
 import os
+import asyncio
 from typing import Dict, List, Optional
 
 ChatMessages = List[Dict[str, str]]
+
+
+NUM_CONCURRENT_QUERIES = 32
+
+sem = asyncio.Semaphore(NUM_CONCURRENT_QUERIES) # ！！过大的并行度会导致vllm engine的KV Cache 被discard，降低速度，尤其是在超长上下文的agent中。请根据vllm在超长序列(32k-128k)下的可用并行度设定
 
 class LLMClient(abc.ABC):
     """Minimal chat-completion interface required by the WebWalker agent."""
@@ -46,11 +52,12 @@ class OpenAIChatClient(LLMClient):
 
     async def complete(self, messages: ChatMessages, **kwargs) -> str:
         payload = {**self.default_kwargs, **kwargs}
-        response = await self.query(
-            model=self.model,
-            messages=messages,
-            **payload,
-        )
+        async with sem:
+            response = await self.query(
+                model=self.model,
+                messages=messages,
+                **payload,
+            )
         content = response.choices[0].message.content
         assert content, f"Model returned empty content {content} from messages {messages}."
         return content
