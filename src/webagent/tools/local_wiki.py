@@ -3,12 +3,14 @@ from __future__ import annotations
 import functools
 import os
 import json
+import asyncio
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 from urllib.parse import urlparse, unquote, quote
 
-from elasticsearch import Elasticsearch, ConnectionError
-from openai import OpenAI
+from elasticsearch import Elasticsearch, BadRequestError, SerializationError, ConflictError, NotFoundError, TransportError
+from elasticsearch import ConnectionError as ESConnectionError
+from openai import OpenAI, AsyncOpenAI
 
 from .base import BaseTool, ToolCall
 
@@ -22,6 +24,15 @@ except Exception as exc:  # noqa: BLE001
     _IMPORT_ERROR = exc
 else:
     _IMPORT_ERROR = None
+    
+ELASTICSEARCH_RUMTIME_ERRORS = (
+    BadRequestError,
+    SerializationError,
+    ConflictError,
+    NotFoundError,
+    TransportError,
+    ESConnectionError,
+)
 
 DEFAULT_MAX_QUERIES = max(1, int(os.getenv("MAX_MULTIQUERY_NUM", "1")))
 DEFAULT_TOP_K = max(1, int(os.getenv("LOCAL_WIKI_SEARCH_TOP_K", "10")))
@@ -69,27 +80,35 @@ Respond strictly in JSON format:
 }}
 """
 
-VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information:
+VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
 
-## **Webpage Content** 
-{content}
-
-## **User Goal**
+## User Goal
 {goal}
 
-## **Task Guidelines**
-1. **Content Scanning**: Locate the **specific sections/data** directly related to the user's goal within the webpage content.
-2. **Key Extraction**: Identify and extract the **most relevant information** from the content, output the **full original context** of the content as far as possible, it can be more than three paragraphs.
-3. **Summary Output**: Organize into a concise paragraph with logical flow, prioritizing clarity and judge the contribution of the information to the goal.
+## Task Guidelines
+1. Locate the portions that directly support the goal.
+2. Extract the most relevant evidence.
+3. Provide a concise summary and judge usefulness.
+4. Find and provide (if any) urls to other pages that may be relevant.
 
-
-**Final Output Format using JSON format**:
+Respond strictly in JSON:
 {{
-  "rational": "string",
-  "evidence": "string",
-  "summary": "string",
+  "rational": "...",
+  "evidence": "...",
+  "summary": "...",
+  "urls": [
+      {{
+          "url": "...",
+          "title": "...",
+      }},
+      {{...}}
+  ]
 }}
+
+## Webpage Content
+{webpage_content}
 """
+
 
 
 @dataclass(frozen=True)
@@ -105,7 +124,7 @@ def _env_flag(name: str) -> bool:
 
 
 DISABLE_ACTIONABLE_LINKS = _env_flag("LOCAL_WIKI_DISABLE_LINKS")
-_SUMMARY_CLIENT: Optional[OpenAI] = None
+_SUMMARY_CLIENT: Optional[AsyncOpenAI] = None
 _SUMMARY_CLIENT_FAILED = False
 
 
@@ -259,7 +278,8 @@ class LocalWikiSearchTool(BaseTool):
                 entry_lines = [f"{idx}. [{title}]({url})"]
                 if score is not None:
                     entry_lines.append(f"Score: {score:.3f}")
-                snippet = self._build_snippet_block(result, query, snippet_client)
+                # snippet = self._build_snippet_block(result, query, snippet_client)
+                snippet = result.get("text")[:512]
                 if snippet:
                     entry_lines.append(f"Snippet: {snippet}")
                 entries.append("\n".join(entry_lines).strip())
@@ -303,13 +323,13 @@ class LocalWikiVisitTool(BaseTool):
     name = "visit"
     description = (
         "Retrieves full content for one or more local wiki pages by title. "
-        "Pass the page title via the `url` field (matching Search output). Optionally include `goal` for context."
+        "Pass the page url via the `url` field (matching Search output). Optionally include `goal` for context."
     )
     arguments_schema = {
-        "url": ["Exact page title to open", "..."],
+        "url": ["Exact page url to open", "..."],
         "goal": "string; optional context for what you are looking for",
         "max_links": "optional integer limit on actionable links to display",
-        "body_max_tokens": "optional integer limit on characters returned from the page body",
+        # "body_max_tokens": "optional integer limit on characters returned from the page body",
     }
 
     async def run(self, call: ToolCall, state) -> str:  # type: ignore[override]
@@ -322,47 +342,90 @@ class LocalWikiVisitTool(BaseTool):
 
         raw_titles = call.arguments.get("url")
         if raw_titles is None:
-            return "[LocalWiki Visit] Expected arguments like {'url': 'Page Title'} or {'url': ['Title', ...]}."
+            return "[LocalWiki Visit] Expected arguments like {'url': 'https://...'} or {'url': ['https://...', ...]}."
 
-        titles = _coerce_queries(raw_titles)
-        if not titles:
-            return "[LocalWiki Visit] Provide at least one valid page title."
-        processed_titles: List[str] = []
-        for title in titles:
-            trimmed = title.strip()
-            parsed = urlparse(trimmed)
-            if parsed.scheme and parsed.path:
-                last_segment = parsed.path.rstrip("/").split("/")[-1]
-                if last_segment:
-                    trimmed = unquote(last_segment).replace("_", " ")
-                else:
-                    trimmed = unquote(parsed.path).replace("_", " ")
-            else:
-                trimmed = trimmed.replace("_", " ")
-            processed_titles.append(trimmed)
-        titles = processed_titles[: min(len(processed_titles), DEFAULT_MAX_QUERIES)]
-
+        urls = _coerce_queries(raw_titles)
+        if not urls:
+            return "[LocalWiki Visit] Provide at least one valid page url."
+        # processed_titles: List[str] = []
+        # for title in titles:
+        #     trimmed = title.strip()
+        #     parsed = urlparse(trimmed)
+        #     if parsed.scheme and parsed.path:
+        #         last_segment = parsed.path.rstrip("/").split("/")[-1]
+        #         if last_segment:
+        #             trimmed = unquote(last_segment).replace("_", " ")
+        #         else:
+        #             trimmed = unquote(parsed.path).replace("_", " ")
+        #     else:
+        #         trimmed = trimmed.replace("_", " ")
+        #     processed_titles.append(trimmed)
+        # titles = processed_titles[: min(len(processed_titles), DEFAULT_MAX_QUERIES)]
+        urls = urls[: min(len(urls), DEFAULT_MAX_QUERIES)]
         max_links = _safe_int(call.arguments.get("max_links"), DEFAULT_MAX_LINKS, allow_zero=True)
         if DISABLE_ACTIONABLE_LINKS:
             max_links = 0
-        body_limit = call.arguments.get("body_max_tokens")
-        body_max = _safe_int(body_limit, DEFAULT_BODY_MAX_CHARS)
+        # body_limit = call.arguments.get("body_max_tokens")
+        # body_max = _safe_int(body_limit, DEFAULT_BODY_MAX_CHARS)
         goal = str(call.arguments.get("goal", "") or "")
         summary_client = _get_summary_client()
 
         outputs: List[str] = []
-        for title in titles:
-            outputs.append(self._visit_single(context, title, goal, max_links, body_max, summary_client))
+        # for title in titles:
+        #     outputs.append(self._visit_single(context, title, goal, max_links, body_max, summary_client))
+        outputs = await asyncio.gather(*[self._visit_single_url(context, url, goal, max_links, summary_client) for url in urls])
         return "\n=======\n".join(outputs)
+    
+    async def _visit_single_url(
+        self,
+        context: LocalWikiContext,
+        url: str,
+        goal: str,
+        max_links: int,
+        summary_client: Optional[AsyncOpenAI],
+    ) -> str:
+        es = context.es
+        query = {
+            "query": {
+                "term" : {
+                    "url": {
+                        "value": url
+                    }
+                }
+            }
+        }
+        try:
+            response = es.search(index=context.index_name, body=query)
+        except ELASTICSEARCH_RUMTIME_ERRORS as exc:
+            return f"[LocalWiki Visit] Failed to fetch '{url}': {exc}"
+        
+        hits = (response.get("hits") or {}).get("hits", [])
+        if not hits:
+            return f"[LocalWiki Visit] Page with url '{url}' was not found in index '{context.index_name}'."
+        
+        source = hits[0].get("_source", {})
+        page_title = source.get("title")
+        page_url = url
+        page_text = source.get("text")
+        links = source.get("links") or []
+        
+        annotated_text = _inject_inline_links(page_text, links, max_links, page_url)
+        print(100*'=')
+        
+        if summary_client:
+            return await self._render_visit_summary(page_title, page_url, goal, annotated_text, summary_client)
+        else:
+            return annotated_text
+            
 
-    def _visit_single(
+    async def _visit_single(
         self,
         context: LocalWikiContext,
         title: str,
         goal: str,
         max_links: int,
         body_max: int,
-        summary_client: Optional[OpenAI],
+        summary_client: Optional[AsyncOpenAI],
     ) -> str:
         es = context.es
         query = {"size": 1, "query": {"match_phrase": {"title": title}}}
@@ -384,25 +447,24 @@ class LocalWikiVisitTool(BaseTool):
 
         annotated_text = _inject_inline_links(page_text, links, max_links, page_url)
         print(100*'=')
-        print(annotated_text)
 
         if annotated_text and len(annotated_text) > body_max:
             annotated_text = f"{annotated_text[:body_max]}..."
 
-        summary_block = self._render_visit_summary(page_title, page_url, goal, annotated_text, summary_client)
+        summary_block = await self._render_visit_summary(page_title, page_url, goal, annotated_text, summary_client)
         return summary_block
 
-    def _render_visit_summary(
+    async def _render_visit_summary(
         self,
         title: str,
         url: str,
         goal: str,
         content: str,
-        client: Optional[OpenAI],
+        client: Optional[AsyncOpenAI],
     ) -> str:
         goal_text = goal or "N/A"
         if client is not None and content:
-            summary = _summarise_visit_page(
+            summary = await _summarise_visit_page(
                 title=title,
                 url=url,
                 goal=goal_text,
@@ -461,7 +523,7 @@ __all__ = [
 ]
 
 
-def _get_summary_client() -> Optional[OpenAI]:
+def _get_summary_client() -> Optional[AsyncOpenAI]:
     global _SUMMARY_CLIENT, _SUMMARY_CLIENT_FAILED
     if _SUMMARY_CLIENT is not None:
         return _SUMMARY_CLIENT
@@ -475,7 +537,7 @@ def _get_summary_client() -> Optional[OpenAI]:
     if SUMMARY_BASE_URL:
         client_kwargs["base_url"] = SUMMARY_BASE_URL
     try:
-        _SUMMARY_CLIENT = OpenAI(**client_kwargs)
+        _SUMMARY_CLIENT = AsyncOpenAI(**client_kwargs)
     except Exception:
         _SUMMARY_CLIENT_FAILED = True
         _SUMMARY_CLIENT = None
@@ -523,22 +585,20 @@ def _fallback_snippet(content: str) -> str:
     return snippet
 
 
-def _summarise_visit_page(
+async def _summarise_visit_page(
     title: str,
     url: str,
     goal: str,
     content: str,
-    client: OpenAI,
+    client: AsyncOpenAI,
 ) -> Optional[str]:
     prompt = VISIT_SUMMARY_PROMPT.format(
-        title=title or "Untitled",
-        url=url or "N/A",
         goal=goal or "N/A",
-        content=content,
+        webpage_content=content,
     )
     for _ in range(SUMMARY_MAX_RETRIES):
         try:
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=SUMMARY_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
@@ -557,7 +617,8 @@ def _summarise_visit_page(
         rational = str(data.get("rational", "")).strip()
         evidence = str(data.get("evidence", "")).strip()
         summary = str(data.get("summary", "")).strip()
-        formatted = _format_visit_summary_block(url or title, goal, rational, evidence, summary)
+        links = data.get("urls", [])
+        formatted = _format_visit_summary_block(url or title, goal, rational, evidence, summary, links)
         if formatted:
             return formatted
     return None
@@ -569,6 +630,7 @@ def _format_visit_summary_block(
     rational: str,
     evidence: str,
     summary: str,
+    links: Optional[List[Dict[str, str]]] = None
 ) -> str:
     source_label = source or "local wiki"
     goal_label = goal or "N/A"
@@ -582,10 +644,20 @@ def _format_visit_summary_block(
     lines.append("Summary:")
     lines.append(summary or "No summary available.")
     lines.append("")
+    if links:
+        lines.append("Links:")
+        lines.append(_format_links(links))
     lines.append("According to the above content, if there may be links containing useful information, please use the "
                  "visit tool to access them. If not, please use the search tool to continue searching.")
     return "\n".join(lines).strip()
 
+def _format_links(links: List[Dict[str, str]]) -> str:
+        return "\n".join(
+            [
+                f"- [{link.get('text', '') or link.get('title', '')}]({link.get('url', '')})"
+                for link in links
+            ]
+        )
 
 def _inject_inline_links(content: str, links: Iterable[Dict[str, str]], limit: int, page_url: str) -> str:
     if not content or not links:
