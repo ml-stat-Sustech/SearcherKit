@@ -1,6 +1,8 @@
 from typing import Optional, List, Union, Dict, Tuple, Iterable
 from urllib.parse import urlparse, unquote, quote
 import os
+import json
+import asyncio
 import numpy as np
 from openai import AsyncOpenAI
 
@@ -19,6 +21,153 @@ ELASTICSEARCH_RUMTIME_ERRORS = (
     NotFoundError,
     TransportError
 )
+
+SUMMARY_MODEL = (
+    os.getenv("LOCAL_WIKI_SUMMARY_MODEL")
+    or os.getenv("WEBDANCER_SUMMARY_MODEL")
+    or os.getenv("WEBDANCER_VISIT_MODEL")
+)
+SUMMARY_API_KEY = (
+    os.getenv("LOCAL_WIKI_SUMMARY_API_KEY")
+    or os.getenv("WEBDANCER_SUMMARY_API_KEY")
+    or os.getenv("DASHSCOPE_API_KEY")
+)
+SUMMARY_BASE_URL = (
+    os.getenv("LOCAL_WIKI_SUMMARY_BASE_URL")
+    or os.getenv("WEBDANCER_SUMMARY_MODEL_SERVER")
+    or os.getenv("DASHSCOPE_MODEL_SERVER")
+    or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+)
+SUMMARY_MAX_RETRIES = max(1, int(os.getenv("LOCAL_WIKI_SUMMARY_MAX_RETRIES", "3")))
+
+VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
+
+## User Goal
+{goal}
+
+## Task Guidelines
+1. Locate the portions that directly support the goal.
+2. Extract the most relevant evidence.
+3. Provide a concise summary and judge usefulness.
+4. Find and provide (if any) urls to other pages that may be relevant.
+
+Respond strictly in JSON:
+{{
+  "rational": "...",
+  "evidence": "...",
+  "summary": "...",
+  "urls": [
+      {{
+          "url": "...",
+          "title": "...",
+      }},
+      {{...}}
+  ]
+}}
+
+## Webpage Content
+{webpage_content}
+"""
+
+_SUMMARY_CLIENT: Optional[AsyncOpenAI] = None
+_SUMMARY_CLIENT_FAILED = False
+
+
+def _get_summary_client() -> Optional[AsyncOpenAI]:
+    global _SUMMARY_CLIENT, _SUMMARY_CLIENT_FAILED
+    if _SUMMARY_CLIENT is not None:
+        return _SUMMARY_CLIENT
+    if _SUMMARY_CLIENT_FAILED:
+        return None
+    if not SUMMARY_MODEL or not SUMMARY_API_KEY:
+        _SUMMARY_CLIENT_FAILED = True
+        return None
+
+    client_kwargs = {"api_key": SUMMARY_API_KEY}
+    if SUMMARY_BASE_URL:
+        client_kwargs["base_url"] = SUMMARY_BASE_URL
+    try:
+        _SUMMARY_CLIENT = AsyncOpenAI(**client_kwargs)
+    except Exception:
+        _SUMMARY_CLIENT_FAILED = True
+        _SUMMARY_CLIENT = None
+    return _SUMMARY_CLIENT
+
+
+async def _summarise_visit_page(
+    title: str,
+    url: str,
+    goal: str,
+    content: str,
+    client: AsyncOpenAI,
+) -> Optional[str]:
+    prompt = VISIT_SUMMARY_PROMPT.format(
+        goal=goal or "N/A",
+        webpage_content=content,
+    )
+    for _ in range(SUMMARY_MAX_RETRIES):
+        try:
+            response = await client.chat.completions.create(
+                model=SUMMARY_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            continue
+
+        raw = response.choices[0].message.content if response.choices else None
+        if not raw:
+            continue
+        cleaned = raw.replace("```json", "").replace("```", "").strip()
+        try:
+            data = json.loads(cleaned)
+        except Exception:
+            continue
+        rational = str(data.get("rational", "")).strip()
+        evidence = str(data.get("evidence", "")).strip()
+        summary = str(data.get("summary", "")).strip()
+        links = data.get("urls", [])
+        formatted = _format_visit_summary_block(url or title, goal, rational, evidence, summary, links)
+        if formatted:
+            return formatted
+    return None
+
+
+def _format_visit_summary_block(
+    source: str,
+    goal: str,
+    rational: str,
+    evidence: str,
+    summary: str,
+    links: Optional[List[Dict[str, str]]] = None
+) -> str:
+    source_label = source or "local wiki"
+    goal_label = goal or "N/A"
+    lines = [
+        f"The useful information in {source_label} for user goal {goal_label} as follows:",
+        "",
+    ]
+    lines.append("Evidence in page:")
+    lines.append(evidence or "No evidence extracted.")
+    lines.append("")
+    lines.append("Summary:")
+    lines.append(summary or "No summary available.")
+    lines.append("")
+    if links:
+        lines.append("Links:")
+        lines.append(_format_links(links))
+    lines.append("According to the above content, if there may be links containing useful information, please use the "
+                 "visit tool to access them. If not, please use the search tool to continue searching.")
+    return "\n".join(lines).strip()
+
+
+def _format_links(links: List[Dict[str, str]]) -> str:
+    return "\n".join(
+        [
+            f"- [{link.get('text', '') or link.get('title', '')}]({link.get('url', '')})"
+            for link in links
+        ]
+    )
 
 mcp = FastMCP()
 
@@ -114,49 +263,59 @@ class LocalWikiSearch:
         return self.parse_search_results(results)
     
 class LocalWikiVisit:
-    def __init__(self, es_host: str, index: str, summary=False) -> None:
+    def __init__(self, es_host: str, index: str, summary: bool = False) -> None:
         self.es_host = es_host
         self.index = index
         self.es_client = Elasticsearch(self.es_host)
         self.summary = summary
-        if self.summary:
-            pass # TODO
+        self.summary_client = _get_summary_client() if summary else None
+
     @tool()
-    def visit(self, url: Union[str, List[str]], goal: Optional[str]=None) -> str:
+    async def visit(self, url: Union[str, List[str]], goal: Optional[str] = None) -> str:
         """
         Retrieves full content for one or more local wiki pages by url.
-        
+
         :param url: A str of url or a list of urls
         :type url: Union[str, List[str]]
+        :param goal: optional context for what you are looking for
         :return: Title and content of the web page.
         :rtype: str
         """
         if isinstance(url, str):
-            return self._visit_single(url)
-        return "\n".join([self._visit_single(u) for u in url])
+            return await self._visit_single(url, goal)
+        results = await asyncio.gather(*[self._visit_single(u, goal) for u in url])
+        return "\n".join(results)
         
-    def _visit_single(self, url: str) -> str:
+    async def _visit_single(self, url: str, goal: Optional[str] = None) -> str:
         query = {"query": {"term" : {"url": {"value": url}}}}
         try:
             response = self.es_client.search(index=self.index, body=query)
         except ELASTICSEARCH_RUMTIME_ERRORS as exc:
             print(f"Failed to fetch '{url}': {exc} from {self.es_host} in index '{self.index}'")
-            raise # this should be passed to the mcp client
-        
+            raise
+
         hits = response.get("hits", {}).get("hits", [])
         if not hits:
             print(f"Page with url '{url}' was not found from {self.es_host} in index '{self.index}'.")
             return f"Page with url '{url}' was not found."
-        
+
         title = hits[0].get("_source", {}).get("title", "[No Title]")
         text = hits[0].get("_source", {}).get("text", "")
         links = hits[0].get("_source", {}).get("links", [])
-        
+
         annotated = self._inject_inline_links(text, links, url)
-        
-        if self.summary:
-            pass # TODO
-        
+
+        if self.summary and self.summary_client:
+            summary = await _summarise_visit_page(
+                title=title,
+                url=url,
+                goal=goal or "",
+                content=annotated,
+                client=self.summary_client,
+            )
+            if summary:
+                return summary
+
         return f"# [{title}]({url})\n\n" + annotated
         
     def _inject_inline_links(self, content: str, links: Iterable[Dict[str, str]], page_url: str, limit: Optional[int] = None) -> str:
@@ -235,7 +394,7 @@ vllm_model_name = os.getenv("VLLM_MODEL_NAME", "Qwen3-Embedding-0.6B")
 vllm_endpoint = f"http://localhost:{vllm_port}/v1"
 
 searcher = LocalWikiSearch(es_host, index, vllm_endpoint, vllm_model_name)
-visitor = LocalWikiVisit(es_host, index)
+visitor = LocalWikiVisit(es_host, index, summary=True)
 mcp = FastMCP()
 mcp.add_tool(searcher.search)
 mcp.add_tool(visitor.visit)
