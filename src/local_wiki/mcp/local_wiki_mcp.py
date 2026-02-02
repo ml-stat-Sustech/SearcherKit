@@ -1,5 +1,8 @@
 from typing import Optional, List, Union, Dict, Tuple, Iterable
 from urllib.parse import urlparse, unquote, quote
+import os
+import numpy as np
+from openai import AsyncOpenAI
 
 from fastmcp import FastMCP
 from fastmcp.tools import tool
@@ -19,27 +22,47 @@ ELASTICSEARCH_RUMTIME_ERRORS = (
 
 mcp = FastMCP()
 
+class VLLMEncoder:
+    def __init__(self, vllm_endpoint: str, vllm_model_name: str) -> None:
+        self._endpoint = vllm_endpoint
+        self._model_name = vllm_model_name
+        self._client = AsyncOpenAI(base_url=self._endpoint, api_key="EMPTY")
+
+    async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
+        if isinstance(texts, str):
+            texts = [f"Query:{texts}"]
+        else:
+            texts = [f"Query:{t}" for t in texts]
+
+        response = await self._client.embeddings.create(
+            model=self._model_name,
+            input=texts
+        )
+        embeddings = np.array([item.embedding for item in response.data], dtype=np.float32)
+
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        embeddings = embeddings / (norms + 1e-9)
+        return embeddings
+
+
 class LocalWikiSearch:
-    
-    def __init__(self, 
-                 es_host: str, 
-                 index: str, 
-                 max_candidates=5, 
-                 type = 'dense', 
-                 emb_model: Optional[str] = None) -> None:
+
+    def __init__(self,
+                 es_host: str,
+                 index: str,
+                 vllm_endpoint: str,
+                 vllm_model_name: str,
+                 max_candidates: int = 5,
+                 retriever_type: str = 'api') -> None:
         self.es_host = es_host
         self.es_client = Elasticsearch(self.es_host)
         self.max_candidates = max_candidates
         self.index = index
-        if type == 'dense':
-            if not emb_model:
-                raise ValueError("Need a encoder for dense search")
-            from src.local_wiki.retrievers.encoders import build_encoder, load_model
-            model = load_model(emb_model)
-            encoder = build_encoder(emb_model, model)
-            self.retriever = build_retriever(type, self.es_client, index, encoder)
+        if retriever_type == 'api':
+            encoder = VLLMEncoder(vllm_endpoint, vllm_model_name)
+            self.retriever = build_retriever('api', self.es_client, index, encoder)
         else:
-            raise ValueError(f"Invalid type \"{type}\"")
+            raise ValueError(f"Invalid type \"{retriever_type}\"")
         
     def parse_search_results(self, results: List[Tuple[str,List[Dict[str, object]]]]) -> str:
         blocks = []
@@ -72,22 +95,22 @@ class LocalWikiSearch:
         return "\n=======\n".join(blocks)
         
     @tool()
-    def search(self, query: Union[str, List[str]]) -> str:
+    async def search(self, query: Union[str, List[str]]) -> str:
         """
         Searches the local Wikipedia index for relevant pages.
-        
+
         :param query: A str of search query or a list of queries
         :type query: Union[str, List[str]]
         :return: Search results. Each result has "title", "score", "text" and "url".
         :rtype: str
         """
         if isinstance(query, str):
-            results = self.retriever.search(query=query, top_k=self.max_candidates) # TODO: error handling
+            results = await self.retriever.search(query=query, top_k=self.max_candidates)
             results = [(query, results)]
         else:
-            results = self.retriever.batch_search(queries=query, top_k=self.max_candidates)
-            results = list(zip(query, results))
-            
+            batch_results = await self.retriever.batch_search(queries=query, top_k=self.max_candidates)
+            results = list(zip(query, batch_results))
+
         return self.parse_search_results(results)
     
 class LocalWikiVisit:
@@ -206,16 +229,15 @@ class LocalWikiVisit:
 
 es_host = "http://192.168.77.12:9200"
 index = "wiki20251001_qwen3-embedding-0.6b"
-emb_model = "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B"
-    
-searcher = LocalWikiSearch(es_host,index,emb_model=emb_model)
-visitor = LocalWikiVisit(es_host,index)
+
+vllm_port = os.getenv("VLLM_PORT", "8200")
+vllm_model_name = os.getenv("VLLM_MODEL_NAME", "Qwen3-Embedding-0.6B")
+vllm_endpoint = f"http://localhost:{vllm_port}/v1"
+
+searcher = LocalWikiSearch(es_host, index, vllm_endpoint, vllm_model_name)
+visitor = LocalWikiVisit(es_host, index)
 mcp = FastMCP()
 mcp.add_tool(searcher.search)
 mcp.add_tool(visitor.visit)
 
 app = mcp.http_app(path="/mcp/", stateless_http=True)
-    
-# if __name__ == "__main__":
-#     uvicorn.run("src.local_wiki.mcp:app::app", host="0.0.0.0", port=8100, workers=4)
-# TODO: this will load 4 duplicate sentence transformers

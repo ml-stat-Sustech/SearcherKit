@@ -3,7 +3,14 @@
 import abc
 import collections
 from elasticsearch import Elasticsearch, ConnectionError
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Protocol, Union
+from abc import abstractmethod
+import numpy as np
+
+class EncoderProtocol(Protocol):
+    @abstractmethod
+    async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
+        ...
 
 from .encoders import BaseEncoder
 
@@ -19,11 +26,11 @@ class BaseRetriever(abc.ABC):
         self.index_name = index_name
 
     @abc.abstractmethod
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         pass
-    
+
     @abc.abstractmethod
-    def batch_search(self, queries: List[str], top_k: int = 5) -> List[List[Dict[str, Any]]]:
+    async def batch_search(self, queries: List[str], top_k: int = 5) -> List[List[Dict[str, Any]]]:
         pass
 
     # --- 改动点: 恢复为更好、更明确的版本 ---
@@ -261,16 +268,43 @@ class HybridRetriever(BaseRetriever):
             all_results.append(results_for_query)
         return all_results
 
+class ApiRetriever(BaseRetriever):
+    def __init__(self, es_client: Elasticsearch, index_name: str, encoder: EncoderProtocol):
+        super().__init__(es_client, index_name)
+        self.encoder = encoder
+
+    async def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+        vector = (await self.encoder.encode(query)).tolist()
+        es_query = {"size": top_k, "knn": {"field": "text_vector", "query_vector": vector, "k": top_k, "num_candidates": 100}}
+        try:
+            response = self.es.search(index=self.index_name, body=es_query)
+            return self._format_results(response['hits']['hits'])
+        except Exception as e:
+            return []
+
+    async def batch_search(self, queries: List[str], top_k: int = 5) -> List[List[Dict[str, Any]]]:
+        vectors = (await self.encoder.encode(queries)).tolist()
+        body = []
+        for vector in vectors:
+            body.append({"index": self.index_name})
+            body.append({"size": top_k, "knn": {"field": "text_vector", "query_vector": vector, "k": top_k, "num_candidates": 100}})
+        try:
+            response = self.es.msearch(body=body)
+            return [self._format_results(res['hits']['hits']) if 'error' not in res else [] for res in response['responses']]
+        except Exception as e:
+            return [[] for _ in queries]
+
 def build_retriever(
     retriever_type: str,
     es_client: Elasticsearch,
     index_name: str,
-    encoder: Optional[BaseEncoder] = None
+    encoder: Optional[Union[BaseEncoder, EncoderProtocol]] = None
 ) -> BaseRetriever:
     """根据指定的类型创建并返回一个 Retriever 实例。"""
-    retriever_map = {'bm25': BM25Retriever, 
-                     'dense': DenseRetriever, 
-                     'hybrid': HybridRetriever}
+    retriever_map = {'bm25': BM25Retriever,
+                     'dense': DenseRetriever,
+                     'hybrid': HybridRetriever,
+                     'api': ApiRetriever}
     
     retriever_class = retriever_map.get(retriever_type.lower())
 
