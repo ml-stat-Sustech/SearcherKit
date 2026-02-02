@@ -1,16 +1,16 @@
 #!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PYTHONPATH="${PYTHONPATH:-}:$(cd "${SCRIPT_DIR}/../.."; pwd)"
+deactivate
 
-export VLLM_MODEL_PATH="${VLLM_MODEL_PATH:-/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B}"
+source /mnt/sharedata/ssd_large/users/hyli/vllm/bin/activate
+
+export CUDA_VISIBLE_DEVICES=6
+export VLLM_MODEL="${VLLM_MODEL_PATH:-/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B}"
 export VLLM_PORT="${VLLM_PORT:-8200}"
-export VLLM_MODEL_NAME="${VLLM_MODEL_NAME:-/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B}"
 
-echo "Starting vLLM with model: $VLLM_MODEL_PATH"
-echo "Port: $VLLM_PORT"
-
-vllm serve "$VLLM_MODEL_PATH" \
+vllm serve "$VLLM_MODEL" \
   --host 0.0.0.0 \
   --port $VLLM_PORT \
-  --embedding-mode \
-  --gpu-memory-utilization 0.2
+  --max_num_batched_tokens 4 \
+  --max-model-len 128 \
+  --gpu-memory-utilization 0.05
+  # --enforce-eager \

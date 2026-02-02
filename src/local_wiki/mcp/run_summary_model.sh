@@ -1,17 +1,19 @@
 #!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PYTHONPATH="${PYTHONPATH:-}:$(cd "${SCRIPT_DIR}/../.."; pwd)"
+deactivate
 
-export VLLM_MODEL_PATH="${SUMMARY_MODEL_PATH:-/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B}"
-export VLLM_PORT="${SUMMARY_MODEL_PORT:-8300}"
-export VLLM_MODEL_NAME="${SUMMARY_MODEL_NAME:-Qwen3-8B}"
+source /mnt/sharedata/ssd_large/users/hyli/vllm/bin/activate
 
-echo "Starting vLLM summary model: $VLLM_MODEL_PATH"
-echo "Port: $VLLM_PORT"
+export CUDA_VISIBLE_DEVICES=0
 
-vllm serve "$VLLM_MODEL_PATH" \
+export VLLM_MODEL="${SUMMARY_MODEL_PATH:-/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B-FP8}"
+
+python -m vllm.entrypoints.openai.api_server \
+  --model "$VLLM_MODEL" \
   --host 0.0.0.0 \
-  --port $VLLM_PORT \
-  --dtype float8 \
-  --gpu-memory-utilization 0.7 \
-  --max_num_batched_tokens 8192
+  --port "${SUMMARY_MODEL_PORT:-8300}" \
+  --dtype auto \
+  --data-parallel-size 1 \
+  --gpu-memory-utilization 0.95 \
+  --max_num_batched_tokens 8192 \
+  --max-model-len 32768 \
+  # --hf-overrides '{"rope_parameters":{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}}' \

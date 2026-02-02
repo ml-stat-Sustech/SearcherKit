@@ -4,12 +4,12 @@ import os
 import json
 import asyncio
 import numpy as np
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAIError
 
 from fastmcp import FastMCP
 from fastmcp.tools import tool
 from elasticsearch import Elasticsearch
-import uvicorn
+import json_repair
 
 from src.local_wiki.retrievers.retrievers import build_retriever
 
@@ -22,28 +22,13 @@ ELASTICSEARCH_RUMTIME_ERRORS = (
     TransportError
 )
 
-SUMMARY_MODEL = (
-    os.getenv("LOCAL_WIKI_SUMMARY_MODEL")
-    or os.getenv("WEBDANCER_SUMMARY_MODEL")
-    or os.getenv("WEBDANCER_VISIT_MODEL")
-)
-SUMMARY_API_KEY = (
-    os.getenv("LOCAL_WIKI_SUMMARY_API_KEY")
-    or os.getenv("WEBDANCER_SUMMARY_API_KEY")
-    or os.getenv("DASHSCOPE_API_KEY")
-)
-SUMMARY_BASE_URL = (
-    os.getenv("LOCAL_WIKI_SUMMARY_BASE_URL")
-    or os.getenv("WEBDANCER_SUMMARY_MODEL_SERVER")
-    or os.getenv("DASHSCOPE_MODEL_SERVER")
-    or "https://dashscope.aliyuncs.com/compatible-mode/v1"
-)
-SUMMARY_MAX_RETRIES = max(1, int(os.getenv("LOCAL_WIKI_SUMMARY_MAX_RETRIES", "3")))
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL")
+SUMMARY_API_KEY = os.getenv("SUMMARY_API_KEY")
+SUMMARY_BASE_URL = os.getenv("SUMMARY_BASE_URL")
+SUMMARY_MAX_RETRIES = max(1, int(os.getenv("SUMMARY_MAX_RETRIES", "3")))
+SUMMARY_MAX_LENGTH = 32000 # ~ 32768 
 
 VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
-
-## User Goal
-{goal}
 
 ## Task Guidelines
 1. Locate the portions that directly support the goal.
@@ -64,6 +49,9 @@ Respond strictly in JSON:
       {{...}}
   ]
 }}
+
+## User Goal
+{goal}
 
 ## Webpage Content
 {webpage_content}
@@ -101,9 +89,11 @@ async def _summarise_visit_page(
     content: str,
     client: AsyncOpenAI,
 ) -> Optional[str]:
+    if len(content) > SUMMARY_MAX_LENGTH:
+        print(f"Content too long, truncated to {SUMMARY_MAX_LENGTH} characters.")
     prompt = VISIT_SUMMARY_PROMPT.format(
         goal=goal or "N/A",
-        webpage_content=content,
+        webpage_content=content[:SUMMARY_MAX_LENGTH],
     )
     for _ in range(SUMMARY_MAX_RETRIES):
         try:
@@ -111,17 +101,22 @@ async def _summarise_visit_page(
                 model=SUMMARY_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
+                temperature=0.7,
+                top_p=0.8,
+                presence_penalty=1.5,
+                extra_body={
+                    "top_k": 20, 
+                    "chat_template_kwargs": {"enable_thinking": False},
+                },
             )
-        except Exception:
+        except OpenAIError:
             continue
 
         raw = response.choices[0].message.content if response.choices else None
         if not raw:
             continue
-        cleaned = raw.replace("```json", "").replace("```", "").strip()
-        try:
-            data = json.loads(cleaned)
-        except Exception:
+        data = json_repair.loads(raw)
+        if not data:
             continue
         rational = str(data.get("rational", "")).strip()
         evidence = str(data.get("evidence", "")).strip()
@@ -389,9 +384,8 @@ class LocalWikiVisit:
 es_host = "http://192.168.77.12:9200"
 index = "wiki20251001_qwen3-embedding-0.6b"
 
-vllm_port = os.getenv("VLLM_PORT", "8200")
-vllm_model_name = os.getenv("VLLM_MODEL_NAME", "Qwen3-Embedding-0.6B")
-vllm_endpoint = f"http://localhost:{vllm_port}/v1"
+vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://192.168.77.15:8200/v1")
+vllm_model_name = os.getenv("VLLM_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
 
 searcher = LocalWikiSearch(es_host, index, vllm_endpoint, vllm_model_name)
 visitor = LocalWikiVisit(es_host, index, summary=True)

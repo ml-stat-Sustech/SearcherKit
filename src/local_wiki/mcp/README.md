@@ -40,16 +40,14 @@ export CUDA_VISIBLE_DEVICES=0  # 使用 GPU 0
 
 ### Embedding 模型
 ```bash
-export VLLM_MODEL_PATH=/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B
-export VLLM_PORT=8200
-export VLLM_MODEL_NAME=Qwen3-Embedding-0.6B
+export VLLM_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B
+export VLLM_ENDPOINT=http://127.0.0.1:8200/v1
 ```
 
 ### Summary 模型
 ```bash
-export SUMMARY_MODEL_PATH=/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B
-export SUMMARY_MODEL_PORT=8300
-export SUMMARY_MODEL_NAME=Qwen3-8B
+export SUMMARY_MODEL=/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B-FP8
+export SUMMARY_BASE_URL=http://127.0.0.1:8300/v1
 ```
 
 ### Elasticsearch
