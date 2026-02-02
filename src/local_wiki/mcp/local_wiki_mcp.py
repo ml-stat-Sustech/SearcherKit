@@ -99,7 +99,7 @@ class LocalWikiVisit:
         if self.summary:
             pass # TODO
     @tool()
-    def visit(self, url: Union[str, List[str]], goal: Optional[str]) -> str:
+    def visit(self, url: Union[str, List[str]], goal: Optional[str]=None) -> str:
         """
         Retrieves full content for one or more local wiki pages by url.
         
