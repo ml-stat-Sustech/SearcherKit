@@ -12,6 +12,7 @@ from elasticsearch import Elasticsearch
 import json_repair
 
 from src.local_wiki.retrievers.retrievers import build_retriever
+from src.local_wiki.retrievers.encoders import build_encoder, load_model
 
 from elasticsearch import Elasticsearch, BadRequestError, SerializationError, ConflictError, NotFoundError, TransportError
 ELASTICSEARCH_RUMTIME_ERRORS = (
@@ -195,16 +196,21 @@ class LocalWikiSearch:
                  es_host: str,
                  index: str,
                  vllm_endpoint: str,
-                 vllm_model_name: str,
+                 model_name: str,
                  max_candidates: int = 5,
                  retriever_type: str = 'api') -> None:
         self.es_host = es_host
         self.es_client = Elasticsearch(self.es_host)
         self.max_candidates = max_candidates
         self.index = index
+        self.retriever_type = retriever_type
         if retriever_type == 'api':
-            encoder = VLLMEncoder(vllm_endpoint, vllm_model_name)
+            encoder = VLLMEncoder(vllm_endpoint, model_name)
             self.retriever = build_retriever('api', self.es_client, index, encoder)
+        elif retriever_type == 'dense':
+            model = load_model(model_name)
+            encoder = build_encoder(model_name, model)
+            self.retriever = build_retriever('dense', self.es_client, index, encoder)
         else:
             raise ValueError(f"Invalid type \"{retriever_type}\"")
         
@@ -249,10 +255,16 @@ class LocalWikiSearch:
         :rtype: str
         """
         if isinstance(query, str):
-            results = await self.retriever.search(query=query, top_k=self.max_candidates)
+            if self.retriever_type == 'api':
+                results = await self.retriever.search(query=query, top_k=self.max_candidates)
+            else:
+                results = self.retriever.search(query=query, top_k=self.max_candidates)
             results = [(query, results)]
         else:
-            batch_results = await self.retriever.batch_search(queries=query, top_k=self.max_candidates)
+            if self.retriever_type == 'api':
+                batch_results = await self.retriever.batch_search(queries=query, top_k=self.max_candidates)
+            else:
+                batch_results = self.retriever.batch_search(queries=query, top_k=self.max_candidates)
             results = list(zip(query, batch_results))
 
         return self.parse_search_results(results)
@@ -384,10 +396,11 @@ class LocalWikiVisit:
 es_host = "http://192.168.77.12:9200"
 index = "wiki20251001_qwen3-embedding-0.6b"
 
-vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://192.168.77.15:8200/v1")
+# vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://192.168.77.15:8200/v1")
 vllm_model_name = os.getenv("VLLM_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
 
-searcher = LocalWikiSearch(es_host, index, vllm_endpoint, vllm_model_name)
+
+searcher = LocalWikiSearch(es_host, index, "", vllm_model_name, retriever_type='dense')
 visitor = LocalWikiVisit(es_host, index, summary=True)
 mcp = FastMCP()
 mcp.add_tool(searcher.search)
