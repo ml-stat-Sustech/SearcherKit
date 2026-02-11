@@ -10,6 +10,7 @@ from urllib.parse import quote
 import re
 import gc
 import torch
+import traceback
 
 from elasticsearch import Elasticsearch, ConnectionError
 from elasticsearch.helpers import bulk
@@ -151,7 +152,7 @@ def create_index(es_client: Elasticsearch, index_name: str, embedding_dim: int, 
 
 # --- 重构后的核心处理逻辑 ---
 
-def parse_and_index_dump(es_client: Elasticsearch, index_name: str, file_path: str, model: SentenceTransformer, prompt_function, num_workers: int, cpu_batch_size: int, gpu_batch_size: int, include_vector: bool = True):
+def parse_and_index_dump(es_client: Elasticsearch, index_name: str, file_path: str, model: SentenceTransformer, prompt_function, num_workers: int, cpu_batch_size: int, gpu_seq_len: int, include_vector: bool = True, gpu_pool=None):
     if not os.path.exists(file_path):
         print(f"错误: 文件未找到于 {file_path}")
         return
@@ -164,7 +165,7 @@ def parse_and_index_dump(es_client: Elasticsearch, index_name: str, file_path: s
     print(f"--- 开始使用 {num_workers} 个CPU核心进行并行处理 ---")
     if include_vector:
         print("--- 模式: 混合搜索 (BM25 + 向量) ---")
-        print(f"模型编码批次大小 (GPU batch size): {gpu_batch_size}")
+        print(f"模型编码最大长度 (GPU sequence length): {gpu_seq_len}")
     else:
         print("--- 模式: 仅 BM25 ---")
     
@@ -213,13 +214,14 @@ def parse_and_index_dump(es_client: Elasticsearch, index_name: str, file_path: s
                         if len(processed_articles_buffer) >= cpu_batch_size:
                             doc_count += _process_and_submit_batch(
                                 es_client, index_name, processed_articles_buffer, 
-                                model, prompt_function, gpu_batch_size, include_vector
+                                model, prompt_function, gpu_seq_len, include_vector, gpu_pool
                             )
                             processed_articles_buffer = [] # 清空缓冲区
                             pbar.set_postfix(docs=f'{doc_count:,}', redirects=f'{redirect_count:,}')
 
                 except Exception as e:
                     print(f"\n主进程解析XML时出错: {e}")
+                    traceback.print_exc()
                 finally:
                     elem.clear() # 及时释放内存
 
@@ -235,14 +237,14 @@ def parse_and_index_dump(es_client: Elasticsearch, index_name: str, file_path: s
             batch_to_submit = processed_articles_buffer[:cpu_batch_size]
             doc_count += _process_and_submit_batch(
                 es_client, index_name, batch_to_submit, 
-                model, prompt_function, gpu_batch_size, include_vector
+                model, prompt_function, gpu_seq_len, include_vector, gpu_pool
             )
             processed_articles_buffer = processed_articles_buffer[cpu_batch_size:]
         
     print(f"\n索引的总文档数: {doc_count:,}。跳过的重定向总数: {redirect_count:,}")
 
 
-def _process_and_submit_batch(es_client, index_name, articles_batch, model, prompt_function, gpu_batch_size, include_vector):
+def _process_and_submit_batch(es_client, index_name, articles_batch, model, prompt_function, gpu_seq_len, include_vector, gpu_pool=None):
     """
     [内部辅助函数] 负责处理一个批次的已解析文章，
     可选地进行向量编码，并批量提交到 Elasticsearch。
@@ -257,15 +259,39 @@ def _process_and_submit_batch(es_client, index_name, articles_batch, model, prom
         # 混合搜索模式：先编码，再准备 bulk actions
         passages = [prompt_function(art["text"][:MAX_TEXT_LENGTH_FOR_EMBEDDING]) for art in articles_batch]
         
-        # print(f"\n[INFO] 主进程开始编码 {len(passages)} 篇文章...")
-        vectors = model.encode(
-            passages, normalize_embeddings=True,
-            batch_size=gpu_batch_size, show_progress_bar=False # 在主进度条下运行时关闭此进度条
-        )
-        
+        # 按照最大序列长度组织批次
+        batch_len = 0
+        batch = []
+        vectors = []
+        for passage in passages:
+            if (batch_len + len(passage)) > gpu_seq_len:
+                new_vectors = model.encode(
+                    batch, normalize_embeddings=True,
+                    batch_size=len(batch), 
+                    show_progress_bar=False, # 在主进度条下运行时关闭此进度条
+                    pool=gpu_pool
+                )
+                vectors.extend(vec.tolist() for vec in new_vectors)
+                
+                batch = [passage]
+                batch_len = len(passage)
+            else:
+                batch_len += len(passage)
+                batch.append(passage)
+
+        # 处理最后一批
+        if batch:
+            new_vectors = model.encode(
+                batch, normalize_embeddings=True,
+                batch_size=len(batch), 
+                show_progress_bar=False, # 在主进度条下运行时关闭此进度条
+                pool=gpu_pool
+            )
+            vectors.extend(vec.tolist() for vec in new_vectors)
+            
         for i, article in enumerate(articles_batch):
             source = article.copy()
-            source["text_vector"] = vectors[i].tolist()
+            source["text_vector"] = vectors[i]
             actions.append({"_index": index_name, "_source": source})
         
         del passages, vectors
@@ -295,8 +321,9 @@ if __name__ == '__main__':
     
     # --- 批处理和并行参数 ---
     parser.add_argument('--cpu_batch_size', type=int, default=256, help="在提交到ES或GPU前，主进程中累积的已处理文档数量。")
-    parser.add_argument('--gpu_batch_size', type=int, default=32, help="在 model.encode() 中实际送入GPU的批次大小 (GPU批处理)。")
-    parser.add_argument('--num_workers', type=int, default=8, help="用于文本解析的工作进程数量。默认使用 (总核心数 - 2)。")
+    # parser.add_argument('--gpu_batch_size', type=int, default=32, help="在 model.encode() 中实际送入GPU的批次大小 (GPU批处理)。")
+    parser.add_argument('--gpu_seq_len', type=int, default=MAX_TEXT_LENGTH_FOR_EMBEDDING*32, help="送入模型的文本最大长度。")
+    parser.add_argument('--num_workers', type=int, default=120, help="用于文本解析的工作进程数量。默认使用 (总核心数 - 2)。")
     
     # --- 功能开关 ---
     parser.add_argument('--dense-vector', action='store_true', help="如果设置，则启用密集向量生成和索引以进行混合搜索。")
@@ -306,6 +333,7 @@ if __name__ == '__main__':
     embedding_model = None
     if args.dense_vector:
         embedding_model = load_model(args.model_name)
+        pool = embedding_model.start_multi_process_pool(target_devices=["cuda:0", "cuda:1", "cuda:2", "cuda:3", "cuda:4", "cuda:5", "cuda:6", "cuda:7"])
     else:
         print("--- 未设置 --dense-vector 标志，跳过模型加载 ---")
 
@@ -329,8 +357,11 @@ if __name__ == '__main__':
         prompt_function=prompt_func,
         num_workers=args.num_workers,
         cpu_batch_size=args.cpu_batch_size,
-        gpu_batch_size=args.gpu_batch_size,
-        include_vector=args.dense_vector
+        # gpu_batch_size=args.gpu_batch_size,
+        gpu_seq_len=args.gpu_seq_len,
+        include_vector=args.dense_vector,
+        gpu_pool=pool if args.dense_vector else None
     )
+    pool.close() if args.dense_vector else None
 
     print("\n--- 全部完成！索引构建完毕。 ---")
