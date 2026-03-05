@@ -6,22 +6,16 @@ TODO:
 - [ ] Support OpenAI Format
 - [ ] Support upstream parsing (tool calls / thinking parsed by LLM engine, should not be parsed, but accessed through `message.tool_call` etc.)
 """
-
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence, TYPE_CHECKING
 
-from chat_types import ChatMessage, TextPart, ToolCall
+from chat_types import ChatMessage
 
-
-def _render_content(content: str | list[TextPart] | None) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return "".join(part.text for part in content)
-
+if TYPE_CHECKING:
+    from webagent.llm.chat_types import ToolCall
+    from 
 
 def _parse_arguments(arguments: Mapping[str, Any] | str) -> Any:
     if isinstance(arguments, str):
@@ -84,7 +78,7 @@ def to_gpt(
     out: list[dict[str, Any]] = []
     for message in messages:
         item: dict[str, Any] = {"role": message.role}
-        content = _render_content(message.content)
+        content = message.content
         item["content"] = content
 
         if message.name:
@@ -126,7 +120,9 @@ def to_gpt(
 def to_qwen(
     messages: Iterable[ChatMessage],
     *,
-    tools: Sequence[Mapping[str, Any]] | None = None,
+    drop_thinking: bool = False,
+    availiable_tools: Sequence[Mapping[str, Any]] | None = None,
+    tool_prompt_formatter: ()
 ) -> list[dict[str, str]]:
     """
     Convert internal ChatMessage objects to Qwen-style JSON role/content messages.
@@ -138,7 +134,7 @@ def to_qwen(
     out: list[dict[str, str]] = []
 
     for message in messages:
-        content = _render_content(message.content)
+        content = message.content
 
         if message.role == "system":
             if content:
@@ -152,20 +148,21 @@ def to_qwen(
 
         if message.role == "assistant":
             parts: list[str] = []
-            thinking = message.extensions.get("thinking")
-            if isinstance(thinking, str) and thinking.strip():
-                parts.append(f"<think>\n{thinking}\n</think>")
+            if not drop_thinking:
+                thinking = message.thinking
+                if isinstance(thinking, str) and thinking.strip():
+                    parts.append(f"<think>\n{thinking}\n</think>")
             if content:
                 parts.append(content)
             if message.tool_calls:
                 parts.append(_render_tool_calls_raw(message.tool_calls))
-            out.append({"role": "assistant", "content": "\n\n".join(parts).strip()})
+            out.append({"role": "assistant", "content": "\n".join(parts).strip()})
             continue
 
         out.append({"role": "user", "content": content})
 
-    if tools:
-        systems.append(_qwen_tools_block(tools))
+    if availiable_tools:
+        systems.append(_qwen_tools_block(availiable_tools))
 
     if systems:
         out.insert(0, {"role": "system", "content": "\n\n".join(systems).strip()})
