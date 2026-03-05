@@ -9,13 +9,13 @@ TODO:
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable, Mapping, Sequence, TYPE_CHECKING
+from typing import Any, Iterable, Mapping, Sequence, Callable, TYPE_CHECKING
 
 from chat_types import ChatMessage
 
 if TYPE_CHECKING:
     from webagent.llm.chat_types import ToolCall
-    from 
+    from webagent.tools.tool import Tool
 
 def _parse_arguments(arguments: Mapping[str, Any] | str) -> Any:
     if isinstance(arguments, str):
@@ -26,7 +26,7 @@ def _parse_arguments(arguments: Mapping[str, Any] | str) -> Any:
     return arguments
 
 
-def _render_tool_calls_raw(tool_calls: list[ToolCall]) -> str:
+def _render_tool_calls(tool_calls: list[ToolCall]) -> str:
     lines: list[str] = []
     for tc in tool_calls:
         payload = {
@@ -39,7 +39,7 @@ def _render_tool_calls_raw(tool_calls: list[ToolCall]) -> str:
     return "\n".join(lines)
 
 
-def _qwen_tools_block(tools: Sequence[Mapping[str, Any]]) -> str:
+def _qwen_tools_block(tools: Iterable[Tool]) -> str:
     lines = [
         "# Tools",
         "",
@@ -49,7 +49,14 @@ def _qwen_tools_block(tools: Sequence[Mapping[str, Any]]) -> str:
         "<tools>",
     ]
     for tool in tools:
-        lines.append(json.dumps(tool, ensure_ascii=False))
+        lines.append(json.dumps({
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.arguments_schema
+                }}, ensure_ascii=False))
+        
     lines.extend(
         [
             "</tools>",
@@ -63,66 +70,66 @@ def _qwen_tools_block(tools: Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def to_gpt(
-    messages: Iterable[ChatMessage],
-    *,
-    tools: Sequence[Mapping[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """
-    Convert internal ChatMessage objects into structured GPT message JSON.
+# def to_gpt(
+#     messages: Iterable[ChatMessage],
+#     *,
+#     tools: Sequence[Mapping[str, Any]] | None = None,
+# ) -> dict[str, Any]:
+#     """
+#     Convert internal ChatMessage objects into structured GPT message JSON.
 
-    Intended for Harmony/OpenAI libraries that accept message JSON and perform
-    model-specific rendering internally.
-    """
+#     Intended for Harmony/OpenAI libraries that accept message JSON and perform
+#     model-specific rendering internally.
+#     """
 
-    out: list[dict[str, Any]] = []
-    for message in messages:
-        item: dict[str, Any] = {"role": message.role}
-        content = message.content
-        item["content"] = content
+#     out: list[dict[str, Any]] = []
+#     for message in messages:
+#         item: dict[str, Any] = {"role": message.role}
+#         content = message.content
+#         item["content"] = content
 
-        if message.name:
-            item["name"] = message.name
-        if message.tool_call_id:
-            item["tool_call_id"] = message.tool_call_id
+#         if message.name:
+#             item["name"] = message.name
+#         if message.tool_call_id:
+#             item["tool_call_id"] = message.tool_call_id
 
-        if message.role == "assistant":
-            thinking = message.extensions.get("thinking")
-            if isinstance(thinking, str) and thinking.strip():
-                item["reasoning"] = thinking
+#         if message.role == "assistant":
+#             thinking = message.extensions.get("thinking")
+#             if isinstance(thinking, str) and thinking.strip():
+#                 item["reasoning"] = thinking
 
-            if message.tool_calls:
-                item["tool_calls"] = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": json.dumps(_parse_arguments(tc.arguments), ensure_ascii=False)
-                            if not isinstance(tc.arguments, str)
-                            else tc.arguments,
-                        },
-                    }
-                    for tc in message.tool_calls
-                ]
+#             if message.tool_calls:
+#                 item["tool_calls"] = [
+#                     {
+#                         "id": tc.id,
+#                         "type": "function",
+#                         "function": {
+#                             "name": tc.name,
+#                             "arguments": json.dumps(_parse_arguments(tc.arguments), ensure_ascii=False)
+#                             if not isinstance(tc.arguments, str)
+#                             else tc.arguments,
+#                         },
+#                     }
+#                     for tc in message.tool_calls
+#                 ]
 
-        if message.extensions.get("openai") and isinstance(message.extensions["openai"], Mapping):
-            item.update(dict(message.extensions["openai"]))
+#         if message.extensions.get("openai") and isinstance(message.extensions["openai"], Mapping):
+#             item.update(dict(message.extensions["openai"]))
 
-        out.append(item)
+#         out.append(item)
 
-    payload: dict[str, Any] = {"messages": out}
-    if tools:
-        payload["tools"] = list(tools)
-    return payload
+#     payload: dict[str, Any] = {"messages": out}
+#     if tools:
+#         payload["tools"] = list(tools)
+#     return payload
 
 
 def to_qwen(
     messages: Iterable[ChatMessage],
     *,
     drop_thinking: bool = False,
-    availiable_tools: Sequence[Mapping[str, Any]] | None = None,
-    tool_prompt_formatter: ()
+    availiable_tools: Iterable[Tool] | None = None,
+    tool_prompt_formatter: Callable[[Iterable[Tool]], str] = _qwen_tools_block
 ) -> list[dict[str, str]]:
     """
     Convert internal ChatMessage objects to Qwen-style JSON role/content messages.
@@ -155,14 +162,14 @@ def to_qwen(
             if content:
                 parts.append(content)
             if message.tool_calls:
-                parts.append(_render_tool_calls_raw(message.tool_calls))
+                parts.append(_render_tool_calls(message.tool_calls))
             out.append({"role": "assistant", "content": "\n".join(parts).strip()})
             continue
 
-        out.append({"role": "user", "content": content})
+        out.append({"role": "user", "content": content or ""})
 
     if availiable_tools:
-        systems.append(_qwen_tools_block(availiable_tools))
+        systems.append(tool_prompt_formatter(availiable_tools))
 
     if systems:
         out.insert(0, {"role": "system", "content": "\n\n".join(systems).strip()})
@@ -170,4 +177,4 @@ def to_qwen(
     return out
 
 
-__all__ = ["to_gpt", "to_qwen"]
+__all__ = ["to_qwen"]
