@@ -1,74 +1,32 @@
 """Chat Template Parser
 
 TODO:
-- [ ] Support Qwen3 Format
 - [ ] Support ASearcher Format
 - [ ] Support OpenAI Format
-- [ ] Support upstream parsing (tool calls / thinking parsed by LLM engine, should not be parsed, but accessed through `message.tool_call` etc.)
+- [x] Support Qwen3 Format
+- [x] Support upstream parsing (tool calls / thinking parsed by LLM engine, should not be parsed, but accessed through `message.tool_call` etc.)
 """
 from __future__ import annotations
 
+import re
+import abc
 import json
-from typing import Any, Iterable, Mapping, Sequence, Callable, TYPE_CHECKING
+from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
-from chat_types import ChatMessage
+from webagent.llm.chat_types import ChatMessage
+from webagent.llm.chat_types import ToolCall
 
 if TYPE_CHECKING:
-    from webagent.llm.chat_types import ToolCall
     from webagent.tools.tool import Tool
+    
+class Parser:
+    @abc.abstractmethod
+    def from_model(self, messages: Iterable[dict[str, Any]]) -> Iterable[ChatMessage]:
+        pass
 
-def _parse_arguments(arguments: Mapping[str, Any] | str) -> Any:
-    if isinstance(arguments, str):
-        try:
-            return json.loads(arguments)
-        except json.JSONDecodeError:
-            return arguments
-    return arguments
-
-
-def _render_tool_calls(tool_calls: list[ToolCall]) -> str:
-    lines: list[str] = []
-    for tc in tool_calls:
-        payload = {
-            "name": tc.name,
-            "arguments": _parse_arguments(tc.arguments),
-        }
-        lines.append("<tool_call>")
-        lines.append(json.dumps(payload, ensure_ascii=False))
-        lines.append("</tool_call>")
-    return "\n".join(lines)
-
-
-def _qwen_tools_block(tools: Iterable[Tool]) -> str:
-    lines = [
-        "# Tools",
-        "",
-        "You may call one or more functions to assist with the user query.",
-        "",
-        "You are provided with function signatures within <tools></tools> XML tags:",
-        "<tools>",
-    ]
-    for tool in tools:
-        lines.append(json.dumps({
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.arguments_schema
-                }}, ensure_ascii=False))
-        
-    lines.extend(
-        [
-            "</tools>",
-            "",
-            "For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:",
-            "<tool_call>",
-            '{"name": <function-name>, "arguments": <args-json-object>}',
-            "</tool_call>",
-        ]
-    )
-    return "\n".join(lines)
-
+    @abc.abstractmethod
+    def to_model(self, messages: Iterable[ChatMessage]) -> Iterable[dict[str, Any]]:
+        pass
 
 # def to_gpt(
 #     messages: Iterable[ChatMessage],
@@ -123,58 +81,220 @@ def _qwen_tools_block(tools: Iterable[Tool]) -> str:
 #         payload["tools"] = list(tools)
 #     return payload
 
-
-def to_qwen(
-    messages: Iterable[ChatMessage],
-    *,
-    drop_thinking: bool = False,
-    availiable_tools: Iterable[Tool] | None = None,
-    tool_prompt_formatter: Callable[[Iterable[Tool]], str] = _qwen_tools_block
-) -> list[dict[str, str]]:
+class QwenParser(Parser):
+    """Parse `ChatMessage` to Qwen format in the form of OpenAI SDK message types
     """
-    Convert internal ChatMessage objects to Qwen-style JSON role/content messages.
+    def __init__(self, upstream_parsed=False) -> None:
+        """_
+        Args:
+            upstream_parsed (bool, optional): Whether the `thinking` and `tool_call` content are already been parsed. Parser would attempt to read from and write to `reasoning`,`reasoning_content` and `tool_calls` fields of the message dict if set to `True`. Defaults to False.
+        """        
+        super().__init__()
+        self.upstream_parsed=upstream_parsed
+    
+    def to_model(
+        self,
+        messages: Iterable[ChatMessage],
+        *,
+        drop_thinking: bool = False,
+        availiable_tools: Iterable[Tool] | None = None
+    ) -> list[dict[str, Any]]:
+        """Convert internal `ChatMessage` objects into Qwen/OpenAI-style message dicts.
 
-    Thinking and tool calls are embedded as raw tags in assistant/user content.
-    """
+        Args:
+            messages: Iterable of internal chat messages.
+            drop_thinking: Whether to omit assistant thinking/reasoning content.
+            availiable_tools: Optional tools used to build a system tool-spec message.
 
-    systems: list[str] = []
-    out: list[dict[str, str]] = []
+        Raises:
+            ValueError: If a message has an unsupported role.
+        """
+        out: list[dict[str, Any]] = []
 
-    for message in messages:
-        content = message.content
+        for message in messages:
+            if message.role == "system":
+                out.append({"role": "system", "content": (message.content or "") + (self.qwen_tools_block(availiable_tools) if availiable_tools else "")})
+            elif message.role == "user":
+                out.append({"role": "user", "content": message.content or ""})
+            elif message.role == "assistant":
+                item: dict[str, Any] = {"role": "assistant"}
+                if self.upstream_parsed:
+                    item["content"] = message.content
+                    if not drop_thinking and isinstance(message.thinking, str):
+                        item["reasoning"] = message.thinking
+                    if message.tool_calls:
+                        item["tool_calls"] = [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": tc.arguments,
+                                },
+                            }
+                            for tc in message.tool_calls
+                        ]
+                else:
+                    parts: list[str] = []
+                    if not drop_thinking and isinstance(message.thinking, str):
+                        parts.append(f"<think>{message.thinking}</think>")
+                    if message.content is not None:
+                        parts.append(message.content)
+                    if message.tool_calls:
+                        parts.append(self.render_tool_calls(message.tool_calls))
+                    item["content"] = "".join(parts)
+                out.append(item)
+            elif message.role == "tool":
+                out.append({"role": "user", "content": f"<tool_response>{message.content}</tool_response>"})
+            else:
+                raise ValueError(f"Invalid ChatMessage role: {message.role}")
 
-        if message.role == "system":
-            if content:
-                systems.append(content)
-            continue
+        return out
 
-        if message.role == "tool":
-            wrapped = f"<tool_response>\n{content}\n</tool_response>"
-            out.append({"role": "user", "content": wrapped})
-            continue
+    def from_model(self, messages: Iterable[dict[str, Any]]) -> list[ChatMessage]:
+        """Parse Qwen/OpenAI-style message dicts into internal `ChatMessage` objects.
 
-        if message.role == "assistant":
-            parts: list[str] = []
-            if not drop_thinking:
-                thinking = message.thinking
-                if isinstance(thinking, str) and thinking.strip():
-                    parts.append(f"<think>\n{thinking}\n</think>")
-            if content:
-                parts.append(content)
-            if message.tool_calls:
-                parts.append(_render_tool_calls(message.tool_calls))
-            out.append({"role": "assistant", "content": "\n".join(parts).strip()})
-            continue
+        Args:
+            messages: Iterable of model message dicts with a `role` field.
 
-        out.append({"role": "user", "content": content or ""})
+        Raises:
+            ValueError: If a message role is not supported or assistant content format is invalid.
+            json.JSONDecodeError: If a `<tool_call>` JSON payload is malformed.
+            KeyError: If a `<tool_call>` JSON payload misses `name` or `arguments`.
+        """
+        out = []
+        for message in messages:
+            role = message.get("role")
+            if role == "user":
+                out.append(self.from_user(message))
+            elif role == "assistant":
+                out.append(self.from_assistant(message))
+            elif role == "system":
+                out.append(self.from_assistant(message))
+            else:
+                raise ValueError(f"Invalid Qwen3 message: {message}")
+        return out
+                
+    def from_system(self, message: dict[str,Any]) -> ChatMessage:
+        return ChatMessage(
+            role="system",
+            content=message.get("content")
+        )
+        
+    def from_assistant(self, message: dict[str,Any]) -> ChatMessage:
+        if self.upstream_parsed:
+            thinking = message.get("reasoning", message.get("reasoning_content"))
+            tool_calls: list[ToolCall] = []
+            for tc in message.get("tool_calls", []):
+                if not isinstance(tc, Mapping):
+                    continue
+                function = tc.get("function", {})
+                if not isinstance(function, Mapping):
+                    function = {}
+                arguments = function.get("arguments", {})
+                if not isinstance(arguments, Mapping):
+                    arguments = {}
+                tool_calls.append(
+                    ToolCall(
+                        id=str(tc.get("id", "call_tool")),
+                        name=str(function.get("name", "")),
+                        arguments=arguments,
+                    )
+                )
+            return ChatMessage(
+                role="assistant",
+                content=message.get("content"),
+                thinking=thinking if isinstance(thinking, str) else None,
+                tool_calls=tool_calls,
+            )
 
-    if availiable_tools:
-        systems.append(tool_prompt_formatter(availiable_tools))
+        content = message.get("content")
+        if not isinstance(content, str):
+            raise ValueError(f"Invalid Qwen assistant message content: {content!r}")
 
-    if systems:
-        out.insert(0, {"role": "system", "content": "\n\n".join(systems).strip()})
+        message_pattern = re.compile(
+            r"^(?:<think>(?P<thinking>.*?)</think>)?"
+            r"(?P<out>(?:(?!<think>|</think>|<tool_call>|</tool_call>).)*)"
+            r"(?P<tool_calls>(?:<tool_call>.*?</tool_call>)*)$",
+            re.DOTALL,
+        )
+        tool_call_pattern = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
+        parsed = message_pattern.fullmatch(content)
+        if not parsed:
+            raise ValueError(f"Invalid Qwen assistant message format: {content!r}")
 
-    return out
+        thinking = parsed.group("thinking")
+        out_raw = parsed.group("out")
+        out_content = out_raw if out_raw != "" else None
+        tool_calls_raw = parsed.group("tool_calls")
+
+        tool_calls: list[ToolCall] = []
+        for payload_raw in re.findall(tool_call_pattern, tool_calls_raw):
+            tc = json.loads(payload_raw)
+            tool_calls.append(
+                ToolCall(
+                    id="call_tool",
+                    name=tc["name"],
+                    arguments=tc["arguments"],
+                )
+            )
+
+        return ChatMessage(
+            role="assistant",
+            content=out_content,
+            thinking=thinking,
+            tool_calls=tool_calls,
+        )
+    
+    def from_user(self, message: dict[str, Any]) -> ChatMessage:
+        return ChatMessage(
+            role="user",
+            content=message.get("content","")
+        )
+            
+    def render_tool_calls(self, tool_calls: list[ToolCall]) -> str:
+        lines: list[str] = []
+        for tc in tool_calls:
+            payload = {
+                "name": tc.name,
+                "arguments": tc.arguments,
+            }
+            lines.append("<tool_call>")
+            lines.append(json.dumps(payload, ensure_ascii=False))
+            lines.append("</tool_call>")
+        return "\n".join(lines)
 
 
-__all__ = ["to_qwen"]
+    def qwen_tools_block(self, tools: Iterable[Tool]) -> str:
+        lines = [
+            "# Tools",
+            "",
+            "You may call one or more functions to assist with the user query.",
+            "",
+            "You are provided with function signatures within <tools></tools> XML tags:",
+            "<tools>",
+        ]
+        for tool in tools:
+            lines.append(json.dumps({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.arguments_schema
+                    }}, ensure_ascii=False))
+
+        lines.extend(
+            [
+                "</tools>",
+                "",
+                "For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:",
+                "<tool_call>",
+                '{"name": <function-name>, "arguments": <args-json-object>}',
+                "</tool_call>",
+            ]
+        )
+        return "\n".join(lines)
+        
+
+
+__all__ = [ "QwenParser" ]

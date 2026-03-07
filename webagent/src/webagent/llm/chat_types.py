@@ -11,7 +11,7 @@ class ToolCall:
     """Provider-agnostic tool/function invocation emitted by an assistant."""
     id: str
     name: str
-    arguments: Mapping[str, Any] | str
+    arguments: Mapping[str, Any]
 
 @dataclass(slots=True)
 class ChatMessage:
