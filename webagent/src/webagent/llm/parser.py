@@ -15,6 +15,7 @@ from typing import Any, Iterable, Mapping, TYPE_CHECKING
 
 from webagent.llm.chat_types import ChatMessage
 from webagent.llm.chat_types import ToolCall
+from webagent.llm.chat_types import assistant, system, user
 
 if TYPE_CHECKING:
     from webagent.tools.tool import Tool
@@ -84,20 +85,19 @@ class Parser:
 class QwenParser(Parser):
     """Parse `ChatMessage` to Qwen format in the form of OpenAI SDK message types
     """
-    def __init__(self, upstream_parsed=False) -> None:
+    def __init__(self, upstream_parsed = False, drop_thinking = True) -> None:
         """_
         Args:
             upstream_parsed (bool, optional): Whether the `thinking` and `tool_call` content are already been parsed. Parser would attempt to read from and write to `reasoning`,`reasoning_content` and `tool_calls` fields of the message dict if set to `True`. Defaults to False.
+            drop_thinking (bool, optional): Whether to format `thinking` content into model context (ineffective when using `upstream_parsing`). Defaults to True. 
         """        
         super().__init__()
-        self.upstream_parsed=upstream_parsed
+        self.upstream_parsed = upstream_parsed
+        self.drop_thinking = drop_thinking
     
     def to_model(
         self,
         messages: Iterable[ChatMessage],
-        *,
-        drop_thinking: bool = False,
-        availiable_tools: Iterable[Tool] | None = None
     ) -> list[dict[str, Any]]:
         """Convert internal `ChatMessage` objects into Qwen/OpenAI-style message dicts.
 
@@ -113,15 +113,17 @@ class QwenParser(Parser):
 
         for message in messages:
             if message.role == "system":
-                out.append({"role": "system", "content": (message.content or "") + (self.qwen_tools_block(availiable_tools) if availiable_tools else "")})
+                out.append({"role": "system", "content": (message.content or "") + (self.qwen_tools_block(message.tools) if message.tools else "")})
             elif message.role == "user":
                 out.append({"role": "user", "content": message.content or ""})
             elif message.role == "assistant":
                 item: dict[str, Any] = {"role": "assistant"}
                 if self.upstream_parsed:
                     item["content"] = message.content
-                    if not drop_thinking and isinstance(message.thinking, str):
+                    if isinstance(message.thinking, str):
+                        # ignore drop_thinking flag, let upstream decide
                         item["reasoning"] = message.thinking
+                        item["reasoning_content"] = message.thinking
                     if message.tool_calls:
                         item["tool_calls"] = [
                             {
@@ -136,7 +138,7 @@ class QwenParser(Parser):
                         ]
                 else:
                     parts: list[str] = []
-                    if not drop_thinking and isinstance(message.thinking, str):
+                    if not self.drop_thinking and isinstance(message.thinking, str):
                         parts.append(f"<think>{message.thinking}</think>")
                     if message.content is not None:
                         parts.append(message.content)
@@ -170,16 +172,13 @@ class QwenParser(Parser):
             elif role == "assistant":
                 out.append(self.from_assistant(message))
             elif role == "system":
-                out.append(self.from_assistant(message))
+                out.append(self.from_system(message))
             else:
                 raise ValueError(f"Invalid Qwen3 message: {message}")
         return out
                 
     def from_system(self, message: dict[str,Any]) -> ChatMessage:
-        return ChatMessage(
-            role="system",
-            content=message.get("content")
-        )
+        return system(message.get("content", ""))
         
     def from_assistant(self, message: dict[str,Any]) -> ChatMessage:
         if self.upstream_parsed:
@@ -201,9 +200,8 @@ class QwenParser(Parser):
                         arguments=arguments,
                     )
                 )
-            return ChatMessage(
-                role="assistant",
-                content=message.get("content"),
+            return assistant(
+                message.get("content"),
                 thinking=thinking if isinstance(thinking, str) else None,
                 tool_calls=tool_calls,
             )
@@ -239,18 +237,14 @@ class QwenParser(Parser):
                 )
             )
 
-        return ChatMessage(
-            role="assistant",
-            content=out_content,
+        return assistant(
+            out_content,
             thinking=thinking,
             tool_calls=tool_calls,
         )
     
     def from_user(self, message: dict[str, Any]) -> ChatMessage:
-        return ChatMessage(
-            role="user",
-            content=message.get("content","")
-        )
+        return user(message.get("content", ""))
             
     def render_tool_calls(self, tool_calls: list[ToolCall]) -> str:
         lines: list[str] = []
@@ -295,6 +289,9 @@ class QwenParser(Parser):
         )
         return "\n".join(lines)
         
+def get_parser_cls(name: str):
+    if "qwen" in name.lower():
+        return QwenParser
+    raise ValueError(f"Cannot infer parser type from name: {name}")
 
-
-__all__ = [ "QwenParser" ]
+__all__ = [ "QwenParser", "get_parser_cls" ]
