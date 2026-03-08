@@ -7,73 +7,36 @@ TODO:
 - [ ] support openai compatible engines
 - [ ] support non server LLM engines
 """
+from __future__ import annotations
 
+import abc
 import asyncio
-import json
-from typing import Any, Dict, Iterable, Mapping, Optional
+from contextlib import nullcontext
+from typing import Any, Dict, Iterable, Optional, TYPE_CHECKING
 
-from chat_types import ChatMessage, TextPart, ToolCall
+from webagent.llm.parser import get_parser_cls
 
+if TYPE_CHECKING:
+    from webagent.llm.chat_types import ChatMessage
 
-NUM_CONCURRENT_QUERIES = 32
+class Client:
+    @abc.abstractmethod
+    async def complete(self, messages: Iterable[ChatMessage], **kwargs) -> ChatMessage:
+        pass
 
-sem = asyncio.Semaphore(NUM_CONCURRENT_QUERIES)
-
-
-def _part_to_openai(part: TextPart) -> dict[str, Any]:
-    return {"type": "text", "text": part.text}
-
-
-def _tool_call_to_openai(tool_call: ToolCall) -> dict[str, Any]:
-    arguments = tool_call.arguments
-    serialized_arguments = arguments if isinstance(arguments, str) else json.dumps(arguments)
-    return {
-        "id": tool_call.id,
-        "type": "function",
-        "function": {
-            "name": tool_call.name,
-            "arguments": serialized_arguments,
-        },
-    }
-
-
-def _to_openai_messages(messages: Iterable[ChatMessage | Mapping[str, Any]]) -> list[dict[str, Any]]:
-    materialized = list(messages)
-    if not materialized:
-        return []
-    if isinstance(materialized[0], ChatMessage):
-        out: list[dict[str, Any]] = []
-        for message in materialized:
-            item: dict[str, Any] = {"role": message.role}
-            if message.content is None:
-                item["content"] = None
-            elif isinstance(message.content, str):
-                item["content"] = message.content
-            else:
-                item["content"] = [_part_to_openai(part) for part in message.content]
-            if message.name:
-                item["name"] = message.name
-            if message.tool_call_id:
-                item["tool_call_id"] = message.tool_call_id
-            if message.tool_calls:
-                item["tool_calls"] = [_tool_call_to_openai(tc) for tc in message.tool_calls]
-            if message.extensions.get("openai") and isinstance(message.extensions["openai"], Mapping):
-                item.update(dict(message.extensions["openai"]))
-            out.append(item)
-        return out
-    return [dict(message) for message in materialized]  # type: ignore[misc]
-
-
-class OpenAIChatClient:
+class OpenAIClient(Client):
     """Wrapper around the `openai` Python SDK."""
-
     def __init__(
         self,
         *,
         model: str,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        default_kwargs: Dict[str, object] = {},
+        default_kwargs: Dict[str, object] | None = None,
+        parser: str | None = None,
+        parser_kwargs: dict[str, Any] | None = None,
+        drop_thinking = True,
+        concurrency_limit: int | None = None
     ) -> None:
         from openai import AsyncOpenAI, RateLimitError
         import backoff
@@ -83,22 +46,19 @@ class OpenAIChatClient:
         )
         self.model = model
         self.query = backoff.on_exception(backoff.expo, RateLimitError)(self.client.chat.completions.create)
+        self.default_kwargs = default_kwargs or {}
+        self.parser = get_parser_cls(parser or model)(**(parser_kwargs or {}))
+        self.drop_thinking = drop_thinking
         
-        self.default_kwargs = default_kwargs
+        self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
 
-    async def complete(self, messages: Iterable[ChatMessage | Mapping[str, Any]], **kwargs) -> ChatMessage:
-        openai_messages = _to_openai_messages(messages)
+    async def complete(self, messages: Iterable[ChatMessage], **kwargs) -> ChatMessage:
         payload = {**self.default_kwargs, **kwargs}
-        async with sem:
+        async with self.llm_concurrency_lock:
             response = await self.query(
                 model=self.model,
-                messages=openai_messages,
+                messages=self.parser.to_model(messages), # type: ignore
                 **payload,
             )
         msg = response.choices[0].message
-        # TODO: parse to ChatMessages
-    
-    @classmethod
-    def from_conf(cls, conf):
-        pass
-        
+        return self.parser.from_model([msg])[0]
