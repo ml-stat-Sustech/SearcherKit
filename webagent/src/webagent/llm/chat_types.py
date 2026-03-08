@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal, Mapping, TYPE_CHECKING
 
 Role = Literal["system", "user", "assistant", "tool"]
@@ -18,17 +18,17 @@ class ToolCall:
 
 @dataclass(slots=True)
 class SystemMessage:
+    content: str
     role: Literal["system"] = "system"
-    content: str | None = None
     tools: list[Tool] | None = None
-    extensions: dict[str, Any] = field(default_factory=dict)
+    extensions: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
 class UserMessage:
+    content: str
     role: Literal["user"] = "user"
-    content: str | None = None
-    extensions: dict[str, Any] = field(default_factory=dict)
+    extensions: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -36,29 +36,26 @@ class AssistantMessage:
     role: Literal["assistant"] = "assistant"
     content: str | None = None
     thinking: str | None = None
-    tool_calls: list[ToolCall] = field(default_factory=list)
-    extensions: dict[str, Any] = field(default_factory=dict)
+    tool_calls: list[ToolCall] | None = None
+    extensions: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
 class ToolMessage:
+    tool_responses: list[str]
     role: Literal["tool"] = "tool"
-    content: str | None = None
-    extensions: dict[str, Any] = field(default_factory=dict)
+    extensions: dict[str, Any] | None = None
 
 ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
-def system(text: str, **kwargs: Any) -> SystemMessage:
-    return SystemMessage(content=text, **kwargs)
+def system(text: str, tools: list[Tool] | None = None, extensions: dict[str, Any] | None = None) -> SystemMessage:
+    return SystemMessage(content=text, tools=tools, extensions=extensions)
 
+def user(text: str, extensions: dict[str, Any] | None = None) -> UserMessage:
+    return UserMessage(content=text, extensions=extensions)
 
-def user(text: str, **kwargs: Any) -> UserMessage:
-    return UserMessage(content=text, **kwargs)
+def assistant(text: str | None, thinking: str | None = None, tool_calls: list[ToolCall] | None = None, extensions: dict[str, Any] | None = None) -> AssistantMessage:
+    return AssistantMessage(content=text, thinking=thinking, tool_calls=tool_calls, extensions=extensions)
 
-
-def assistant(text: str | None = None, **kwargs: Any) -> AssistantMessage:
-    return AssistantMessage(content=text, **kwargs)
-
-
-def tool(text: str, **kwargs: Any) -> ToolMessage:
-    return ToolMessage(content=text, **kwargs)
+def tool(tool_responses: list[str], extensions: dict[str, Any] | None = None) -> ToolMessage:
+    return ToolMessage(tool_responses=tool_responses, extensions=extensions)

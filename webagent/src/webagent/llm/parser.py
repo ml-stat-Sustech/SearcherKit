@@ -20,6 +20,9 @@ from webagent.llm.chat_types import assistant, system, user
 if TYPE_CHECKING:
     from webagent.tools.tool import Tool
     
+class ParsingError(Exception):
+    """Raised when model message payload cannot be parsed into `ChatMessage`."""
+
 class Parser:
     @abc.abstractmethod
     def from_model(self, messages: Iterable[dict[str, Any]]) -> Iterable[ChatMessage]:
@@ -147,7 +150,7 @@ class QwenParser(Parser):
                     item["content"] = "".join(parts)
                 out.append(item)
             elif message.role == "tool":
-                out.append({"role": "user", "content": f"<tool_response>{message.content}</tool_response>"})
+                out.append({"role": "user", "content":"\n".join([f"<tool_response>{resp}</tool_response>" for resp in message.tool_responses])})
             else:
                 raise ValueError(f"Invalid ChatMessage role: {message.role}")
 
@@ -161,8 +164,7 @@ class QwenParser(Parser):
 
         Raises:
             ValueError: If a message role is not supported or assistant content format is invalid.
-            json.JSONDecodeError: If a `<tool_call>` JSON payload is malformed.
-            KeyError: If a `<tool_call>` JSON payload misses `name` or `arguments`.
+            ParsingError: If a `<tool_call>` JSON payload is malformed or misses required fields.
         """
         out = []
         for message in messages:
@@ -178,11 +180,11 @@ class QwenParser(Parser):
         return out
                 
     def from_system(self, message: dict[str,Any]) -> ChatMessage:
-        return system(message.get("content", ""))
+        return system(message.get("content") or "")
         
     def from_assistant(self, message: dict[str,Any]) -> ChatMessage:
         if self.upstream_parsed:
-            thinking = message.get("reasoning", message.get("reasoning_content"))
+            thinking = message.get("reasoning", message.get("reasoning_content", None))
             tool_calls: list[ToolCall] = []
             for tc in message.get("tool_calls", []):
                 if not isinstance(tc, Mapping):
@@ -206,7 +208,7 @@ class QwenParser(Parser):
                 tool_calls=tool_calls,
             )
 
-        content = message.get("content")
+        content = message.get("content", "")
         if not isinstance(content, str):
             raise ValueError(f"Invalid Qwen assistant message content: {content!r}")
 
@@ -227,15 +229,21 @@ class QwenParser(Parser):
         tool_calls_raw = parsed.group("tool_calls")
 
         tool_calls: list[ToolCall] = []
+        cnt = 0
         for payload_raw in re.findall(tool_call_pattern, tool_calls_raw):
-            tc = json.loads(payload_raw)
-            tool_calls.append(
-                ToolCall(
-                    id="call_tool",
-                    name=tc["name"],
-                    arguments=tc["arguments"],
+            # Notice: Keep tool call order
+            try:
+                tc = json.loads(payload_raw)
+                tool_calls.append(
+                    ToolCall(
+                        id="chatcmpl-tool-"+str(cnt),
+                        name=tc["name"],
+                        arguments=tc["arguments"],
+                    )
                 )
-            )
+                cnt += 1
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                raise ParsingError(f"Invalid <tool_call> payload: {payload_raw!r}") from exc
 
         return assistant(
             out_content,
@@ -294,4 +302,4 @@ def get_parser_cls(name: str):
         return QwenParser
     raise ValueError(f"Cannot infer parser type from name: {name}")
 
-__all__ = [ "QwenParser", "get_parser_cls" ]
+__all__ = [ "ParsingError", "QwenParser", "get_parser_cls" ]
