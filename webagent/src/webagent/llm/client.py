@@ -12,17 +12,27 @@ from __future__ import annotations
 import abc
 import asyncio
 from contextlib import nullcontext
-from typing import Any, Dict, Iterable, Optional, Sequence, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, TYPE_CHECKING
 
-from webagent.llm.parser import get_parser_cls
-from webagent.llm.parser import ParsingError
+from openai import AsyncOpenAI
+
+from webagent.utils.retry import wrap_async
 
 if TYPE_CHECKING:
-    from webagent.llm.chat_types import ChatMessage
+    from openai.types.completion_usage import CompletionUsage
+    from webagent.utils.retry import RetryPolicy
 
 class Client:
     @abc.abstractmethod
-    async def complete(self, messages: Iterable[ChatMessage], **kwargs) -> ChatMessage:
+    async def complete(self, messages: Iterable[dict[str,Any]], **kwargs) -> dict[str,Any]:
+        pass
+    
+    @abc.abstractmethod
+    async def complete_with_usage(
+        self,
+        messages: Iterable[dict[str, Any]],
+        **kwargs,
+    ) -> tuple[dict[str, Any], CompletionUsage | None]:
         pass
 
 class OpenAIClient(Client):
@@ -34,8 +44,7 @@ class OpenAIClient(Client):
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         default_kwargs: Dict[str, object] | None = None,
-        retry = False,
-        retry_errors: Sequence[type[Exception]] | None = None,
+        retry_policy: RetryPolicy | None = None,
         concurrency_limit: int | None = None
     ) -> None:
         """Initialize an OpenAI chat-completions client wrapper.
@@ -45,14 +54,11 @@ class OpenAIClient(Client):
             api_key: OpenAI-compatible API key. Uses environment defaults when `None`.
             base_url: Optional base URL for OpenAI-compatible providers.
             default_kwargs: Default request parameters merged into every `complete` call.
-            retry: Whether to enable exponential backoff retries around `complete`.
-            retry_errors: Exception classes that should trigger a retry. When `retry`
-                is enabled and this is `None`, `RateLimitError` is used.
+            retry_policy: Retry policy for API requests. If `None`, requests are sent
+                without retries.
             concurrency_limit: Maximum number of concurrent LLM requests. `None`
                 means no explicit semaphore limit.
         """
-        from openai import AsyncOpenAI, RateLimitError
-        import backoff
         self.client = AsyncOpenAI(
             base_url = base_url,
             api_key = api_key
@@ -61,14 +67,17 @@ class OpenAIClient(Client):
         self.default_kwargs = default_kwargs or {}
         
         self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
+        self._create_completion: Callable[
+            [Iterable[dict[str, Any]], dict[str, Any]],
+            Awaitable[Any],
+        ] = self._create_completion_no_retry
+        if retry_policy is not None:
+            self._create_completion = wrap_async(
+                self._create_completion_no_retry,
+                policy=retry_policy,
+                op_name="openai.chat.completions.create",
+            )
         
-        if retry:
-            if not retry_errors:
-                retry_errors = (RateLimitError,)
-            self.complete = backoff.on_exception(
-                backoff.expo, tuple(retry_errors), max_time=30
-            )(self.complete)
-
     async def complete(self, messages: Iterable[dict[str,Any]], **kwargs) -> dict[str,Any]:
         """Send chat messages to the model and return the assistant message object.
 
@@ -79,11 +88,25 @@ class OpenAIClient(Client):
         Returns:
             The first choice message from the API response.
         """
-        payload = {**self.default_kwargs, **kwargs}
+        return (await self.complete_with_usage(messages, **kwargs))[0]
+
+    async def _create_completion_no_retry(
+        self,
+        messages: Iterable[dict[str, Any]],
+        payload: dict[str, Any],
+    ) -> Any:
         async with self.llm_concurrency_lock:
-            response = await self.client.chat.completions.create(
+            return await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages, # type: ignore
                 **payload,
             )
-        return response.choices[0].message
+
+    async def complete_with_usage(
+        self,
+        messages: Iterable[dict[str, Any]],
+        **kwargs,
+    ) -> tuple[dict[str, Any], CompletionUsage | None]:
+        payload = {**self.default_kwargs, **kwargs}
+        resp = await self._create_completion(messages, payload)
+        return resp.choices[0].message, resp.usage
