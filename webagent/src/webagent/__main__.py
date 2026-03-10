@@ -12,8 +12,11 @@ from omegaconf import DictConfig
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
+from webagent.log import get_logger, setup_logger
 from webagent.runtime.agent_runner import AgentRunner
 from webagent.utils.config import instantiate
+
+logger = get_logger(__name__)
 
 
 def _serialize_message(message: Any) -> Any:
@@ -27,6 +30,7 @@ async def _run(cfg: DictConfig) -> None:
     data_source_cfg = cfg.get("data_source")
     output_dir = Path(cfg.get("output_path") or "outputs/agent_history")
 
+    logger.info("Starting webagent batch run output_dir=%s", output_dir)
     data_source = instantiate(cfg=data_source_cfg, recursive=True, resolve_imports=True)
     runner = AgentRunner(agent_config=agent_cfg)
 
@@ -38,6 +42,7 @@ async def _run(cfg: DictConfig) -> None:
         task = runner.submit(prompt, extra=extra)
         tasks.append(task)
         meta[id(task)] = {"index": index, "input": prompt, "answer": answer}
+    logger.info("Scheduled requests count=%s", len(tasks))
 
     for task in asyncio.as_completed(tasks):
         history = await task
@@ -49,10 +54,14 @@ async def _run(cfg: DictConfig) -> None:
         }
         output_path = output_dir / f"{info['index']:06d}.json"
         output_path.write_text(json.dumps(row, ensure_ascii=False, default=str), encoding="utf-8")
+        logger.info("Wrote result index=%s path=%s messages=%s", info["index"], output_path, len(history))
+
+    logger.info("Completed webagent batch run count=%s", len(tasks))
 
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
+    setup_logger()
     asyncio.run(_run(cfg))
 
 if __name__ == "__main__":

@@ -6,10 +6,12 @@ from typing import Any, Awaitable, Callable, ParamSpec, TypeVar
 
 import backoff
 
+from webagent.log import get_logger
+
 P = ParamSpec("P")
 T = TypeVar("T")
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -65,19 +67,24 @@ def wrap_async(
 
     operation = op_name or getattr(func, "__name__", "async_op")
     on_backoff, on_giveup = _build_handlers(op_name=operation, log=log)
+    backoff_kwargs: dict[str, Any] = {
+        "max_tries": policy.max_tries,
+        "max_time": policy.max_time,
+        "jitter": policy.jitter,
+        "factor": policy.factor,
+        "base": policy.base,
+        "on_backoff": on_backoff,
+        "on_giveup": on_giveup,
+        "logger": None,
+        "raise_on_giveup": True,
+    }
+    if policy.giveup is not None:
+        backoff_kwargs["giveup"] = policy.giveup
+
     return backoff.on_exception(
         backoff.expo,
         policy.exceptions,
-        max_tries=policy.max_tries,
-        max_time=policy.max_time,
-        giveup=policy.giveup,
-        jitter=policy.jitter,
-        factor=policy.factor,
-        base=policy.base,
-        on_backoff=on_backoff,
-        on_giveup=on_giveup,
-        logger=None,
-        raise_on_giveup=True,
+        **backoff_kwargs,
     )(func)
 
 
@@ -92,19 +99,24 @@ def wrap_sync(
 
     operation = op_name or getattr(func, "__name__", "sync_op")
     on_backoff, on_giveup = _build_handlers(op_name=operation, log=log)
+    backoff_kwargs: dict[str, Any] = {
+        "max_tries": policy.max_tries,
+        "max_time": policy.max_time,
+        "jitter": policy.jitter,
+        "factor": policy.factor,
+        "base": policy.base,
+        "on_backoff": on_backoff,
+        "on_giveup": on_giveup,
+        "logger": None,
+        "raise_on_giveup": True,
+    }
+    if policy.giveup is not None:
+        backoff_kwargs["giveup"] = policy.giveup
+
     return backoff.on_exception(
         backoff.expo,
         policy.exceptions,
-        max_tries=policy.max_tries,
-        max_time=policy.max_time,
-        giveup=policy.giveup,
-        jitter=policy.jitter,
-        factor=policy.factor,
-        base=policy.base,
-        on_backoff=on_backoff,
-        on_giveup=on_giveup,
-        logger=None,
-        raise_on_giveup=True,
+        **backoff_kwargs,
     )(func)
 
 

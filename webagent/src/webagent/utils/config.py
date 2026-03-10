@@ -8,7 +8,11 @@ from typing import Any, Callable, Optional, TypeVar
 
 from omegaconf import DictConfig, OmegaConf
 
+from webagent.log import get_logger
+
 T = TypeVar("T")
+
+logger = get_logger(__name__)
 
 
 def _to_container(cfg: Any) -> Any:
@@ -51,8 +55,7 @@ def _resolve_imports(value: Any, *, target_key: str) -> Any:
         try:
             return _import_from_path(value)
         except (ModuleNotFoundError, ImportError, AttributeError):
-            # TODO: replace with logger when logging is wired up for config.
-            print(f"[config] import failed for '{value}', keeping as string")
+            logger.warning("Config import failed for '%s'; keeping raw string", value)
             return value
     return value
 

@@ -10,11 +10,14 @@ from typing import Iterable, Any, TYPE_CHECKING
 from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
+from webagent.log import get_logger
 from webagent.utils.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
     from webagent.tools.tool import Tool
+
+logger = get_logger(__name__)
 
 class WebAgent(Agent):
     """
@@ -64,17 +67,28 @@ class WebAgent(Agent):
         self.max_tokens_prompt_margin = max_tokens_prompt_margin
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
+        tool_call_list = list(tool_calls)
+        logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
-        for tc in tool_calls:
+        for tc in tool_call_list:
             tool_call_coros.append(
-                retry_async(self.tool_dict[tc.name].run,
-                            tc.arguments.values(),
-                            policy = RetryPolicy(
-                                max_time=30,
-                                exceptions=(Exception,)
-                            )))
-        
-        return await asyncio.gather(*tool_call_coros)
+                retry_async(
+                    self.tool_dict[tc.name].run,
+                    policy=RetryPolicy(
+                        max_time=30,
+                        exceptions=(Exception,),
+                    ),
+                    op_name=f"tool.{tc.name}",
+                    log=logger,
+                    **dict(tc.arguments),
+                )
+            )
+
+        try:
+            return await asyncio.gather(*tool_call_coros)
+        except Exception:
+            logger.exception("Tool execution failed tools=%s", [tc.name for tc in tool_call_list])
+            raise
     
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
@@ -86,6 +100,7 @@ class WebAgent(Agent):
     async def parse_and_call_llm(self, history: list[ChatMessage]):
         call_result_raw, usage = await self.client.complete_with_usage(self.parser.to_model(history))
         self.context_token_size = usage.total_tokens if usage else -1
+        logger.debug("LLM turn completed total_tokens=%s", self.context_token_size)
         return next(iter(self.parser.from_model([call_result_raw])))
 
     async def run(self, query: str, extra: dict[str, Any] | None = None):
@@ -102,11 +117,17 @@ class WebAgent(Agent):
         """
         history: list[ChatMessage] = [system(self.system_prompt, tools=list(self.tool_dict.values())),
                                       user(query)]
+        logger.info("Starting reasoning loop agent=WebAgent query=%r", query[:120])
+        turn = 0
         while True:
+            turn += 1
+            logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
             call_res = await retry_async(
                 self.parse_and_call_llm,
                 history,
                 policy=RetryPolicy(max_time=30, exceptions=(ParsingError,)),
+                op_name="webagent.parse_and_call_llm",
+                log=logger,
             )
             
             history.append(call_res)
@@ -121,12 +142,18 @@ class WebAgent(Agent):
                 
             if self.max_tokens_prompt:
                 if self.context_token_size == -1:
-                    # log warn
-                    pass
+                    logger.warning("LLM usage metadata missing; skip max_tokens reminder")
                 elif self.context_token_size > self.max_tokens - self.max_tokens_prompt_margin:
+                    logger.info(
+                        "Context token limit approaching total_tokens=%s limit=%s margin=%s",
+                        self.context_token_size,
+                        self.max_tokens,
+                        self.max_tokens_prompt_margin,
+                    )
                     history.append(user(self.max_tokens_prompt))
             
             if await self.stop(history):
                 break
             
+        logger.info("Reasoning completed agent=WebAgent turns=%s messages=%s", turn, len(history))
         return history

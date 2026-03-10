@@ -63,7 +63,9 @@ from typing import Any, Callable, Optional
 from fastmcp import Client
 from fastmcp.client.transports import SSETransport
 
-logger = logging.getLogger(__name__)
+from webagent.log import get_logger, setup_logger
+
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # 工具函数：从环境变量或配置对象中安全地读取参数
@@ -811,14 +813,11 @@ def main() -> None:
     try:
         arguments = json.loads(args.args)
     except json.JSONDecodeError as exc:
-        print(f"Error: --args is not valid JSON: {exc}", file=sys.stderr)
+        setup_logger()
+        logger.error("Invalid JSON for --args: %s", exc)
         sys.exit(1)
 
-    # 配置基础日志输出，方便观察 trace log
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    )
+    setup_logger(level="DEBUG")
 
     try:
         result = run(
@@ -829,7 +828,7 @@ def main() -> None:
         )
         print(result)
     except (ToolFatalError, ToolRecoverableError) as exc:
-        print(f"Tool error: {exc}", file=sys.stderr)
+        logger.error("Tool execution failed: %s", exc)
         sys.exit(1)
 
 

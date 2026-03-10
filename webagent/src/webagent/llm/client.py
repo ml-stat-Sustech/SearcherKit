@@ -16,11 +16,14 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, TYPE_CHEC
 
 from openai import AsyncOpenAI
 
+from webagent.log import get_logger
 from webagent.utils.retry import wrap_async
 
 if TYPE_CHECKING:
     from openai.types.completion_usage import CompletionUsage
     from webagent.utils.retry import RetryPolicy
+
+logger = get_logger(__name__)
 
 class Client:
     @abc.abstractmethod
@@ -92,9 +95,14 @@ class OpenAIClient(Client):
 
     async def _create_completion_no_retry(
         self,
-        messages: Iterable[dict[str, Any]],
+        messages: list[dict[str, Any]],
         payload: dict[str, Any],
     ) -> Any:
+        logger.debug(
+            "Submitting LLM completion model=%s messages=%s",
+            self.model,
+            len(messages),
+        )
         async with self.llm_concurrency_lock:
             return await self.client.chat.completions.create(
                 model=self.model,
@@ -107,6 +115,14 @@ class OpenAIClient(Client):
         messages: Iterable[dict[str, Any]],
         **kwargs,
     ) -> tuple[dict[str, Any], CompletionUsage | None]:
+        message_list = messages if isinstance(messages, list) else list(messages)
         payload = {**self.default_kwargs, **kwargs}
-        resp = await self._create_completion(messages, payload)
+        resp = await self._create_completion(message_list, payload)
+        logger.debug(
+            "LLM completion finished model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            self.model,
+            getattr(resp.usage, "prompt_tokens", None),
+            getattr(resp.usage, "completion_tokens", None),
+            getattr(resp.usage, "total_tokens", None),
+        )
         return resp.choices[0].message, resp.usage

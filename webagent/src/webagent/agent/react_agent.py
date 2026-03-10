@@ -9,12 +9,15 @@ from typing import Iterable, Any, TYPE_CHECKING
 
 from webagent.llm.chat_types import tool, system, user
 from webagent.agent.agent import Agent
+from webagent.log import get_logger
 
 if TYPE_CHECKING:
     from webagent.llm.chat_types import ChatMessage, ToolCall
     from webagent.llm.client import Client
     from webagent.llm.parser import Parser
     from webagent.tools.tool import Tool
+
+logger = get_logger(__name__)
 
 class ReactAgent(Agent):
     """
@@ -27,7 +30,13 @@ class ReactAgent(Agent):
         self.system_prompt = system_prompt or ""
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
-        return await asyncio.gather(*[self.tool_dict[tc.name].run(**tc.arguments) for tc in tool_calls])
+        tool_call_list = list(tool_calls)
+        logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
+        try:
+            return await asyncio.gather(*[self.tool_dict[tc.name].run(**tc.arguments) for tc in tool_call_list])
+        except Exception:
+            logger.exception("Tool execution failed tools=%s", [tc.name for tc in tool_call_list])
+            raise
     
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
@@ -37,7 +46,11 @@ class ReactAgent(Agent):
     async def run(self, query: str, extra: dict[str, Any] | None = None):
         history: list[ChatMessage] = [system(self.system_prompt, tools=list(self.tool_dict.values())),
                                       user(query)]
+        logger.info("Starting reasoning loop agent=ReactAgent query=%r", query[:120])
+        turn = 0
         while True:
+            turn += 1
+            logger.debug("Running LLM turn=%s history_messages=%s", turn, len(history))
             call_res_raw = await self.client.complete(self.parser.to_model(history))
             
             call_res = next(iter(self.parser.from_model([call_res_raw])))
@@ -52,4 +65,5 @@ class ReactAgent(Agent):
             if await self.stop(history):
                 break
             
+        logger.info("Reasoning completed agent=ReactAgent turns=%s messages=%s", turn, len(history))
         return history
