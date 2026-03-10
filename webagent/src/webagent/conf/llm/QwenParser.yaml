@@ -1,6 +1,5 @@
 # QwenParser configuration
 # Class: webagent.llm.parser.QwenParser
-parser:
-  target: webagent.llm.parser.QwenParser
-  upstream_parsed: false
-  drop_thinking: true
+target: webagent.llm.parser.QwenParser
+upstream_parsed: false
+drop_thinking: true

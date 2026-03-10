@@ -1,0 +1,12 @@
+# GenericMCPTool configuration
+# Class: webagent.tools.tool.GenericMCPTool
+
+target: webagent.tools.tool.GenericMCPTool
+mcp_tool_name: null
+endpoint: http://127.0.0.1:8100/mcp
+auth_header: ""
+max_concurrency: 8
+response_char_limit: 20000
+enable_trace_logging: true
+raise_on_fatal: true
+final_answer_generator: null

@@ -16,21 +16,29 @@ llm_client:
     max_tokens: 1024
   concurrency_limit: 8
 
-utils:
-  retry_policy:
-    max_tries: 3
-    max_time: null
-    exceptions:
-      - builtins.Exception
-    giveup: null
-    jitter: backoff.full_jitter
-    factor: 1.0
-    base: 2.0
+retry_policy:
+  max_tries: 3
+  max_time: null
+  exceptions:
+    - builtins.Exception
+  giveup: null
+  jitter: backoff.full_jitter
+  factor: 1.0
+  base: 2.0
 
 agent:
   llm_client: ${llm_client}
   parser: ${parser}
-  tools: []
+  tools: 
+    - target: webagent.tools.tool.GenericMCPTool
+      mcp_tool_name: search
+      endpoint: http://127.0.0.1:8100/mcp
+      auth_header: ""
+      max_concurrency: 8
+      response_char_limit: 20000
+      enable_trace_logging: true
+      raise_on_fatal: true
+      final_answer_generator: null
   system_prompt: ""
   max_turn: 10
   max_turn_prompt: null

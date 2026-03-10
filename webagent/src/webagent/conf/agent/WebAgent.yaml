@@ -1,14 +1,13 @@
 # WebAgent configuration
 # Class: webagent.agent.webagent.WebAgent
 
-webagent:
-  target: webagent.agent.webagent.WebAgent
-  llm_client: null
-  parser: null
-  tools: null
-  system_prompt: ""
-  max_turn: 10
-  max_turn_prompt: null
-  max_tokens: 1024
-  max_tokens_prompt: null
-  max_tokens_prompt_margin: 128
+target: webagent.agent.webagent.WebAgent
+llm_client: null
+parser: null
+tools: null
+system_prompt: ""
+max_turn: 10
+max_turn_prompt: null
+max_tokens: 1024
+max_tokens_prompt: null
+max_tokens_prompt_margin: 128

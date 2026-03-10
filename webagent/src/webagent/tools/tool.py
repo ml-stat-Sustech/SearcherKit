@@ -200,6 +200,7 @@ class MCPTool(Tool):
         raise_on_fatal: Optional[bool] = None,
         final_answer_generator: Optional[FinalAnswerGenerator] = None,
     ) -> None:
+        self.name = self.mcp_tool_name
         self.settings = MCPToolSettings(
             endpoint=(
                 endpoint if endpoint is not None

@@ -11,13 +11,15 @@ from omegaconf import DictConfig, OmegaConf
 T = TypeVar("T")
 
 
-def _to_container(cfg: Any) -> dict[str, Any]:
+def _to_container(cfg: Any) -> Any:
     if cfg is None:
         return {}
     if isinstance(cfg, DictConfig):
         return OmegaConf.to_container(cfg, resolve=True)  # type: ignore[no-any-return]
     if isinstance(cfg, Mapping):
         return dict(cfg)
+    if isinstance(cfg, list):
+        return list(cfg)
     raise TypeError(f"cfg must be a mapping or DictConfig, got {type(cfg)!r}")
 
 
@@ -78,6 +80,9 @@ def instantiate(
     if resolve_imports:
         data = _resolve_imports(data, target_key=target_key)
 
+    if isinstance(data, list):
+        raise TypeError("cfg must be a mapping or DictConfig when instantiating a target")
+
     target = data.pop(target_key, None)
     if factory is None:
         if target is None:
@@ -93,6 +98,28 @@ def instantiate(
                     recursive=True,
                     resolve_imports=resolve_imports,
                 )
+            elif isinstance(value, list):
+                new_list: list[Any] = []
+                for item in value:
+                    if isinstance(item, Mapping) and target_key in item:
+                        new_list.append(
+                            instantiate(
+                                cfg=item,
+                                target_key=target_key,
+                                recursive=True,
+                                resolve_imports=resolve_imports,
+                            )
+                        )
+                    elif isinstance(item, Mapping):
+                        # Recurse into nested mappings without targets.
+                        new_list.append(
+                            _resolve_imports(item, target_key=target_key)
+                            if resolve_imports
+                            else dict(item)
+                        )
+                    else:
+                        new_list.append(item)
+                data[key] = new_list
 
     data.update(kwargs)
     return factory(**data)  # type: ignore[misc]

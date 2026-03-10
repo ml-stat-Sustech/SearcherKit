@@ -31,7 +31,7 @@ class AgentRunner:
         if max_concurrency is not None and max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1 or None")
 
-        self.build_agent = build_agent or (lambda: instantiate(agent_config))
+        self.build_agent = build_agent or (lambda: instantiate(cfg=agent_config, recursive=True, resolve_imports=True))
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
 
