@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from dataclasses import asdict, is_dataclass
+from pathlib import Path
+from typing import Any
 
 import hydra
 from omegaconf import DictConfig
@@ -9,13 +13,47 @@ import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 from webagent.runtime.agent_runner import AgentRunner
+from webagent.utils.config import instantiate
+
+
+def _serialize_message(message: Any) -> Any:
+    # TODO: normalize Tool objects and tool_call arguments for JSON-safe, round-trippable history.
+    if is_dataclass(message):
+        return asdict(message)
+    return message
+
+async def _run(cfg: DictConfig) -> None:
+    agent_cfg = cfg.get("agent")
+    data_source_cfg = cfg.get("data_source")
+    output_dir = Path(cfg.get("output_path") or "outputs/agent_history")
+
+    data_source = instantiate(cfg=data_source_cfg, recursive=True, resolve_imports=True)
+    runner = AgentRunner(agent_config=agent_cfg)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    tasks: list[asyncio.Task[list[Any]]] = []
+    meta: dict[int, dict[str, Any]] = {}
+    for index, (prompt, extra, answer) in enumerate(data_source):
+        task = runner.submit(prompt, extra=extra)
+        tasks.append(task)
+        meta[id(task)] = {"index": index, "input": prompt, "answer": answer}
+
+    for task in asyncio.as_completed(tasks):
+        history = await task
+        info = meta[id(task)]
+        row = {
+            "input": info["input"],
+            "answer": info["answer"],
+            "history": [_serialize_message(msg) for msg in history],
+        }
+        output_path = output_dir / f"{info['index']:06d}.json"
+        output_path.write_text(json.dumps(row, ensure_ascii=False, default=str), encoding="utf-8")
 
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
-    ageng_cfg = cfg.get("agent")
-    runner = AgentRunner(agent_config=ageng_cfg)
-    # TODO
+    asyncio.run(_run(cfg))
 
 if __name__ == "__main__":
     main()

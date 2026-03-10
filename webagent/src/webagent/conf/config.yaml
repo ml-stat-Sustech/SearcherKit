@@ -5,6 +5,7 @@ defaults:
   - llm@parser: QwenParser
   - utils@retry_policy: RetryPolicy
   - agent@agent: WebAgent
+  - data_source@data_source: GenericDataSource
   - _self_
 
 llm_client:
@@ -45,3 +46,6 @@ agent:
   max_tokens: 1024
   max_tokens_prompt: null
   max_tokens_prompt_margin: 128
+
+data_source:
+  source: /path/to/data.jsonl
