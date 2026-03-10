@@ -51,3 +51,7 @@ Thumbs.db
 # Python related
 __pycache__
 .venv
+*.egg-info/
+
+# results
+outputs/
