@@ -29,14 +29,17 @@ class ReactAgent(Agent):
         self.tool_dict = {t.name: t for t in tools}
         self.system_prompt = system_prompt or ""
 
+    async def init_tools(self) -> None:
+        tools = list(self.tool_dict.values())
+        if not tools:
+            return
+        logger.info("Initializing tools count=%s tools=%s", len(tools), [t.name for t in tools])
+        await asyncio.gather(*[t.init() for t in tools])
+
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
-        try:
-            return await asyncio.gather(*[self.tool_dict[tc.name].run(**tc.arguments) for tc in tool_call_list])
-        except Exception:
-            logger.exception("Tool execution failed tools=%s", [tc.name for tc in tool_call_list])
-            raise
+        return await asyncio.gather(*[self.tool_dict[tc.name].run(**tc.arguments) for tc in tool_call_list])
     
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
@@ -44,8 +47,11 @@ class ReactAgent(Agent):
         return False
 
     async def run(self, query: str, extra: dict[str, Any] | None = None):
-        history: list[ChatMessage] = [system(self.system_prompt, tools=list(self.tool_dict.values())),
-                                      user(query)]
+        await self.init_tools()
+        history: list[ChatMessage] = [
+            system(self.system_prompt, tools=list(self.tool_dict.values())),
+            user(query),
+        ]
         logger.info("Starting reasoning loop agent=ReactAgent query=%r", query[:120])
         turn = 0
         while True:

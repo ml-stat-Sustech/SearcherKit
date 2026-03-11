@@ -152,7 +152,7 @@ class MCPToolSettings:
 class Tool(abc.ABC):
     name: str
     description: str | None
-    arguments_schema: Any | None
+    arguments_schema: Mapping[str, Any] | None
 
     async def init(self, *args: Any, **kwargs: Any) -> None:
         """Initialize tool resources."""
@@ -203,6 +203,8 @@ class MCPTool(Tool):
         final_answer_generator: Optional[FinalAnswerGenerator] = None,
     ) -> None:
         self.name = self.mcp_tool_name
+        self.description = None
+        self.arguments_schema = None
         self.settings = MCPToolSettings(
             endpoint=(
                 endpoint if endpoint is not None
@@ -463,6 +465,7 @@ class MCPTool(Tool):
 
         for info in tools:
             if getattr(info, "name", None) == self.mcp_tool_name:
+                self._apply_tool_metadata(info, trace_id=trace_id)
                 self._trace_log(
                     logging.DEBUG,
                     "MCP tool resolved",
@@ -473,6 +476,55 @@ class MCPTool(Tool):
         raise ToolFatalError(
             f"MCP tool '{self.mcp_tool_name}' not found at endpoint {self.settings.endpoint}."
         )
+
+    def _apply_tool_metadata(self, info: Any, *, trace_id: Optional[str]) -> None:
+        """从 MCP 的 tool info 中提取 description 和 arguments schema。"""
+        description = getattr(info, "description", None)
+        schema = (
+            getattr(info, "input_schema", None)
+            or getattr(info, "inputSchema", None)
+            or getattr(info, "parameters", None)
+            or getattr(info, "schema", None)
+        )
+
+        if description is not None:
+            self.description = str(description)
+        if schema is not None:
+            self.arguments_schema = self._coerce_schema(schema)
+
+        self._trace_log(
+            logging.DEBUG,
+            "MCP tool metadata applied",
+            trace_id=trace_id,
+            description_set=self.description is not None,
+            schema_set=self.arguments_schema is not None,
+        )
+
+    @staticmethod
+    def _coerce_schema(value: Any) -> Mapping[str, Any] | None:
+        """尽量将 schema 转成 JSON 友好的 Mapping。"""
+        if value is None:
+            return None
+        if isinstance(value, Mapping):
+            return dict(value)
+        model_dump = getattr(value, "model_dump", None)
+        if callable(model_dump):
+            return model_dump()
+        to_dict = getattr(value, "dict", None)
+        if callable(to_dict):
+            return to_dict()
+        json_schema = getattr(value, "json_schema", None)
+        if callable(json_schema):
+            return json_schema()
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except Exception:
+                return None
+            if isinstance(parsed, Mapping):
+                return dict(parsed)
+            return None
+        return None
 
     # ---- 核心 MCP 调用 ----
 

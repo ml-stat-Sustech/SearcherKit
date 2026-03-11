@@ -74,6 +74,13 @@ class WebAgent(Agent):
         self.llm_retry_policy = llm_retry_policy
         self.tool_retry_policy = tool_retry_policy
 
+    async def init_tools(self) -> None:
+        tools = list(self.tool_dict.values())
+        if not tools:
+            return
+        logger.info("Initializing tools count=%s tools=%s", len(tools), [t.name for t in tools])
+        await asyncio.gather(*[t.init() for t in tools])
+
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
@@ -119,8 +126,11 @@ class WebAgent(Agent):
             Full chat history generated during the run, including system/user,
             assistant, and tool messages.
         """
-        history: list[ChatMessage] = [system(self.system_prompt, tools=list(self.tool_dict.values())),
-                                      user(query)]
+        await self.init_tools()
+        history: list[ChatMessage] = [
+            system(self.system_prompt, tools=list(self.tool_dict.values())),
+            user(query),
+        ]
         logger.info("Starting reasoning loop agent=WebAgent query=%r", query[:120])
         turn = 0
         while True:

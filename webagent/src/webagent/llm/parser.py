@@ -277,12 +277,14 @@ class QwenParser(Parser):
             "<tools>",
         ]
         for tool in tools:
+            description = tool.description or ""
+            parameters = tool.arguments_schema or {}
             lines.append(json.dumps({
                 "type": "function",
                 "function": {
                     "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.arguments_schema
+                    "description": description,
+                    "parameters": parameters
                     }}, ensure_ascii=False))
 
         lines.extend(
