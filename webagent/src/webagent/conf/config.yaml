@@ -35,6 +35,7 @@ agent:
       mcp_tool_name: search
       endpoint: http://127.0.0.1:8100/mcp
       auth_header: ""
+      transport: http
       max_concurrency: 8
       response_char_limit: 20000
       enable_trace_logging: true

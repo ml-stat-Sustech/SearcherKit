@@ -61,7 +61,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from fastmcp import Client
-from fastmcp.client.transports import SSETransport
+from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 
 from webagent.log import get_logger, setup_logger
 
@@ -135,6 +135,7 @@ class MCPToolSettings:
     """
     endpoint: str = os.getenv("MCP_ENDPOINT", "http://127.0.0.1:8100/mcp")
     auth_header: str = os.getenv("MCP_AUTH_HEADER", "")
+    transport: str = os.getenv("MCP_TRANSPORT", "auto")
     max_concurrency: int = _coerce_int(os.getenv("MCP_MAX_CONCURRENCY", 8), 8)
     response_char_limit: int = _coerce_int(
         os.getenv("MCP_RESPONSE_CHAR_LIMIT", 20000),
@@ -205,6 +206,7 @@ class MCPTool(Tool):
         *,
         endpoint: Optional[str] = None,
         auth_header: Optional[str] = None,
+        transport: Optional[str] = None,
         max_concurrency: Optional[int] = None,
         response_char_limit: Optional[int] = None,
         enable_trace_logging: Optional[bool] = None,
@@ -222,6 +224,10 @@ class MCPTool(Tool):
             auth_header=(
                 auth_header if auth_header is not None
                 else MCPToolSettings.auth_header
+            ),
+            transport=(
+                transport if transport is not None
+                else MCPToolSettings.transport
             ),
             max_concurrency=(
                 max_concurrency if max_concurrency is not None
@@ -256,6 +262,7 @@ class MCPTool(Tool):
             {
                 "mcp_tool_name": self.mcp_tool_name,
                 "endpoint": self.settings.endpoint,
+                "transport": self.settings.transport,
                 "max_concurrency": self.settings.max_concurrency,
                 "response_char_limit": self.settings.response_char_limit,
                 "enable_trace_logging": self.settings.enable_trace_logging,
@@ -285,6 +292,7 @@ class MCPTool(Tool):
         params = {
             "endpoint": _read_conf(conf, "endpoint"),
             "auth_header": _read_conf(conf, "auth_header"),
+            "transport": _read_conf(conf, "transport"),
             "max_concurrency": _read_conf(conf, "max_concurrency"),
             "response_char_limit": _read_conf(conf, "response_char_limit"),
             "enable_trace_logging": _read_conf(conf, "enable_trace_logging"),
@@ -329,6 +337,9 @@ class MCPTool(Tool):
                 self.settings.auth_header = _read_conf(
                     conf, "auth_header", self.settings.auth_header,
                 )
+                self.settings.transport = _read_conf(
+                    conf, "transport", self.settings.transport,
+                )
                 self.settings.max_concurrency = _coerce_int(
                     _read_conf(conf, "max_concurrency", self.settings.max_concurrency),
                     self.settings.max_concurrency,
@@ -348,6 +359,8 @@ class MCPTool(Tool):
             # 显式 kwargs 优先级最高，覆盖一切
             if "auth_header" in kwargs:
                 self.settings.auth_header = kwargs["auth_header"]
+            if "transport" in kwargs:
+                self.settings.transport = kwargs["transport"]
             if "max_concurrency" in kwargs:
                 self.settings.max_concurrency = _coerce_int(
                     kwargs["max_concurrency"], self.settings.max_concurrency,
@@ -436,10 +449,10 @@ class MCPTool(Tool):
     # ---- 内部连接管理 ----
 
     async def _connect(self, *, trace_id: Optional[str] = None) -> None:
-        """建立到 MCP 端点的 SSE 连接。"""
+        """建立到 MCP 端点的连接（Streamable HTTP 或 SSE）。"""
         # 【修复】改为有意义的守卫：现在 fastmcp 用 try/except import，
         # Client/SSETransport 可能确实为 None
-        if Client is None or SSETransport is None:
+        if Client is None or SSETransport is None or StreamableHttpTransport is None:
             raise ToolFatalError(
                 "fastmcp 未安装。请执行 `pip install 'fastmcp>=3.0.0'`。"
             )
@@ -453,10 +466,7 @@ class MCPTool(Tool):
             if self.settings.auth_header:
                 headers["Authorization"] = self.settings.auth_header
 
-            transport = SSETransport(
-                url=self.settings.endpoint,
-                headers=headers if headers else None,
-            )
+            transport = self._build_transport(headers=headers)
             self._client = Client(transport)
 
             # 尝试建立持久连接；若客户端支持 __aenter__ 则进入上下文
@@ -470,6 +480,7 @@ class MCPTool(Tool):
                     "Connected to MCP endpoint",
                     trace_id=trace_id,
                     endpoint=self.settings.endpoint,
+                    transport=self.settings.transport,
                 )
             except Exception as exc:
                 self._connected = False
@@ -477,6 +488,26 @@ class MCPTool(Tool):
                 raise ToolFatalError(
                     f"Failed to connect MCP endpoint {self.settings.endpoint}: {exc}"
                 ) from exc
+
+    def _build_transport(self, *, headers: dict[str, str]) -> Any:
+        transport_name = (self.settings.transport or "auto").strip().lower()
+        if transport_name in {"", "auto"}:
+            transport_name = "http"
+
+        if transport_name in {"http", "streamable", "streamable_http", "streamable-http"}:
+            transport_cls = StreamableHttpTransport
+        elif transport_name in {"sse", "sse_transport"}:
+            transport_cls = SSETransport
+        else:
+            raise ToolFatalError(
+                f"Unsupported MCP transport '{self.settings.transport}'. "
+                "Use 'http', 'sse', or 'auto'."
+            )
+
+        return transport_cls(
+            url=self.settings.endpoint,
+            headers=headers if headers else None,
+        )
 
     async def _ensure_tool_exists(self, *, trace_id: Optional[str] = None) -> None:
         """验证目标工具在 MCP 服务端确实存在，否则快速失败。"""
@@ -781,6 +812,7 @@ class GenericMCPTool(MCPTool):
         params = {
             "endpoint": _read_conf(conf, "endpoint"),
             "auth_header": _read_conf(conf, "auth_header"),
+            "transport": _read_conf(conf, "transport"),
             "max_concurrency": _read_conf(conf, "max_concurrency"),
             "response_char_limit": _read_conf(conf, "response_char_limit"),
             "enable_trace_logging": _read_conf(conf, "enable_trace_logging"),
