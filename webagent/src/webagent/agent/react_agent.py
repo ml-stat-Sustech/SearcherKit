@@ -49,7 +49,10 @@ class ReactAgent(Agent):
     async def run(self, query: str, extra: dict[str, Any] | None = None):
         await self.init_tools()
         history: list[ChatMessage] = [
-            system(self.system_prompt, tools=list(self.tool_dict.values())),
+            system(
+                self.system_prompt,
+                tools=[tool.dump_metadata() for tool in self.tool_dict.values()],
+            ),
             user(query),
         ]
         logger.info("Starting reasoning loop agent=ReactAgent query=%r", query[:120])

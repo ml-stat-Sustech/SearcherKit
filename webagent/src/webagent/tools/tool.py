@@ -162,6 +162,15 @@ class Tool(abc.ABC):
         """Execute the tool with the provided arguments."""
         pass
 
+    def dump_metadata(self) -> dict[str, Any]:
+        """Return a JSON-serializable metadata dict for logging."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "arguments_schema": self.arguments_schema,
+            "type": self.__class__.__name__,
+        }
+
 
 # ---------------------------------------------------------------------------
 # MCPTool：基于 fastmcp 的客户端工具基类
@@ -240,6 +249,21 @@ class MCPTool(Tool):
         # Track configured semaphore capacity separately. Do not compare with
         # semaphore._value, because _value is runtime-available permits.
         self._semaphore_limit = self.settings.max_concurrency
+
+    def dump_metadata(self) -> dict[str, Any]:
+        base = super().dump_metadata()
+        base.update(
+            {
+                "mcp_tool_name": self.mcp_tool_name,
+                "endpoint": self.settings.endpoint,
+                "max_concurrency": self.settings.max_concurrency,
+                "response_char_limit": self.settings.response_char_limit,
+                "enable_trace_logging": self.settings.enable_trace_logging,
+                "raise_on_fatal": self.settings.raise_on_fatal,
+                "auth_header_set": bool(self.settings.auth_header),
+            }
+        )
+        return base
         self._final_answer_generator = final_answer_generator
 
     # ---- async context manager 支持 ----

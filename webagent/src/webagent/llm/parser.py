@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import abc
 import json
-from typing import Any, Iterable, Mapping, TYPE_CHECKING
+from typing import Any, Iterable, Mapping
 
 from webagent.llm.chat_types import ChatMessage
 from webagent.llm.chat_types import ToolCall
@@ -20,9 +20,6 @@ from webagent.log import get_logger
 
 logger = get_logger(__name__)
 
-if TYPE_CHECKING:
-    from webagent.tools.tool import Tool
-    
 class ParsingError(Exception):
     """Raised when model message payload cannot be parsed into `ChatMessage`."""
 
@@ -270,7 +267,7 @@ class QwenParser(Parser):
         return "\n".join(lines)
 
 
-    def qwen_tools_block(self, tools: Iterable[Tool]) -> str:
+    def qwen_tools_block(self, tools: Iterable[Mapping[str, Any]]) -> str:
         lines = [
             "# Tools",
             "",
@@ -280,16 +277,17 @@ class QwenParser(Parser):
             "<tools>",
         ]
         for tool in tools:
-            if not tool.description:
-                logger.warning(f"Tool {tool.name} has no description")
-            if not tool.arguments_schema:
-                logger.warning(f"Tool {tool.name} has no arguments schema")
-            description = tool.description or ""
-            parameters = tool.arguments_schema or {}
+            name = tool.get("name", "")
+            description = tool.get("description", "")
+            parameters = tool.get("arguments_schema", {}) or {}
+            if not description:
+                logger.warning("Tool %s has no description", name)
+            if not parameters:
+                logger.warning("Tool %s has no arguments schema", name)
             lines.append(json.dumps({
                 "type": "function",
                 "function": {
-                    "name": tool.name,
+                    "name": name,
                     "description": description,
                     "parameters": parameters
                     }}, ensure_ascii=False))

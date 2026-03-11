@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, TYPE_CHECKING
+from typing import Any, Literal, Mapping
 
 Role = Literal["system", "user", "assistant", "tool"]
-
-if TYPE_CHECKING:
-    from webagent.tools.tool import Tool
 
 @dataclass(slots=True)
 class ToolCall:
@@ -20,7 +17,7 @@ class ToolCall:
 class SystemMessage:
     content: str
     role: Literal["system"] = "system"
-    tools: list[Tool] | None = None
+    tools: list[Mapping[str, Any]] | None = None
     extensions: dict[str, Any] | None = None
 
 
@@ -48,7 +45,7 @@ class ToolMessage:
 
 ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
-def system(text: str, tools: list[Tool] | None = None, extensions: dict[str, Any] | None = None) -> SystemMessage:
+def system(text: str, tools: list[Mapping[str, Any]] | None = None, extensions: dict[str, Any] | None = None) -> SystemMessage:
     return SystemMessage(content=text, tools=tools, extensions=extensions)
 
 def user(text: str, extensions: dict[str, Any] | None = None) -> UserMessage:
