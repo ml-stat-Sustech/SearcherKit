@@ -83,12 +83,8 @@ class WebAgent(Agent):
                     **dict(tc.arguments),
                 )
             )
-
-        try:
-            return await asyncio.gather(*tool_call_coros)
-        except Exception:
-            logger.exception("Tool execution failed tools=%s", [tc.name for tc in tool_call_list])
-            raise
+            
+        return await asyncio.gather(*tool_call_coros)
     
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
