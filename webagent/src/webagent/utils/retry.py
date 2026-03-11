@@ -26,6 +26,23 @@ class RetryPolicy:
     factor: float = 1.0
     base: float = 2.0
 
+    def __post_init__(self) -> None:
+        excs = self.exceptions
+        if isinstance(excs, list) or isinstance(excs, set):
+            excs = tuple(excs)
+        elif isinstance(excs, type) and issubclass(excs, BaseException):
+            excs = (excs,)
+        if not isinstance(excs, tuple):
+            raise TypeError("exceptions must be an exception type or tuple of exception types")
+        invalid = [
+            exc
+            for exc in excs
+            if not isinstance(exc, type) or not issubclass(exc, BaseException)
+        ]
+        if invalid:
+            raise TypeError(f"exceptions must be exception types, got: {invalid!r}")
+        self.exceptions = excs
+
 
 def _build_handlers(
     *,
