@@ -221,7 +221,7 @@ class QwenParser(Parser):
         tool_call_pattern = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
         parsed = message_pattern.fullmatch(content)
         if not parsed:
-            raise ValueError(f"Invalid Qwen assistant message format: {content!r}")
+            raise ParsingError(f"Invalid Qwen assistant message format: {content!r}")
 
         thinking = parsed.group("thinking")
         out_raw = parsed.group("out")
