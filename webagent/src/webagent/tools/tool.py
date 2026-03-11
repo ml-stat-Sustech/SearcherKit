@@ -61,6 +61,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 
 from webagent.log import get_logger, setup_logger
@@ -624,6 +625,8 @@ class MCPTool(Tool):
                 return text
             except ToolFatalError:
                 raise
+            except ToolError as exc:
+                raise ToolRecoverableError from exc
             except Exception as exc:
                 return await self._handle_exception(exc, trace_id=trace)
 

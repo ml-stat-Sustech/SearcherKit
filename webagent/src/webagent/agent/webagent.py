@@ -106,6 +106,8 @@ class WebAgent(Agent):
             return True
         if sum(map(lambda x: x.role == "tool", history)) >= self.max_turn:
             return True
+        if self.context_token_size >= self.max_tokens:
+            return True
         return False
     
     async def parse_and_call_llm(self, history: list[ChatMessage]):
