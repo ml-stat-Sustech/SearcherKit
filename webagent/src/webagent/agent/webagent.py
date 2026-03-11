@@ -39,7 +39,9 @@ class WebAgent(Agent):
                  max_turn_prompt: str | None = None,
                  max_tokens: int = 1024,
                  max_tokens_prompt: str | None = None,
-                 max_tokens_prompt_margin: int = 128):
+                 max_tokens_prompt_margin: int = 128,
+                 llm_retry_policy: RetryPolicy | None = None,
+                 tool_retry_policy: RetryPolicy | None = None):
         """
         Initialize a WebAgent instance.
 
@@ -54,6 +56,10 @@ class WebAgent(Agent):
             max_tokens_prompt: Optional user prompt injected near token limit.
             max_tokens_prompt_margin: Safety margin before `max_tokens` to trigger
                 the token-limit reminder prompt.
+            llm_retry_policy: Retry policy for LLM parsing/call steps. If `None`,
+                retries are disabled.
+            tool_retry_policy: Retry policy for tool execution. If `None`, retries
+                are disabled.
         """
         self.client = llm_client
         self.parser = parser
@@ -65,24 +71,26 @@ class WebAgent(Agent):
         self.max_tokens = max_tokens
         self.max_tokens_prompt = max_tokens_prompt
         self.max_tokens_prompt_margin = max_tokens_prompt_margin
+        self.llm_retry_policy = llm_retry_policy
+        self.tool_retry_policy = tool_retry_policy
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
         for tc in tool_call_list:
-            tool_call_coros.append(
-                retry_async(
-                    self.tool_dict[tc.name].run,
-                    policy=RetryPolicy(
-                        max_time=30,
-                        exceptions=(Exception,),
-                    ),
-                    op_name=f"tool.{tc.name}",
-                    log=logger,
-                    **dict(tc.arguments),
+            if self.tool_retry_policy is None:
+                tool_call_coros.append(self.tool_dict[tc.name].run(**dict(tc.arguments)))
+            else:
+                tool_call_coros.append(
+                    retry_async(
+                        self.tool_dict[tc.name].run,
+                        policy=self.tool_retry_policy,
+                        op_name=f"tool.{tc.name}",
+                        log=logger,
+                        **dict(tc.arguments),
+                    )
                 )
-            )
             
         return await asyncio.gather(*tool_call_coros)
     
@@ -118,13 +126,16 @@ class WebAgent(Agent):
         while True:
             turn += 1
             logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
-            call_res = await retry_async(
-                self.parse_and_call_llm,
-                history,
-                policy=RetryPolicy(max_time=30, exceptions=(ParsingError,)),
-                op_name="webagent.parse_and_call_llm",
-                log=logger,
-            )
+            if self.llm_retry_policy is None:
+                call_res = await self.parse_and_call_llm(history)
+            else:
+                call_res = await retry_async(
+                    self.parse_and_call_llm,
+                    history,
+                    policy=self.llm_retry_policy,
+                    op_name="webagent.parse_and_call_llm",
+                    log=logger,
+                )
             
             history.append(call_res)
             

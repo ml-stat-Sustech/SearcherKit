@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 from webagent.llm.client import OpenAIClient
 from webagent.runtime.agent_runner import AgentRunner
 from webagent.tools.tool import GenericMCPTool
+from webagent.utils.retry import RetryPolicy
 
 
 def _load_cfg() -> Any:
@@ -25,6 +26,8 @@ def test_agent_components_from_config() -> None:
 
     assert isinstance(agent.client, OpenAIClient)
     assert isinstance(agent.tool_dict, dict)
+    assert isinstance(agent.llm_retry_policy, RetryPolicy)
+    assert isinstance(agent.tool_retry_policy, RetryPolicy)
 
     tool_cfgs = OmegaConf.to_container(cfg.agent.tools, resolve=True) if cfg.agent.tools else []
     for tool_cfg in tool_cfgs:
