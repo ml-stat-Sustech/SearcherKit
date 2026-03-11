@@ -37,17 +37,17 @@ async def _run(cfg: DictConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     tasks: list[asyncio.Future[list[Any]]] = []
-    meta: dict[asyncio.Future[list[Any]], dict[str, Any]] = {}
+    meta: dict[int, dict[str, Any]] = {}
     for index, (prompt, extra, answer) in enumerate(data_source):
         submitted = runner.submit(prompt, extra=extra)
         task = submitted if isinstance(submitted, asyncio.Task) else asyncio.create_task(submitted)
         tasks.append(task)
-        meta[task] = {"index": index, "input": prompt, "answer": answer}
+        meta[index] = {"index": index, "input": prompt, "answer": answer}
     logger.info("Scheduled requests count=%s", len(tasks))
 
     for task in asyncio.as_completed(tasks):
         history = await task
-        info = meta[task]
+        info = meta[index]
         row = {
             "input": info["input"],
             "answer": info["answer"],
