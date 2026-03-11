@@ -80,7 +80,7 @@ class OpenAIClient(Client):
                 policy=retry_policy,
                 op_name="openai.chat.completions.create",
             )
-        
+
     async def complete(self, messages: Iterable[dict[str,Any]], **kwargs) -> dict[str,Any]:
         """Send chat messages to the model and return the assistant message object.
 
@@ -125,4 +125,4 @@ class OpenAIClient(Client):
             getattr(resp.usage, "completion_tokens", None),
             getattr(resp.usage, "total_tokens", None),
         )
-        return resp.choices[0].message, resp.usage
+        return resp.choices[0].message.model_dump(), resp.usage

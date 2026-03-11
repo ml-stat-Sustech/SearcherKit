@@ -16,6 +16,9 @@ from typing import Any, Iterable, Mapping, TYPE_CHECKING
 from webagent.llm.chat_types import ChatMessage
 from webagent.llm.chat_types import ToolCall
 from webagent.llm.chat_types import assistant, system, user
+from webagent.log import get_logger
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from webagent.tools.tool import Tool
@@ -277,6 +280,10 @@ class QwenParser(Parser):
             "<tools>",
         ]
         for tool in tools:
+            if not tool.description:
+                logger.warning(f"Tool {tool.name} has no description")
+            if not tool.arguments_schema:
+                logger.warning(f"Tool {tool.name} has no arguments schema")
             description = tool.description or ""
             parameters = tool.arguments_schema or {}
             lines.append(json.dumps({
