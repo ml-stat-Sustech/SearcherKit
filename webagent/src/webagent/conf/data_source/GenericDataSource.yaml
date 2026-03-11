@@ -6,3 +6,4 @@ source: null
 fmt: jsonl
 input_key: prompt
 answer_key: answer
+max_items: null

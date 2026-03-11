@@ -18,15 +18,25 @@ class GenericDataSource(DataSource):
     fmt: DataFormat
     input_key: str = "prompt"
     answer_key: str = "answer"
+    max_items: int | None = None
 
     def yield_inputs(self) -> Iterator[DataItem]:
         if self.fmt == "jsonl":
-            yield from self._yield_jsonl()
+            iterator = self._yield_jsonl()
+        elif self.fmt == "parquet":
+            iterator = self._yield_parquet()
+        else:
+            raise ValueError(f"unsupported fmt: {self.fmt!r}")
+
+        if self.max_items is None:
+            yield from iterator
             return
-        if self.fmt == "parquet":
-            yield from self._yield_parquet()
-            return
-        raise ValueError(f"unsupported fmt: {self.fmt!r}")
+        if self.max_items <= 0:
+            return # TODO log warn/error?
+        for idx, item in enumerate(iterator):
+            if idx >= self.max_items:
+                break
+            yield item
 
     def _yield_jsonl(self) -> Iterator[DataItem]:
         with open(self.source, "r", encoding="utf-8") as handle:
@@ -42,7 +52,7 @@ class GenericDataSource(DataSource):
 
     def _yield_parquet(self) -> Iterator[DataItem]:
         try:
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq # TODO dependency group
         except ImportError as exc:
             raise ImportError("parquet loading requires pyarrow") from exc
 
