@@ -39,3 +39,9 @@ src/webagent/
 - `llm/`: Encapsulates model communication, response parsing, and message types.
 - `tools/`: Defines tool contracts used by the agent runtime.
 - `conf/`: Stores hydra configs template and default values.
+
+## Config Imports
+
+Config fields that are imported by the runtime use the `pkg://` scheme:
+- Module only: `pkg://package.module`
+- Module attribute: `pkg://package.module:ClassOrFunc`

@@ -1,7 +1,7 @@
 # WebAgent configuration
 # Class: webagent.agent.webagent.WebAgent
 
-target: webagent.agent.webagent.WebAgent
+target: pkg://webagent.agent.webagent:WebAgent
 llm_client: null
 parser: null
 tools: null

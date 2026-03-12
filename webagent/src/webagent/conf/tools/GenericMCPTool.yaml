@@ -1,7 +1,7 @@
 # GenericMCPTool configuration
 # Class: webagent.tools.tool.GenericMCPTool
 
-target: webagent.tools.tool.GenericMCPTool
+target: pkg://webagent.tools.tool:GenericMCPTool
 mcp_tool_name: null
 endpoint: http://127.0.0.1:8100/mcp
 auth_header: ""

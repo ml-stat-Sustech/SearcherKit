@@ -1,6 +1,6 @@
 # OpenAIClient configuration
 # Class: webagent.llm.client.OpenAIClient
-target: webagent.llm.client.OpenAIClient
+target: pkg://webagent.llm.client:OpenAIClient
 model: null
 api_key: null
 base_url: null

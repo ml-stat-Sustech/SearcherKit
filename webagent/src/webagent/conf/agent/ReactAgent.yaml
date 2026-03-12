@@ -1,7 +1,7 @@
 # ReactAgent configuration
 # Class: webagent.agent.react_agent.ReactAgent
 
-target: webagent.agent.react_agent.ReactAgent
+target: pkg://webagent.agent.react_agent:ReactAgent
 llm_client: null
 parser: null
 tools: null

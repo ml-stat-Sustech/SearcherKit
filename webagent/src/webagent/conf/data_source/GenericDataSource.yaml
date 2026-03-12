@@ -1,7 +1,7 @@
 # GenericDataSource configuration
 # Class: webagent.data_source.generic.GenericDataSource
 
-target: webagent.data_source.generic.GenericDataSource
+target: pkg://webagent.data_source.generic:GenericDataSource
 source: null
 fmt: jsonl
 input_key: prompt

@@ -4,15 +4,21 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from importlib import import_module
+import re
 from typing import Any, Callable, Optional, TypeVar
 
 from omegaconf import DictConfig, OmegaConf
 
-from webagent.log import get_logger
 
 T = TypeVar("T")
 
-logger = get_logger(__name__)
+_PKG_PREFIX = "pkg://"
+_PKG_IMPORT_RE = re.compile(
+    r"^pkg://"
+    r"(?P<module>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)"
+    r"(?::(?P<attr>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*))?"
+    r"$"
+)
 
 
 def _to_container(cfg: Any) -> Any:
@@ -27,20 +33,33 @@ def _to_container(cfg: Any) -> Any:
     raise TypeError(f"cfg must be a mapping or DictConfig, got {type(cfg)!r}")
 
 
-def _import_from_path(path: str) -> Callable[..., Any]:
-    """Import a dotted path like 'pkg.mod.Class' and return the attribute."""
-    if not isinstance(path, str) or "." not in path:
-        raise ValueError(f"target must be an import path like 'pkg.mod.Class', got {path!r}")
-    module_name, _, attr = path.rpartition(".")
+def _import_from_path(path: str) -> Any:
+    """Import a path like 'pkg://pkg.mod[:attr]' and return the module or attribute."""
+    if not isinstance(path, str):
+        raise ValueError(
+            f"target must be an import path like '{_PKG_PREFIX}pkg.mod[:attr]', got {path!r}"
+        )
+    match = _PKG_IMPORT_RE.fullmatch(path)
+    if not match:
+        raise ValueError(
+            f"target must be an import path like '{_PKG_PREFIX}pkg.mod[:attr]', got {path!r}"
+        )
+    module_name = match.group("module")
+    attr_path = match.group("attr")
     module = import_module(module_name)
     try:
-        return getattr(module, attr)
+        if not attr_path:
+            return module
+        value: Any = module
+        for attr in attr_path.split("."):
+            value = getattr(value, attr)
+        return value
     except AttributeError as exc:
         raise AttributeError(f"target '{path}' not found") from exc
 
 
 def _resolve_imports(value: Any, *, target_key: str) -> Any:
-    """Recursively resolve importable dotted-path strings (excluding target key)."""
+    """Recursively resolve pkg:// import strings (excluding target key)."""
     if isinstance(value, Mapping):
         out: dict[str, Any] = {}
         for key, item in value.items():
@@ -51,13 +70,13 @@ def _resolve_imports(value: Any, *, target_key: str) -> Any:
         return out
     if isinstance(value, list):
         return [_resolve_imports(item, target_key=target_key) for item in value]
-    if isinstance(value, str) and "." in value:
+    if isinstance(value, str) and value.startswith(_PKG_PREFIX):
         try:
             return _import_from_path(value)
-        except (ModuleNotFoundError, ImportError, AttributeError):
-            logger.warning("Config import failed for '%s'; keeping raw string", value)
-            return value
+        except (ModuleNotFoundError, ImportError, AttributeError, ValueError):
+            raise
     return value
+
 
 def instantiate(
     factory: Optional[Callable[..., T]] = None,
@@ -75,7 +94,7 @@ def instantiate(
         cfg: DictConfig/dict with params and optional `target` import path.
         target_key: Key name for the import path in cfg.
         recursive: If True, recursively instantiate nested configs containing `target`.
-        resolve_imports: If True, attempt to import dotted-path strings in config.
+        resolve_imports: If True, attempt to import pkg:// strings in config.
         **kwargs: Overrides for cfg values.
     """
 
@@ -126,6 +145,7 @@ def instantiate(
 
     data.update(kwargs)
     return factory(**data)  # type: ignore[misc]
+
 
 class FromOmegaConfigMixin:
     """Mixin to construct classes from OmegaConf/dict configs."""
