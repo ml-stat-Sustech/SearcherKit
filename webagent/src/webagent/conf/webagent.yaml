@@ -29,7 +29,7 @@ agent:
   parser:
     upstream_parsed: false
   tools: 
-    - target: webagent.tools.tool.GenericMCPTool
+    - target: pkg://webagent.tools.tool:GenericMCPTool
       mcp_tool_name: search
       endpoint: http://127.0.0.1:8300/mcp/
       auth_header: ""
@@ -45,21 +45,21 @@ agent:
   max_tokens_prompt: "You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
   max_tokens_prompt_margin: 3072
   llm_retry_policy:
-    target: webagent.utils.retry.RetryPolicy
+    target: pkg://webagent.utils.retry:RetryPolicy
     max_tries: 5
     exceptions:
-      - webagent.llm.parser.ParsingError
+      - pkg://webagent.llm.parser:ParsingError
     giveup: null
-    jitter: backoff.full_jitter
+    jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
   tool_retry_policy: 
-    target: webagent.utils.retry.RetryPolicy
+    target: pkg://webagent.utils.retry:RetryPolicy
     max_tries: 5
     exceptions:
-      - webagent.tools.tool.ToolRecoverableError
+      - pkg://webagent.tools.tool:ToolRecoverableError
     giveup: null
-    jitter: backoff.full_jitter
+    jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
 
