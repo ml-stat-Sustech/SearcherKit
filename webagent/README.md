@@ -2,6 +2,22 @@
 
 High-performance, widely compatible agent runtime.
 
+## Installation
+
+```bash
+git clone https://github.com/ml-stat-Sustech/webagent.git
+cd webagent/webagent
+uv sync
+```
+
+## Quick Start
+
+modify `conf/config.yaml` or `conf/webagent.yaml` or create a new config
+
+```bash
+python -m webagent --config-name=[config_name]
+```
+
 ## Key Notice
 
 Implement with following focus
