@@ -1,21 +1,12 @@
 # Full config example for a Qwen-backed WebAgent
 
 defaults:
-  - llm@llm_client: OpenAIClient
-  - llm@parser: QwenParser
-  - utils@retry_policy: RetryPolicy
   - agent@agent: WebAgent
+  - llm@agent.llm_client: OpenAIClient
+  - llm@agent.parser: QwenParser
+  - utils@retry_policy: RetryPolicy
   - data_source@data_source: GenericDataSource
   - _self_
-
-llm_client:
-  model: Qwen3-8B
-  api_key: YOUR_API_KEY
-  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  default_kwargs:
-    temperature: 0.2
-    max_tokens: 1024
-  concurrency_limit: 8
 
 retry_policy:
   max_tries: 3
@@ -28,8 +19,14 @@ retry_policy:
   base: 2.0
 
 agent:
-  llm_client: ${llm_client}
-  parser: ${parser}
+  llm_client:
+    model: Qwen3-8B
+    api_key: YOUR_API_KEY
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    default_kwargs:
+      temperature: 0.2
+      max_tokens: 1024
+    concurrency_limit: 8
   tools: 
     - target: pkg://webagent.tools.tool:GenericMCPTool
       mcp_tool_name: search

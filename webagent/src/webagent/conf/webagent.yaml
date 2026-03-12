@@ -1,0 +1,72 @@
+# Full config example for a Qwen-backed WebAgent
+
+defaults:
+  - agent@agent: WebAgent
+  - llm@agent.llm_client: OpenAIClient
+  - llm@agent.parser: QwenParser
+  - utils@retry_policy: RetryPolicy
+  - data_source@data_source: GenericDataSource
+  - _self_
+
+retry_policy:
+  max_tries: 3
+
+agent:
+  llm_client:
+    model: Qwen3-8B
+    api_key: "a"
+    base_url: http://127.0.0.1:8001/v1
+    default_kwargs:
+      temperature: 0.7
+      top_p: 0.8
+      presence_penalty: 1.5
+      extra_body: 
+        top_k: 20
+      stop:
+        - "<tool_response>"
+        - "\n<tool_response>"
+    concurrency_limit: 512
+  parser:
+    upstream_parsed: false
+  tools: 
+    - target: webagent.tools.tool.GenericMCPTool
+      mcp_tool_name: search
+      endpoint: http://127.0.0.1:8300/mcp/
+      auth_header: ""
+      max_concurrency: 512
+      response_char_limit: 20000
+      enable_trace_logging: true
+      raise_on_fatal: true
+      final_answer_generator: null
+  system_prompt: "You are a deep research assistant. Your core function is to conduct thorough, multi-source investigations into any topic. You must handle both broad, open-domain inquiries and queries within specialized academic fields. For every request, synthesize information from credible, diverse sources to deliver a comprehensive, accurate, and objective response. When you have gathered sufficient information and are ready to provide the definitive response, you must enclose the entire final answer within <answer></answer> tags."
+  max_turn: 100
+  max_turn_prompt: "You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
+  max_tokens: 131072
+  max_tokens_prompt: "You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
+  max_tokens_prompt_margin: 3072
+  llm_retry_policy:
+    target: webagent.utils.retry.RetryPolicy
+    max_tries: 5
+    exceptions:
+      - webagent.llm.parser.ParsingError
+    giveup: null
+    jitter: backoff.full_jitter
+    factor: 1.0
+    base: 2.0
+  tool_retry_policy: 
+    target: webagent.utils.retry.RetryPolicy
+    max_tries: 5
+    exceptions:
+      - webagent.tools.tool.ToolRecoverableError
+    giveup: null
+    jitter: backoff.full_jitter
+    factor: 1.0
+    base: 2.0
+
+data_source:
+  source: data/browsecomp_plus_decrypted_qa.jsonl
+  input_key: question
+  answer_key: answer
+  max_items: null
+
+output_path: outputs/agent_history
