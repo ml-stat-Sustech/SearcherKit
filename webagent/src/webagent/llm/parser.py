@@ -191,14 +191,13 @@ class QwenParser(Parser):
             thinking = get_first_or_default(message, "reasoning", "reasoning_content")
             tool_calls: list[ToolCall] = []
             for tc in get_or_default(message, "tool_calls", []):
-                if not isinstance(tc, Mapping):
-                    continue
-                function = get_or_default(tc, "function", {})
-                if not isinstance(function, Mapping):
-                    function = {}
-                arguments = get_or_default(function, "arguments", {})
-                if not isinstance(arguments, Mapping):
-                    arguments = {}
+                function = tc["function"]
+                arguments = function["arguments"]
+                try:
+                    arguments = json.loads(arguments)
+                except json.JSONDecodeError:
+                    raise ParsingError(f"Invalid JSON payload for <tool_call>: {arguments}")
+                
                 tool_calls.append(
                     ToolCall(
                         id=str(get_or_default(tc, "id", "call_tool")),
