@@ -6,6 +6,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+from tqdm import tqdm
 import hydra
 from omegaconf import DictConfig
 
@@ -16,47 +17,61 @@ from webagent.log import get_logger, setup_logger
 from webagent.runtime.agent_runner import AgentRunner
 from webagent.utils.config import instantiate
 
+from webagent.llm.chat_types import ChatMessage
+
 logger = get_logger(__name__)
 
-
-def _serialize_message(message: Any) -> Any:
-    # TODO: normalize Tool objects and tool_call arguments for JSON-safe, round-trippable history.
+def _serialize_message(message: ChatMessage) -> Any:
     if is_dataclass(message):
         return asdict(message)
     return message
 
+def _save_to_path(path: Path, index: int, input: str, answer: str, history: list[ChatMessage]) -> None:
+    path.write_text(json.dumps({
+        "input": input,
+        "answer": answer,
+        "history": [_serialize_message(msg) for msg in history],
+    }, ensure_ascii=False, default=str), encoding="utf-8")
+    logger.info("Wrote result index=%d path=%s messages=%s", index, path, len(history))
+
 async def _run(cfg: DictConfig) -> None:
-    agent_cfg = cfg.get("agent")
     data_source_cfg = cfg.get("data_source")
-    output_dir = Path(cfg.get("output_path") or "outputs/agent_history")
-
-    logger.info("Starting webagent batch run output_dir=%s", output_dir)
     data_source = instantiate(cfg=data_source_cfg, recursive=True, resolve_imports=True)
-    runner = AgentRunner(agent_config=agent_cfg)
 
+    output_dir = Path(cfg.get("output_path") or "outputs/agent_history")
+    logger.info("Starting webagent batch run output_dir=%s", output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    agent_cfg = cfg.get("agent")
+    runner = AgentRunner(agent_config=agent_cfg)
+
     tasks: list[asyncio.Future[list[Any]]] = []
-    meta: dict[int, dict[str, Any]] = {}
+    pbar = tqdm(total=0)
+
     for index, (prompt, extra, answer) in enumerate(data_source):
-        submitted = runner.submit(prompt, extra=extra)
-        task = submitted if isinstance(submitted, asyncio.Task) else asyncio.create_task(submitted)
+        output_path = output_dir / f"{index:06d}.json"
+        if output_path.exists():
+            logger.info("Skipping existing output index=%s path=%s", index, output_path)
+            continue
+        task = runner.submit(prompt, extra=extra)
+        def _on_done(
+            done_task: asyncio.Future[list[Any]],
+            *,
+            output_path: Path = output_path,
+            index: int = index,
+            prompt: str = prompt,
+            answer: str = answer,
+        ) -> None:
+            _save_to_path(output_path, index, prompt, answer, done_task.result())
+            pbar.update(1)
+        
+        task.add_done_callback(_on_done)
         tasks.append(task)
-        meta[index] = {"index": index, "input": prompt, "answer": answer}
     logger.info("Scheduled requests count=%s", len(tasks))
+    pbar.reset(total=len(tasks))
 
-    for task in asyncio.as_completed(tasks):
-        history = await task
-        info = meta[index]
-        row = {
-            "input": info["input"],
-            "answer": info["answer"],
-            "history": [_serialize_message(msg) for msg in history],
-        }
-        output_path = output_dir / f"{info['index']:06d}.json"
-        output_path.write_text(json.dumps(row, ensure_ascii=False, default=str), encoding="utf-8")
-        logger.info("Wrote result index=%s path=%s messages=%s", info["index"], output_path, len(history))
-
+    if tasks:
+        await asyncio.gather(*tasks)
     logger.info("Completed webagent batch run count=%s", len(tasks))
 
 
