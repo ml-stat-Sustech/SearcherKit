@@ -117,7 +117,14 @@ class QwenParser(Parser):
 
         for message in messages:
             if message.role == "system":
-                out.append({"role": "system", "content": (message.content or "") + (self.qwen_tools_block(message.tools) if message.tools else "")})
+                content = message.content or ""
+                if self.upstream_parsed:
+                    item: dict[str, Any] = {"role": "system", "content": content}
+                    if message.tools:
+                        item["tools"] = self.as_openai_tools(message.tools)
+                    out.append(item)
+                else:
+                    out.append({"role": "system", "content": content + (self.qwen_tools_block(message.tools) if message.tools else "")})
             elif message.role == "user":
                 out.append({"role": "user", "content": message.content or ""})
             elif message.role == "assistant":
@@ -277,21 +284,8 @@ class QwenParser(Parser):
             "You are provided with function signatures within <tools></tools> XML tags:",
             "<tools>",
         ]
-        for tool in tools:
-            name = get_or_default(tool, "name", "")
-            description = get_or_default(tool, "description", "")
-            parameters = tool.get("arguments_schema", {}) or {}
-            if not description:
-                logger.warning("Tool %s has no description", name)
-            if not parameters:
-                logger.warning("Tool %s has no arguments schema", name)
-            lines.append(json.dumps({
-                "type": "function",
-                "function": {
-                    "name": name,
-                    "description": description,
-                    "parameters": parameters
-                    }}, ensure_ascii=False))
+        for tool in self.as_openai_tools(tools):
+            lines.append(json.dumps(tool, ensure_ascii=False))
 
         lines.extend(
             [
@@ -304,6 +298,33 @@ class QwenParser(Parser):
             ]
         )
         return "\n".join(lines)
+
+    def as_openai_tools(self, tools: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+        out: list[Mapping[str, Any]] = []
+        for tool in tools:
+            if not isinstance(tool, Mapping):
+                continue
+            if "type" in tool and "function" in tool:
+                out.append(dict(tool))
+                continue
+            name = get_or_default(tool, "name", "")
+            description = get_or_default(tool, "description", "")
+            parameters = tool.get("arguments_schema", tool.get("parameters", {})) or {}
+            if not description:
+                logger.warning("Tool %s has no description", name)
+            if not parameters:
+                logger.warning("Tool %s has no arguments schema", name)
+            out.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": description,
+                        "parameters": parameters,
+                    },
+                }
+            )
+        return out
         
 def get_parser_cls(name: str):
     if "qwen" in name.lower():
