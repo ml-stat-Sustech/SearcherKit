@@ -96,8 +96,10 @@ def _read_conf(conf: Any, key: str, default: Any = None) -> Any:
     if conf is None:
         return default
     if isinstance(conf, Mapping):
-        return conf.get(key, default)
-    return getattr(conf, key, default)
+        value = conf.get(key, default)
+        return default if value is None else value
+    value = getattr(conf, key, default)
+    return default if value is None else value
 
 
 def _resolve_conf(conf: Any | None) -> Any | None:

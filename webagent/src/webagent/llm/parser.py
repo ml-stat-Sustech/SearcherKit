@@ -17,6 +17,7 @@ from webagent.llm.chat_types import ChatMessage
 from webagent.llm.chat_types import ToolCall
 from webagent.llm.chat_types import assistant, system, user
 from webagent.log import get_logger
+from webagent.utils.mapping import get_first_or_default, get_or_default
 
 logger = get_logger(__name__)
 
@@ -184,31 +185,31 @@ class QwenParser(Parser):
         
     def from_assistant(self, message: dict[str,Any]) -> ChatMessage:
         if self.upstream_parsed:
-            thinking = message.get("reasoning", message.get("reasoning_content", None))
+            thinking = get_first_or_default(message, "reasoning", "reasoning_content")
             tool_calls: list[ToolCall] = []
-            for tc in message.get("tool_calls", []):
+            for tc in get_or_default(message, "tool_calls", []):
                 if not isinstance(tc, Mapping):
                     continue
-                function = tc.get("function", {})
+                function = get_or_default(tc, "function", {})
                 if not isinstance(function, Mapping):
                     function = {}
-                arguments = function.get("arguments", {})
+                arguments = get_or_default(function, "arguments", {})
                 if not isinstance(arguments, Mapping):
                     arguments = {}
                 tool_calls.append(
                     ToolCall(
-                        id=str(tc.get("id", "call_tool")),
-                        name=str(function.get("name", "")),
+                        id=str(get_or_default(tc, "id", "call_tool")),
+                        name=str(get_or_default(function, "name", "")),
                         arguments=arguments,
                     )
                 )
             return assistant(
-                message.get("content"),
+                get_or_default(message, "content"),
                 thinking=thinking if isinstance(thinking, str) else None,
                 tool_calls=tool_calls,
             )
 
-        content = message.get("content", "")
+        content = get_or_default(message, "content", "")
         if not isinstance(content, str):
             raise ValueError(f"Invalid Qwen assistant message content: {content!r}")
 
@@ -252,7 +253,7 @@ class QwenParser(Parser):
         )
     
     def from_user(self, message: dict[str, Any]) -> ChatMessage:
-        return user(message.get("content", ""))
+        return user(get_or_default(message, "content", ""))
             
     def render_tool_calls(self, tool_calls: list[ToolCall]) -> str:
         lines: list[str] = []
@@ -277,8 +278,8 @@ class QwenParser(Parser):
             "<tools>",
         ]
         for tool in tools:
-            name = tool.get("name", "")
-            description = tool.get("description", "")
+            name = get_or_default(tool, "name", "")
+            description = get_or_default(tool, "description", "")
             parameters = tool.get("arguments_schema", {}) or {}
             if not description:
                 logger.warning("Tool %s has no description", name)

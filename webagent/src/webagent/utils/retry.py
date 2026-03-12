@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable, ParamSpec, TypeVar
 import backoff
 
 from webagent.log import get_logger
+from webagent.utils.mapping import get_or_default
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -52,21 +53,21 @@ def _build_handlers(
     active_logger = log or logger
 
     def on_backoff(details: dict[str, Any]) -> None:
-        exc = details.get("exception")
+        exc = get_or_default(details, "exception", None)
         active_logger.warning(
             "Retrying op=%s tries=%s wait=%.2fs error=%r",
             op_name,
-            details.get("tries"),
-            details.get("wait", 0.0),
+            get_or_default(details, "tries", "unknown"),
+            get_or_default(details, "wait", 0.0),
             exc,
         )
 
     def on_giveup(details: dict[str, Any]) -> None:
-        exc = details.get("exception")
+        exc = get_or_default(details, "exception", None)
         active_logger.error(
             "Retry exhausted op=%s tries=%s error=%r",
             op_name,
-            details.get("tries"),
+            get_or_default(details, "tries", "unknown"),
             exc,
         )
 
