@@ -221,7 +221,7 @@ class Tool(abc.ABC):
             "function": {
                 "name": name,
                 "description": description,
-                "parameters": arguments_schema,
+                "parameters": parameters,
             },
         }
     
