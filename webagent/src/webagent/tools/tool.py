@@ -65,6 +65,8 @@ from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from webagent.utils.json_schema import json_schema_to_pydantic
+
 from webagent.log import get_logger, setup_logger
 
 logger = get_logger(__name__)
@@ -593,7 +595,7 @@ class MCPTool(Tool):
 
     @staticmethod
     def _coerce_schema(value: Any) -> type[BaseModel] | None:
-        """将 MCP schema 转成 pydantic BaseModel class（最小兼容）。"""
+        """将 MCP schema 转成 pydantic BaseModel class（JSON Schema -> Pydantic）。"""
         if value is None:
             return None
         if isinstance(value, str):
@@ -609,16 +611,10 @@ class MCPTool(Tool):
         if isinstance(value, Mapping):
             schema = dict(value)
             model_name = schema.get("title") or "MCPArguments"
-
-            class MCPArgumentsModel(BaseModel):
-                model_config = ConfigDict(extra="allow")
-
-                @classmethod
-                def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> Any:
-                    return schema
-
-            MCPArgumentsModel.__name__ = str(model_name)
-            return MCPArgumentsModel
+            try:
+                return json_schema_to_pydantic(schema, model_name=str(model_name))
+            except (TypeError, ValueError):
+                return None
         return None
 
     # ---- 核心 MCP 调用 ----
