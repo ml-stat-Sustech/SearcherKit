@@ -174,6 +174,26 @@ class Tool(abc.ABC):
             "arguments_schema": self.arguments_schema,
             "type": self.__class__.__name__,
         }
+    
+    @staticmethod
+    def to_openai_tool(name: str, description: str | None = None, arguments_schema: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+        description = description or ""
+        parameters = arguments_schema or {}
+        if not description:
+            logger.warning("Tool %s has no description", name)
+        if not parameters:
+            logger.warning("Tool %s has no arguments schema", name)
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": arguments_schema,
+            },
+        }
+    
+    def as_openai_tool(self) -> Mapping[str, Any]:
+        return self.to_openai_tool(self.name, self.description, self.arguments_schema)
 
 
 # ---------------------------------------------------------------------------

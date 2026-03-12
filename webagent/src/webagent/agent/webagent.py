@@ -111,9 +111,13 @@ class WebAgent(Agent):
         return False
     
     async def parse_and_call_llm(self, history: list[ChatMessage]):
-        call_result_raw, usage = await self.client.complete_with_usage(self.parser.to_model(history))
+        tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
+        
+        call_result_raw, usage = await self.client.complete_with_usage(self.parser.to_model(history), tools=tools)
+
         self.context_token_size = usage.total_tokens if usage else -1
         logger.debug("LLM turn completed total_tokens=%s", self.context_token_size)
+
         return next(iter(self.parser.from_model([call_result_raw])))
 
     async def run(self, query: str, extra: dict[str, Any] | None = None):

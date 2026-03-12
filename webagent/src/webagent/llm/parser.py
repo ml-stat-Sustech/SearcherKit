@@ -13,9 +13,8 @@ import abc
 import json
 from typing import Any, Iterable, Mapping
 
-from webagent.llm.chat_types import ChatMessage
-from webagent.llm.chat_types import ToolCall
-from webagent.llm.chat_types import assistant, system, user
+from webagent.llm.chat_types import ChatMessage, ToolCall, assistant, system, user
+from webagent.tools.tool import Tool
 from webagent.log import get_logger
 from webagent.utils.mapping import get_first_or_default, get_or_default
 
@@ -119,10 +118,7 @@ class QwenParser(Parser):
             if message.role == "system":
                 content = message.content or ""
                 if self.upstream_parsed:
-                    item: dict[str, Any] = {"role": "system", "content": content}
-                    if message.tools:
-                        item["tools"] = self.as_openai_tools(message.tools)
-                    out.append(item)
+                    out.append({"role": "system", "content": content})
                 else:
                     out.append({"role": "system", "content": content + (self.qwen_tools_block(message.tools) if message.tools else "")})
             elif message.role == "user":
@@ -284,8 +280,8 @@ class QwenParser(Parser):
             "You are provided with function signatures within <tools></tools> XML tags:",
             "<tools>",
         ]
-        for tool in self.as_openai_tools(tools):
-            lines.append(json.dumps(tool, ensure_ascii=False))
+        for tool in tools:
+            lines.append(json.dumps(Tool.to_openai_tool(tool["name"], tool["description"], tool["arguments_schema"]) , ensure_ascii=False))
 
         lines.extend(
             [
@@ -298,33 +294,6 @@ class QwenParser(Parser):
             ]
         )
         return "\n".join(lines)
-
-    def as_openai_tools(self, tools: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-        out: list[Mapping[str, Any]] = []
-        for tool in tools:
-            if not isinstance(tool, Mapping):
-                continue
-            if "type" in tool and "function" in tool:
-                out.append(dict(tool))
-                continue
-            name = get_or_default(tool, "name", "")
-            description = get_or_default(tool, "description", "")
-            parameters = tool.get("arguments_schema", tool.get("parameters", {})) or {}
-            if not description:
-                logger.warning("Tool %s has no description", name)
-            if not parameters:
-                logger.warning("Tool %s has no arguments schema", name)
-            out.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": description,
-                        "parameters": parameters,
-                    },
-                }
-            )
-        return out
         
 def get_parser_cls(name: str):
     if "qwen" in name.lower():

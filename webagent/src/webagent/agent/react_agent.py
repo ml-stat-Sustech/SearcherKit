@@ -57,10 +57,13 @@ class ReactAgent(Agent):
         ]
         logger.info("Starting reasoning loop agent=ReactAgent query=%r", query[:120])
         turn = 0
+
+        tools_for_client = [tool.as_openai_tool() for tool in self.tool_dict.values()]
+
         while True:
             turn += 1
             logger.debug("Running LLM turn=%s history_messages=%s", turn, len(history))
-            call_res_raw = await self.client.complete(self.parser.to_model(history))
+            call_res_raw = await self.client.complete(self.parser.to_model(history), tools = tools_for_client)
             
             call_res = next(iter(self.parser.from_model([call_res_raw])))
             
