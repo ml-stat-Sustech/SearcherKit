@@ -8,6 +8,7 @@ High-performance, widely compatible agent runtime.
 git clone https://github.com/ml-stat-Sustech/webagent.git
 cd webagent/webagent
 uv sync
+uv pip install -e .
 ```
 
 ## Quick Start

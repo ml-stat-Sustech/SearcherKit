@@ -63,6 +63,7 @@ from typing import Any, Callable, Optional
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from webagent.log import get_logger, setup_logger
 
@@ -156,29 +157,61 @@ class MCPToolSettings:
 class Tool(abc.ABC):
     name: str
     description: str | None
-    arguments_schema: Mapping[str, Any] | None
+    arguments_schema: type[BaseModel] | None
+    raise_argument_validation_error: bool
+
+    def __init__(self, *, raise_argument_validation_error: bool = False) -> None:
+        self.raise_argument_validation_error = raise_argument_validation_error
 
     async def init(self, *args: Any, **kwargs: Any) -> None:
         """Initialize tool resources."""
 
-    @abc.abstractmethod
-    async def run(self, *args: Any, **kwargs: Any) -> str:
+    async def run(self, **kwargs: Any) -> str:
         """Execute the tool with the provided arguments."""
-        pass
+        if self.arguments_schema is None:
+            return await self._run(kwargs)
+        try:
+            model = self.arguments_schema.model_validate(kwargs)
+        except ValidationError as exc:
+            logger.warning(
+                "Tool %s arguments validation failed: %s",
+                self.name,
+                exc,
+            )
+            if self.raise_argument_validation_error:
+                raise
+            return f"[Tool] invalid arguments for {self.name}: {exc}"
+        return await self._run(model.model_dump())
+
+    @abc.abstractmethod
+    async def _run(self, arguments: dict[str, Any]) -> str:
+        """Subclasses implement actual tool execution."""
+        raise NotImplementedError
 
     def dump_metadata(self) -> dict[str, Any]:
         """Return a JSON-serializable metadata dict for logging."""
         return {
             "name": self.name,
             "description": self.description,
-            "arguments_schema": self.arguments_schema,
+            "arguments_schema": (
+                self.arguments_schema.model_json_schema()
+                if self.arguments_schema is not None
+                else None
+            ),
             "type": self.__class__.__name__,
         }
     
     @staticmethod
-    def to_openai_tool(name: str, description: str | None = None, arguments_schema: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+    def to_openai_tool(
+        name: str,
+        description: str | None = None,
+        arguments_schema: type[BaseModel] | None = None,
+    ) -> Mapping[str, Any]:
         description = description or ""
-        parameters = arguments_schema or {}
+        if arguments_schema is None:
+            parameters: Mapping[str, Any] = {}
+        else:
+            parameters = arguments_schema.model_json_schema()
         if not description:
             logger.warning("Tool %s has no description", name)
         if not parameters:
@@ -194,6 +227,7 @@ class Tool(abc.ABC):
     
     def as_openai_tool(self) -> Mapping[str, Any]:
         return self.to_openai_tool(self.name, self.description, self.arguments_schema)
+
 
 
 # ---------------------------------------------------------------------------
@@ -234,8 +268,14 @@ class MCPTool(Tool):
         response_char_limit: Optional[int] = None,
         enable_trace_logging: Optional[bool] = None,
         raise_on_fatal: Optional[bool] = None,
+        raise_argument_validation_error: Optional[bool] = None,
         final_answer_generator: Optional[FinalAnswerGenerator] = None,
     ) -> None:
+        super().__init__(
+            raise_argument_validation_error=bool(raise_argument_validation_error)
+            if raise_argument_validation_error is not None
+            else False
+        )
         self.name = self.mcp_tool_name
         self.description = None
         self.arguments_schema = None
@@ -320,6 +360,9 @@ class MCPTool(Tool):
             "response_char_limit": _read_conf(conf, "response_char_limit"),
             "enable_trace_logging": _read_conf(conf, "enable_trace_logging"),
             "raise_on_fatal": _read_conf(conf, "raise_on_fatal"),
+            "raise_argument_validation_error": _read_conf(
+                conf, "raise_argument_validation_error"
+            ),
             "final_answer_generator": _read_conf(conf, "final_answer_generator"),
         }
         params.update(overrides)
@@ -429,45 +472,15 @@ class MCPTool(Tool):
 
     # ---- 公共调用接口 ----
 
-    async def run(self, *args: Any, **kwargs: Any) -> str:
-        """子类必须覆盖此方法，在其中调用 _run_mcp_tool()。"""
-        raise NotImplementedError("Subclass should implement run() and call _run_mcp_tool().")
-
-    async def run_batch(
-        self,
-        payloads: list[dict[str, Any]],
-        *,
-        trace_id: Optional[str] = None,
-        fail_fast: bool = False,
-    ) -> list[str]:
-        """批量并发调用 MCP 工具。
-
-        Args:
-            payloads: 每个元素是传给 mcp_tool 的参数字典
-            trace_id: 可选的追踪 ID
-            fail_fast: True 时任何异常立即上抛；False 时收集错误消息继续执行
-        """
-        if not payloads:
-            return []
-
-        jobs = [
-            self._run_mcp_tool(payload, trace_id=trace_id)
-            for payload in payloads
-        ]
-
-        if fail_fast:
-            # fail_fast 模式：任何异常直接传播
-            return await asyncio.gather(*jobs)
-
-        # 容错模式：异常转为错误消息字符串
-        results = await asyncio.gather(*jobs, return_exceptions=True)
-        out: list[str] = []
-        for item in results:
-            if isinstance(item, Exception):
-                out.append(self._recoverable_message(item))
-            else:
-                out.append(item)
-        return out
+    # async def run_batch(
+    #     self,
+    #     payloads: list[dict[str, Any]],
+    #     *,
+    #     trace_id: Optional[str] = None,
+    #     fail_fast: bool = False,
+    # ) -> list[str]:
+    #     """批量并发调用 MCP 工具。"""
+    #     ...
 
     # ---- 内部连接管理 ----
 
@@ -579,29 +592,33 @@ class MCPTool(Tool):
         )
 
     @staticmethod
-    def _coerce_schema(value: Any) -> Mapping[str, Any] | None:
-        """尽量将 schema 转成 JSON 友好的 Mapping。"""
+    def _coerce_schema(value: Any) -> type[BaseModel] | None:
+        """将 MCP schema 转成 pydantic BaseModel class（最小兼容）。"""
         if value is None:
             return None
-        if isinstance(value, Mapping):
-            return dict(value)
-        model_dump = getattr(value, "model_dump", None)
-        if callable(model_dump):
-            return model_dump()
-        to_dict = getattr(value, "dict", None)
-        if callable(to_dict):
-            return to_dict()
-        json_schema = getattr(value, "json_schema", None)
-        if callable(json_schema):
-            return json_schema()
         if isinstance(value, str):
             try:
                 parsed = json.loads(value)
-            except Exception:
+            except json.JSONDecodeError:
                 return None
-            if isinstance(parsed, Mapping):
-                return dict(parsed)
-            return None
+            value = parsed
+        if isinstance(value, type) and issubclass(value, BaseModel):
+            return value
+        if isinstance(value, BaseModel):
+            return value.__class__
+        if isinstance(value, Mapping):
+            schema = dict(value)
+            model_name = schema.get("title") or "MCPArguments"
+
+            class MCPArgumentsModel(BaseModel):
+                model_config = ConfigDict(extra="allow")
+
+                @classmethod
+                def __get_pydantic_json_schema__(cls, core_schema: Any, handler: Any) -> Any:
+                    return schema
+
+            MCPArgumentsModel.__name__ = str(model_name)
+            return MCPArgumentsModel
         return None
 
     # ---- 核心 MCP 调用 ----
@@ -842,30 +859,20 @@ class GenericMCPTool(MCPTool):
             "response_char_limit": _read_conf(conf, "response_char_limit"),
             "enable_trace_logging": _read_conf(conf, "enable_trace_logging"),
             "raise_on_fatal": _read_conf(conf, "raise_on_fatal"),
+            "raise_argument_validation_error": _read_conf(
+                conf, "raise_argument_validation_error"
+            ),
             "final_answer_generator": _read_conf(conf, "final_answer_generator"),
         }
         params.update(overrides)
         return cls(mcp_tool_name=resolved_name, **params)
 
-    async def run(
+    async def _run(
         self,
-        arguments: Optional[dict[str, Any]] = None,
-        *,
-        trace_id: Optional[str] = None,
-        **kwargs: Any,
+        arguments: dict[str, Any],
     ) -> str:
-        """调用绑定的 MCP 工具。
-
-        支持两种调用风格：
-        - run({"query": "..."})          # 字典方式
-        - run(query="...")               # 关键字参数方式
-        """
-        # 【修复】原代码此处缺少 _run_mcp_tool 调用和 return，方法体被截断导致
-        # run() 永远返回 None —— 这是原文件最严重的 bug
-        payload = dict(arguments or {})
-        if kwargs:
-            payload.update(kwargs)
-        return await self._run_mcp_tool(payload, trace_id=trace_id)
+        """子类实现：转发 MCP 调用。"""
+        return await self._run_mcp_tool(arguments)
 
 
 # ---------------------------------------------------------------------------
@@ -886,7 +893,7 @@ async def _async_main(
     )
     async with tool:
         await tool.init()
-        result = await tool.run(arguments)
+        result = await tool.run(**arguments)
     return result
 
 
