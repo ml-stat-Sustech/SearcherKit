@@ -7,6 +7,8 @@ from __future__ import annotations
 import asyncio
 from typing import Iterable, Any, TYPE_CHECKING
 
+from openai import BadRequestError
+
 from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
@@ -73,6 +75,30 @@ class WebAgent(Agent):
         self.max_tokens_prompt_margin = max_tokens_prompt_margin
         self.llm_retry_policy = llm_retry_policy
         self.tool_retry_policy = tool_retry_policy
+        self.context_limit_exceeded = False
+
+    @staticmethod
+    def _is_context_length_error(exc: BadRequestError) -> bool:
+        response = getattr(exc, "response", None)
+        body = getattr(response, "json", None)
+        error_payload = body() if callable(body) else {}
+        error = error_payload.get("error", {}) if isinstance(error_payload, dict) else {}
+        message = str(error.get("message", "")).lower()
+        code = str(error.get("code", "")).lower()
+        param = str(error.get("param", "")).lower()
+        text = " ".join(
+            part for part in [message, code, param, str(exc).lower()] if part
+        )
+        return any(
+            marker in text
+            for marker in (
+                "context length",
+                "maximum context length",
+                "max context length",
+                "context window",
+                "too many tokens",
+            )
+        )
 
     async def init_tools(self) -> None:
         tools = list(self.tool_dict.values())
@@ -86,6 +112,12 @@ class WebAgent(Agent):
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
         for tc in tool_call_list:
+            async def return_error(name):
+                return f"[Tool] Tool {name} doesn't exist"
+            if tc.name not in self.tool_dict:
+                tool_call_coros.append(return_error(tc.name))
+                continue
+            
             if self.tool_retry_policy is None:
                 tool_call_coros.append(self.tool_dict[tc.name].run(**dict(tc.arguments)))
             else:
@@ -106,12 +138,16 @@ class WebAgent(Agent):
             return True
         if sum(map(lambda x: x.role == "tool", history)) >= self.max_turn:
             return True
-        if self.context_token_size >= self.max_tokens:
+        if self.context_limit_exceeded:
             return True
         return False
     
     async def parse_and_call_llm(self, history: list[ChatMessage]):
-        tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
+        # TODO: better implementation. 
+        if getattr(self.parser, "upstream_parsed", False):
+            tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
+        else:
+            tools = None
         
         call_result_raw, usage = await self.client.complete_with_usage(self.parser.to_model(history), tools=tools)
 
@@ -142,19 +178,30 @@ class WebAgent(Agent):
         ]
         logger.info("Starting reasoning loop agent=WebAgent query=%r", query[:120])
         turn = 0
+        self.context_limit_exceeded = False
         while True:
             turn += 1
             logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
-            if self.llm_retry_policy is None:
-                call_res = await self.parse_and_call_llm(history)
-            else:
-                call_res = await retry_async(
-                    self.parse_and_call_llm,
-                    history,
-                    policy=self.llm_retry_policy,
-                    op_name="webagent.parse_and_call_llm",
-                    log=logger,
+            try:
+                if self.llm_retry_policy is None:
+                    call_res = await self.parse_and_call_llm(history)
+                else:
+                    call_res = await retry_async(
+                        self.parse_and_call_llm,
+                        history,
+                        policy=self.llm_retry_policy,
+                        op_name="webagent.parse_and_call_llm",
+                        log=logger,
+                    )
+            except BadRequestError as exc:
+                if not self._is_context_length_error(exc):
+                    raise
+                self.context_limit_exceeded = True
+                logger.info(
+                    "Stopping reasoning loop due to model context limit model_error=%s",
+                    str(exc),
                 )
+                break
             
             history.append(call_res)
             
