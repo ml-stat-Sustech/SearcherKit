@@ -41,7 +41,7 @@ class WebSailorParser(QwenParser):
             "Example response:\n"
             "<think> thinking process here </think>\n"
             "<tool_call>\n"
-            '{"name": "tool name here", "arguments": {"parameter name here": "parameter value here", "another parameter name here": "another parameter value here"}}\n'
+            '{{"name": "tool name here", "arguments": {{"parameter name here": "parameter value here", "another parameter name here": "another parameter value here"}}}}\n'
             "</tool_call>\n"
             "<tool_response>\n"
             "tool_response here\n"
