@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 from webagent.log import get_logger, setup_logger
 from webagent.runtime.agent_runner import AgentRunner
+from webagent.runtime.evaluate import evaluate_main
 from webagent.utils.config import instantiate
 
 from webagent.llm.chat_types import ChatMessage
@@ -81,4 +83,8 @@ def main(cfg: DictConfig) -> None:
     asyncio.run(_run(cfg))
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "evaluate":
+        sys.argv.pop(1)
+        evaluate_main()
+    else:
+        main()
