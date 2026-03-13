@@ -155,7 +155,7 @@ class AgentRunner:
         data_source: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
         output_path: str | Path | None = None,
         retry_policy: RetryPolicy | None = None,
-        overwrite: bool = False,
+        overwrite_output: bool = False,
     ) -> dict[str, Any]:
         """
         Run a batch of agent tasks and persist per-sample trajectories plus summary stats.
@@ -163,15 +163,17 @@ class AgentRunner:
         Inputs can be provided either through `cfg` or through explicit parameters.
         The effective runtime values are resolved from the union of both sources:
         `data_source` and `output_path` are required after merging, while
-        `retry_policy` is optional. When both `cfg` and explicit parameters provide
-        the same field, `cfg` takes precedence. This matches the intended usage
-        where `cfg` defines the active experiment setup and explicit parameters are
-        mainly for secondary integrations or custom wrappers.
+        `retry_policy` and `overwrite_output` are optional. When both `cfg` and
+        explicit parameters provide the same field, `cfg` takes precedence. This
+        matches the intended usage where `cfg` defines the active experiment setup
+        and explicit parameters are mainly for secondary integrations or custom
+        wrappers.
 
         Args:
             cfg: Optional config object. If present, `cfg.data_source`,
-                `cfg.output_path`, and `cfg.retry_policy` are used to fill runtime
-                values, with `data_source` and `output_path` treated as required.
+                `cfg.output_path`, `cfg.retry_policy`, and
+                `cfg.overwrite_output` are used to fill runtime values, with
+                `data_source` and `output_path` treated as required.
             data_source: Optional iterable yielding `(prompt, extra, answer)` tuples.
                 Used directly unless `cfg.data_source` is provided.
             output_path: Optional output directory for trajectory files and
@@ -179,7 +181,8 @@ class AgentRunner:
             retry_policy: Optional retry policy for each agent execution. Used
                 unless `cfg.retry_policy` is provided, in which case the policy is
                 instantiated from config.
-            overwrite: Whether to overwrite existing per-sample output files.
+            overwrite_output: Whether to overwrite existing per-sample output
+                files.
 
         Returns:
             A summary dictionary containing counts and aggregate statistics such as
@@ -189,22 +192,47 @@ class AgentRunner:
         Raises:
             ValueError: If merged inputs still do not provide required values.
         """
-        cfg_data_source = cfg.get("data_source") if cfg is not None else None
-        cfg_output_path = cfg.get("output_path") if cfg is not None else None
-        cfg_retry_policy = cfg.get("retry_policy") if cfg is not None else None
 
-        if cfg is None and data_source is None and output_path is None and retry_policy is None:
-            raise ValueError(
-                "run requires cfg or explicit parameters; missing required values: data_source, output_path"
-            )
+        # Process cfg / params
 
-        overlap_fields: list[str] = []
-        if cfg_data_source is not None and data_source is not None:
-            overlap_fields.append("data_source")
-        if cfg_output_path is not None and output_path is not None:
-            overlap_fields.append("output_path")
-        if cfg_retry_policy is not None and retry_policy is not None:
-            overlap_fields.append("retry_policy")
+        cfg_values: dict[str, Any] = {}
+        if cfg is not None:
+            cfg_data_source = cfg.get("data_source")
+            if cfg_data_source is not None:
+                cfg_values["data_source"] = instantiate(
+                    cfg=cfg_data_source,
+                    recursive=True,
+                    resolve_imports=True,
+                )
+
+            cfg_output_path = cfg.get("output_path")
+            if cfg_output_path is not None:
+                cfg_values["output_path"] = cfg_output_path
+
+            cfg_retry_policy = cfg.get("retry_policy")
+            if cfg_retry_policy is not None:
+                cfg_values["retry_policy"] = instantiate(
+                    cfg=cfg_retry_policy,
+                    recursive=True,
+                    resolve_imports=True,
+                )
+
+            cfg_overwrite_output = cfg.get("overwrite_output")
+            if cfg_overwrite_output is not None:
+                cfg_values["overwrite_output"] = bool(cfg_overwrite_output)
+
+        explicit_values = {
+            "data_source": data_source,
+            "output_path": output_path,
+            "retry_policy": retry_policy,
+            "overwrite_output": overwrite_output,
+        }
+
+        overlap_fields = [
+            field
+            for field, explicit_value in explicit_values.items()
+            if field in cfg_values and explicit_value is not None and explicit_value != cfg_values[field]
+        ]
         if overlap_fields:
             # cfg usually represents the intended experiment setup, while explicit
             # parameters are secondary overrides used by downstream integrations.
@@ -213,36 +241,26 @@ class AgentRunner:
                 overlap_fields,
             )
 
-        resolved_data_source = data_source
-        if cfg_data_source is not None:
-            resolved_data_source = instantiate(
-                cfg=cfg_data_source,
-                recursive=True,
-                resolve_imports=True,
-            )
-
-        resolved_output_path = cfg_output_path if cfg_output_path is not None else output_path
-
-        resolved_retry_policy = retry_policy
-        if cfg_retry_policy is not None:
-            resolved_retry_policy = instantiate(
-                cfg=cfg_retry_policy,
-                recursive=True,
-                resolve_imports=True,
-            )
+        resolved_values = dict(explicit_values)
+        resolved_values.update(cfg_values)
 
         missing_fields: list[str] = []
-        if resolved_data_source is None:
+        if resolved_values["data_source"] is None:
             missing_fields.append("data_source")
-        if resolved_output_path is None:
+        if resolved_values["output_path"] is None:
             missing_fields.append("output_path")
         if missing_fields:
             raise ValueError(
                 f"run missing required values after merging cfg and explicit parameters: {', '.join(missing_fields)}"
             )
 
-        data_source = resolved_data_source
-        output_dir = Path(resolved_output_path)
+        data_source = resolved_values["data_source"]
+        resolved_retry_policy = resolved_values["retry_policy"]
+        resolved_overwrite_output = bool(resolved_values["overwrite_output"])
+        output_dir = Path(resolved_values["output_path"])
+
+        # Begin agent run
+
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Starting agent batch run output_dir=%s", output_dir)
 
@@ -296,7 +314,7 @@ class AgentRunner:
         for index, (prompt, extra, answer) in enumerate(data_source):
             summary["total"] += 1
             record_path = output_dir / f"{index:06d}.json"
-            if record_path.exists() and not overwrite:
+            if record_path.exists() and not resolved_overwrite_output:
                 logger.info("Skipping existing output index=%s path=%s", index, record_path)
                 summary["skipped"] += 1
                 continue

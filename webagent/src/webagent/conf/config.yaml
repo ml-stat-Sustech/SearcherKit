@@ -69,3 +69,4 @@ data_source:
   source: /path/to/data.jsonl
 
 output_path: outputs/agent_history
+overwrite_output: false
