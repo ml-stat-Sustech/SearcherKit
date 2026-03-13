@@ -1,0 +1,92 @@
+# WebExplorer-style WebAgent config.
+#
+# This recipe keeps the project's default WebAgent + QwenParser runtime and
+# aligns the model sampling settings with the official WebExplorer inference
+# code. It assumes the MCP server exposes `search` and `browse` tools.
+# If your MCP server uses `visit` instead of `browse`, rename `mcp_tool_name`
+# accordingly.
+
+defaults:
+  - agent@agent: WebAgent
+  - llm@agent.llm_client: OpenAIClient
+  - llm@agent.parser: QwenParser
+  - utils@retry_policy: RetryPolicy
+  - data_source@data_source: GenericDataSource
+  - _self_
+
+retry_policy:
+  max_tries: 3
+
+agent:
+  llm_client:
+    model: WebExplorer
+    api_key: "EMPTY"
+    base_url: http://127.0.0.1:6001/v1
+    default_kwargs:
+      temperature: 0.6
+      top_p: 0.95
+      max_tokens: 10000
+      stop:
+        - "<tool_response>"
+        - "\n<tool_response>"
+    concurrency_limit: 512
+  parser:
+    upstream_parsed: false
+  tools:
+    - target: pkg://webagent.tools.tool:GenericMCPTool
+      mcp_tool_name: search
+      endpoint: http://127.0.0.1:8300/mcp/
+      auth_header: ""
+      max_concurrency: 512
+      response_char_limit: 20000
+      enable_trace_logging: true
+      raise_on_fatal: true
+      final_answer_generator: null
+  system_prompt: |
+    You are a helpful assistant.
+
+    Solve the user's question by iteratively using the available tools. Search
+    for promising sources first, then browse the most relevant URLs to answer
+    specific sub-questions. Do not rely on unsupported prior knowledge when the
+    tools can verify the answer.
+
+    When you have enough evidence, provide the final answer inside
+    <answer></answer> and stop calling tools.
+  max_turn: 100
+  max_turn_prompt: |
+    You have reached the final step. You are forbidden to call any tools.
+    Based on all the information above, provide your final answer now in the format:
+    <answer>your answer</answer>
+  max_tokens: 110592
+  max_tokens_prompt: |
+    You have reached the maximum context length. You are forbidden to call any tools.
+    Based on all the information above, provide your final answer now in the format:
+    <answer>your answer</answer>
+  max_tokens_prompt_margin: 3072
+  llm_retry_policy:
+    target: pkg://webagent.utils.retry:RetryPolicy
+    max_tries: 5
+    exceptions:
+      - pkg://webagent.llm.parser:ParsingError
+    giveup: null
+    jitter: pkg://backoff:full_jitter
+    factor: 1.0
+    base: 2.0
+  tool_retry_policy:
+    target: pkg://webagent.utils.retry:RetryPolicy
+    max_tries: 5
+    exceptions:
+      - pkg://webagent.tools.tool:ToolRecoverableError
+    giveup: null
+    jitter: pkg://backoff:full_jitter
+    factor: 1.0
+    base: 2.0
+
+data_source:
+  source: data/browsecomp_plus_decrypted_qa.jsonl
+  input_key: question
+  answer_key: answer
+  max_items: null
+
+output_path: outputs/webexplorer_history
+overwrite_output: false
