@@ -1,0 +1,7 @@
+# SingleTurnAgent configuration
+# Class: webagent.agent.single_turn_agent.SingleTurnAgent
+
+target: pkg://webagent.agent.single_turn_agent:SingleTurnAgent
+llm_client: null
+parser: null
+system_prompt: ""

@@ -1,0 +1,47 @@
+"""
+Single-turn conversational agent.
+"""
+
+from __future__ import annotations
+
+from typing import Any, TYPE_CHECKING
+
+from webagent.llm.chat_types import ChatMessage, system, user
+from webagent.agent.agent import Agent
+from webagent.log import get_logger
+
+if TYPE_CHECKING:
+    from webagent.llm.client import Client
+    from webagent.llm.parser import Parser
+
+logger = get_logger(__name__)
+
+
+class SingleTurnAgent(Agent):
+    """
+    Minimal conversational agent that performs exactly one LLM completion.
+    """
+
+    def __init__(
+        self,
+        llm_client: Client,
+        parser: Parser,
+        system_prompt: str | None = None,
+    ):
+        self.client = llm_client
+        self.parser = parser
+        self.system_prompt = system_prompt or ""
+
+    async def run(self, query: str, extra: dict[str, Any] | None = None) -> list[ChatMessage]:
+        history: list[ChatMessage] = [
+            system(self.system_prompt),
+            user(query),
+        ]
+        logger.info("Starting single-turn agent query=%r", query[:120])
+
+        call_res_raw = await self.client.complete(self.parser.to_model(history))
+        call_res = next(iter(self.parser.from_model([call_res_raw])))
+        history.append(call_res)
+
+        logger.info("Single-turn agent completed messages=%s", len(history))
+        return history
