@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import asynccontextmanager
+from dataclasses import asdict, is_dataclass
+from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence, TYPE_CHECKING
 
 from webagent.agent.agent import Agent
@@ -19,6 +22,32 @@ def _preview_query(text: str, limit: int = 120) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
+
+
+def _serialize_message(message: Any) -> Any:
+    if is_dataclass(message):
+        return asdict(message)
+    return message
+
+
+def _history_stats(history: list[ChatMessage]) -> dict[str, int]:
+    turns = 0
+    tool_calls = 0
+    tool_messages = 0
+
+    for message in history:
+        if message.role == "assistant":
+            turns += 1
+            message_tool_calls = message.tool_calls or []
+            tool_calls += len(message_tool_calls)
+        elif message.role == "tool":
+            tool_messages += 1
+
+    return {
+        "turns": turns,
+        "tool_calls": tool_calls,
+        "tool_messages": tool_messages,
+    }
 
 
 class AgentRunner:
@@ -118,3 +147,194 @@ class AgentRunner:
             for query, extra in zip(query_list, extra_list)
         ]
         return tasks
+
+    async def run(
+        self,
+        *,
+        cfg: Any = None,
+        data_source: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
+        output_path: str | Path | None = None,
+        retry_policy: RetryPolicy | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Run a batch of agent tasks and persist per-sample trajectories plus summary stats.
+
+        Inputs can be provided either through `cfg` or through explicit parameters.
+        The effective runtime values are resolved from the union of both sources:
+        `data_source` and `output_path` are required after merging, while
+        `retry_policy` is optional. When both `cfg` and explicit parameters provide
+        the same field, `cfg` takes precedence. This matches the intended usage
+        where `cfg` defines the active experiment setup and explicit parameters are
+        mainly for secondary integrations or custom wrappers.
+
+        Args:
+            cfg: Optional config object. If present, `cfg.data_source`,
+                `cfg.output_path`, and `cfg.retry_policy` are used to fill runtime
+                values, with `data_source` and `output_path` treated as required.
+            data_source: Optional iterable yielding `(prompt, extra, answer)` tuples.
+                Used directly unless `cfg.data_source` is provided.
+            output_path: Optional output directory for trajectory files and
+                `summary.json`. Used unless `cfg.output_path` is provided.
+            retry_policy: Optional retry policy for each agent execution. Used
+                unless `cfg.retry_policy` is provided, in which case the policy is
+                instantiated from config.
+            overwrite: Whether to overwrite existing per-sample output files.
+
+        Returns:
+            A summary dictionary containing counts and aggregate statistics such as
+            completed samples, failed samples, total turns, total tool calls, and
+            their averages.
+
+        Raises:
+            ValueError: If merged inputs still do not provide required values.
+        """
+        cfg_data_source = cfg.get("data_source") if cfg is not None else None
+        cfg_output_path = cfg.get("output_path") if cfg is not None else None
+        cfg_retry_policy = cfg.get("retry_policy") if cfg is not None else None
+
+        if cfg is None and data_source is None and output_path is None and retry_policy is None:
+            raise ValueError(
+                "run requires cfg or explicit parameters; missing required values: data_source, output_path"
+            )
+
+        overlap_fields: list[str] = []
+        if cfg_data_source is not None and data_source is not None:
+            overlap_fields.append("data_source")
+        if cfg_output_path is not None and output_path is not None:
+            overlap_fields.append("output_path")
+        if cfg_retry_policy is not None and retry_policy is not None:
+            overlap_fields.append("retry_policy")
+        if overlap_fields:
+            # cfg usually represents the intended experiment setup, while explicit
+            # parameters are secondary overrides used by downstream integrations.
+            logger.warning(
+                "Both cfg and explicit parameters were provided for %s; cfg values take precedence",
+                overlap_fields,
+            )
+
+        resolved_data_source = data_source
+        if cfg_data_source is not None:
+            resolved_data_source = instantiate(
+                cfg=cfg_data_source,
+                recursive=True,
+                resolve_imports=True,
+            )
+
+        resolved_output_path = cfg_output_path if cfg_output_path is not None else output_path
+
+        resolved_retry_policy = retry_policy
+        if cfg_retry_policy is not None:
+            resolved_retry_policy = instantiate(
+                cfg=cfg_retry_policy,
+                recursive=True,
+                resolve_imports=True,
+            )
+
+        missing_fields: list[str] = []
+        if resolved_data_source is None:
+            missing_fields.append("data_source")
+        if resolved_output_path is None:
+            missing_fields.append("output_path")
+        if missing_fields:
+            raise ValueError(
+                f"run missing required values after merging cfg and explicit parameters: {', '.join(missing_fields)}"
+            )
+
+        data_source = resolved_data_source
+        output_dir = Path(resolved_output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        logger.info("Starting agent batch run output_dir=%s", output_dir)
+
+        summary: dict[str, Any] = {
+            "output_dir": str(output_dir),
+            "total": 0,
+            "completed": 0,
+            "failed": 0,
+            "skipped": 0,
+            "total_turns": 0,
+            "total_tool_calls": 0,
+            "avg_turns": 0.0,
+            "avg_tool_calls": 0.0,
+        }
+
+        async def _run_one(
+            index: int,
+            prompt: str,
+            extra: dict[str, Any] | None,
+            answer: Any,
+            record_path: Path,
+        ) -> dict[str, Any]:
+            history = await self.submit(
+                prompt,
+                extra=extra,
+                retry_policy=resolved_retry_policy,
+            )
+            stats = _history_stats(history)
+            payload = {
+                "index": index,
+                "input": prompt,
+                "extra": extra,
+                "answer": answer,
+                "history": [_serialize_message(message) for message in history],
+                "stats": stats,
+            }
+            record_path.write_text(
+                json.dumps(payload, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            logger.info(
+                "Wrote result index=%s path=%s turns=%s tool_calls=%s",
+                index,
+                record_path,
+                stats["turns"],
+                stats["tool_calls"],
+            )
+            return stats
+
+        scheduled_tasks: list[asyncio.Task[dict[str, Any]]] = []
+        for index, (prompt, extra, answer) in enumerate(data_source):
+            summary["total"] += 1
+            record_path = output_dir / f"{index:06d}.json"
+            if record_path.exists() and not overwrite:
+                logger.info("Skipping existing output index=%s path=%s", index, record_path)
+                summary["skipped"] += 1
+                continue
+
+            scheduled_tasks.append(
+                asyncio.create_task(_run_one(index, prompt, extra, answer, record_path))
+            )
+
+        logger.info("Scheduled batch requests count=%s", len(scheduled_tasks))
+
+        if scheduled_tasks:
+            results = await asyncio.gather(*scheduled_tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    summary["failed"] += 1
+                    logger.exception("Agent batch item failed", exc_info=result)
+                    continue
+                summary["completed"] += 1
+                summary["total_turns"] += result["turns"]
+                summary["total_tool_calls"] += result["tool_calls"]
+
+        completed = summary["completed"]
+        if completed:
+            summary["avg_turns"] = summary["total_turns"] / completed
+            summary["avg_tool_calls"] = summary["total_tool_calls"] / completed
+
+        summary_path = output_dir / "summary.json"
+        summary_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        logger.info(
+            "Completed agent batch run total=%s completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f",
+            summary["total"],
+            summary["completed"],
+            summary["failed"],
+            summary["skipped"],
+            summary["avg_turns"],
+            summary["avg_tool_calls"],
+        )
+        return summary
