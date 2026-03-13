@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from importlib import import_module
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 import re
 from typing import Any, Callable, Optional, TypeVar
 
@@ -13,9 +15,16 @@ from omegaconf import DictConfig, OmegaConf
 T = TypeVar("T")
 
 _PKG_PREFIX = "pkg://"
+_FILE_PREFIX = "file://"
 _PKG_IMPORT_RE = re.compile(
     r"^pkg://"
     r"(?P<module>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)"
+    r"(?::(?P<attr>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*))?"
+    r"$"
+)
+_FILE_IMPORT_RE = re.compile(
+    r"^file://"
+    r"(?P<path>.+?\.py)"
     r"(?::(?P<attr>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*))?"
     r"$"
 )
@@ -34,19 +43,37 @@ def _to_container(cfg: Any) -> Any:
 
 
 def _import_from_path(path: str) -> Any:
-    """Import a path like 'pkg://pkg.mod[:attr]' and return the module or attribute."""
+    """Import a path like 'pkg://pkg.mod[:attr]' or 'file:///abs/mod.py[:attr]'."""
     if not isinstance(path, str):
         raise ValueError(
-            f"target must be an import path like '{_PKG_PREFIX}pkg.mod[:attr]', got {path!r}"
+            "target must be an import path like "
+            f"'{_PKG_PREFIX}pkg.mod[:attr]' or '{_FILE_PREFIX}/abs/path.py[:attr]', got {path!r}"
         )
-    match = _PKG_IMPORT_RE.fullmatch(path)
-    if not match:
+    pkg_match = _PKG_IMPORT_RE.fullmatch(path)
+    file_match = _FILE_IMPORT_RE.fullmatch(path)
+    if not pkg_match and not file_match:
         raise ValueError(
-            f"target must be an import path like '{_PKG_PREFIX}pkg.mod[:attr]', got {path!r}"
+            "target must be an import path like "
+            f"'{_PKG_PREFIX}pkg.mod[:attr]' or '{_FILE_PREFIX}/abs/path.py[:attr]', got {path!r}"
         )
-    module_name = match.group("module")
-    attr_path = match.group("attr")
-    module = import_module(module_name)
+
+    if pkg_match:
+        module_name = pkg_match.group("module")
+        attr_path = pkg_match.group("attr")
+        module = import_module(module_name)
+    else:
+        assert file_match is not None
+        file_path = Path(file_match.group("path")).expanduser().resolve()
+        attr_path = file_match.group("attr")
+        if not file_path.is_file():
+            raise FileNotFoundError(f"target file '{file_path}' not found")
+        module_name = f"_webagent_config_file_{abs(hash(str(file_path)))}"
+        spec = spec_from_file_location(module_name, file_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"could not load module from '{file_path}'")
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+
     try:
         if not attr_path:
             return module
@@ -59,7 +86,7 @@ def _import_from_path(path: str) -> Any:
 
 
 def _resolve_imports(value: Any, *, target_key: str) -> Any:
-    """Recursively resolve pkg:// import strings (excluding target key)."""
+    """Recursively resolve pkg:// and file:// import strings (excluding target key)."""
     if isinstance(value, Mapping):
         out: dict[str, Any] = {}
         for key, item in value.items():
@@ -70,10 +97,18 @@ def _resolve_imports(value: Any, *, target_key: str) -> Any:
         return out
     if isinstance(value, list):
         return [_resolve_imports(item, target_key=target_key) for item in value]
-    if isinstance(value, str) and value.startswith(_PKG_PREFIX):
+    if isinstance(value, str) and (
+        value.startswith(_PKG_PREFIX) or value.startswith(_FILE_PREFIX)
+    ):
         try:
             return _import_from_path(value)
-        except (ModuleNotFoundError, ImportError, AttributeError, ValueError):
+        except (
+            ModuleNotFoundError,
+            ImportError,
+            AttributeError,
+            ValueError,
+            FileNotFoundError,
+        ):
             raise
     return value
 
