@@ -36,27 +36,6 @@ def _extract_answer_content(content: Any, *, record_path: Path) -> str:
         raise ValueError(f"record {record_path} assistant <answer> block is empty")
     return answer
 
-
-def iter_agent_run_record_items(
-    output_path: str | os.PathLike[str],
-) -> Iterator[tuple[Path, str, str, Any | None]]:
-    output_dir = Path(output_path)
-    for record_path in sorted(output_dir.glob("*.json")):
-        payload = json.loads(record_path.read_text(encoding="utf-8"))
-        history = payload.get("history", [])
-        if not isinstance(history, list) or not history:
-            raise ValueError(f"record {record_path} missing non-empty history")
-
-        last_message = history[-1]
-        if not isinstance(last_message, dict):
-            raise ValueError(f"record {record_path} last history item is not an object")
-        if last_message.get("role") != "assistant":
-            raise ValueError(f"record {record_path} last message role is not assistant")
-
-        response = _extract_answer_content(last_message.get("content"), record_path=record_path)
-        yield record_path, payload.get("input", ""), response, payload.get("answer")
-
-
 def build_agent() -> Agent:
     system_prompt = """Output exactly one valid JSON object and nothing else.
 
@@ -107,7 +86,7 @@ extracted_final_answer: The final exact answer extracted from the [response].
 
 reasoning: Explain why the extracted_final_answer is correct or incorrect based on [correct_answer], in the context of this [question]. You should judge whether the extracted_final_answer is semantically equivalent to [correct_answer], allowing the extracted_final_answer to be string variations of [correct_answer]. You should also allow the extracted_final_answer to be more precise or verbose than [correct_answer], as long as its additional details are correct. Do not comment on any background to the problem, do not attempt to solve the problem, do not argue for any answer different than [correct_answer], focus only on whether the answers are semantically equivalent.
 
-correct: Answer 'yes' if extracted_final_answer matches the [correct_answer] given above, or is within a small margin of error for numerical problems. Answer 'no' otherwise, i.e. if there if there is any inconsistency, ambiguity, non-equivalency, or if the extracted answer is incorrect.
+correct: Output true if extracted_final_answer matches the [correct_answer] given above, or is within a small margin of error for numerical problems. Output false otherwise, i.e. if there if there is any inconsistency, ambiguity, non-equivalency, or if the extracted answer is incorrect.
 
 
 confidence: The extracted confidence score between 0|\%| and 100|\%| from [response]. Put 100 if there is no confidence score available.
@@ -302,7 +281,7 @@ async def _run_evaluate(
     dst_dir = Path(output_dir)
     dst_dir.mkdir(parents=True, exist_ok=True)
     semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
-    records = list(iter_agent_run_record_items(src_dir))
+    record_paths = sorted(src_dir.glob("*.json"))
 
     async def _run_limited(record_path: Path, output_path: Path) -> Path:
         if semaphore is None:
@@ -313,7 +292,7 @@ async def _run_evaluate(
     tasks: list[asyncio.Task[Path]] = []
     pbar = tqdm(total=0)
 
-    for record_path, _, _, _ in records:
+    for record_path in record_paths:
         output_path = dst_dir / record_path.name
         if output_path.exists():
             continue
@@ -336,9 +315,9 @@ async def _run_evaluate(
             logger.exception("Evaluation task failed", exc_info=result)
 
     stats = _collect_stats(dst_dir)
-    stats["source_total"] = len(records)
+    stats["source_total"] = len(record_paths)
     stats["submitted"] = len(tasks)
-    stats["skipped_existing"] = len(records) - len(tasks)
+    stats["skipped_existing"] = len(record_paths) - len(tasks)
     stats["failed_requests"] = failed_requests
 
     summary_path = dst_dir / "summary.json"
