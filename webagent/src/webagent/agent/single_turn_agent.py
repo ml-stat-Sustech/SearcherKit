@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 
 from webagent.llm.chat_types import ChatMessage, system, user
 from webagent.agent.agent import Agent
-from webagent.log import get_logger
+from webagent.log import get_logger, log_context
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
@@ -37,11 +37,12 @@ class SingleTurnAgent(Agent):
             system(self.system_prompt),
             user(query),
         ]
-        logger.info("Starting single-turn agent query=%r", query[:120])
+        with log_context(turn=1):
+            logger.info("Starting single-turn agent query=%r", query[:120])
 
-        call_res_raw = await self.client.complete(self.parser.to_model(history))
-        call_res = next(iter(self.parser.from_model([call_res_raw])))
-        history.append(call_res)
+            call_res_raw = await self.client.complete(self.parser.to_model(history))
+            call_res = next(iter(self.parser.from_model([call_res_raw])))
+            history.append(call_res)
 
-        logger.info("Single-turn agent completed messages=%s", len(history))
+            logger.info("Single-turn agent completed messages=%s", len(history))
         return history

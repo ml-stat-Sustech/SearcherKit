@@ -19,6 +19,22 @@ modify `conf/config.yaml` or `conf/webagent.yaml` or create a new config
 python -m webagent --config-name=[config_name]
 ```
 
+Per-run logging defaults to:
+- `output_path/run.log` for global run-level logs
+- `output_path/traces/*.log` for per-sample trace logs
+
+You can override this with the `logging` section in config:
+
+```yaml
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
+```
+
 ## Key Notice
 
 Implement with following focus

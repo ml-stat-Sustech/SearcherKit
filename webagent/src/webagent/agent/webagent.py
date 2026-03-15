@@ -12,7 +12,7 @@ from openai import BadRequestError
 from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
-from webagent.log import get_logger
+from webagent.log import get_logger, log_context
 from webagent.utils.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
@@ -181,52 +181,53 @@ class WebAgent(Agent):
         self.context_limit_exceeded = False
         while True:
             turn += 1
-            logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
-            try:
-                if self.llm_retry_policy is None:
-                    call_res = await self.parse_and_call_llm(history)
-                else:
-                    call_res = await retry_async(
-                        self.parse_and_call_llm,
-                        history,
-                        policy=self.llm_retry_policy,
-                        op_name="webagent.parse_and_call_llm",
-                        log=logger,
-                    )
-            except BadRequestError as exc:
-                if not self._is_context_length_error(exc):
-                    raise
-                self.context_limit_exceeded = True
-                logger.info(
-                    "Stopping reasoning loop due to model context limit model_error=%s",
-                    str(exc),
-                )
-                break
-            
-            history.append(call_res)
-            
-            if call_res.tool_calls:
-                results = await self.call_tools(call_res.tool_calls)
-                if results:
-                    history.append(tool(results))
-                    
-            if sum(map(lambda x: x.role == "tool", history)) == self.max_turn - 1 and self.max_turn_prompt:
-                history.append(user(self.max_turn_prompt))
-                
-            if self.max_tokens_prompt:
-                if self.context_token_size == -1:
-                    logger.warning("LLM usage metadata missing; skip max_tokens reminder")
-                elif self.context_token_size > self.max_tokens - self.max_tokens_prompt_margin:
+            with log_context(turn=turn):
+                logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
+                try:
+                    if self.llm_retry_policy is None:
+                        call_res = await self.parse_and_call_llm(history)
+                    else:
+                        call_res = await retry_async(
+                            self.parse_and_call_llm,
+                            history,
+                            policy=self.llm_retry_policy,
+                            op_name="webagent.parse_and_call_llm",
+                            log=logger,
+                        )
+                except BadRequestError as exc:
+                    if not self._is_context_length_error(exc):
+                        raise
+                    self.context_limit_exceeded = True
                     logger.info(
-                        "Context token limit approaching total_tokens=%s limit=%s margin=%s",
-                        self.context_token_size,
-                        self.max_tokens,
-                        self.max_tokens_prompt_margin,
+                        "Stopping reasoning loop due to model context limit model_error=%s",
+                        str(exc),
                     )
-                    history.append(user(self.max_tokens_prompt))
-            
-            if await self.stop(history):
-                break
+                    break
+
+                history.append(call_res)
+
+                if call_res.tool_calls:
+                    results = await self.call_tools(call_res.tool_calls)
+                    if results:
+                        history.append(tool(results))
+
+                if sum(map(lambda x: x.role == "tool", history)) == self.max_turn - 1 and self.max_turn_prompt:
+                    history.append(user(self.max_turn_prompt))
+
+                if self.max_tokens_prompt:
+                    if self.context_token_size == -1:
+                        logger.warning("LLM usage metadata missing; skip max_tokens reminder")
+                    elif self.context_token_size > self.max_tokens - self.max_tokens_prompt_margin:
+                        logger.info(
+                            "Context token limit approaching total_tokens=%s limit=%s margin=%s",
+                            self.context_token_size,
+                            self.max_tokens,
+                            self.max_tokens_prompt_margin,
+                        )
+                        history.append(user(self.max_tokens_prompt))
+
+                if await self.stop(history):
+                    break
             
         logger.info("Reasoning completed agent=WebAgent turns=%s messages=%s", turn, len(history))
         return history

@@ -1,14 +1,233 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 import os
+from pathlib import Path
+from threading import RLock
+from typing import Any
 
 DEFAULT_LOGGER_NAME = "webagent"
 DEFAULT_LOG_LEVEL = "INFO"
 LOG_LEVEL_ENV_VARS = ("WEBAGENT_LOG_LEVEL", "LOG_LEVEL")
 LOG_FORMAT = "%(asctime)s %(filename)s:%(lineno)d %(levelname)s %(message)s"
+RUN_LOG_FORMAT = (
+    "%(asctime)s %(filename)s:%(lineno)d %(levelname)s "
+    "[scope=%(scope)s run=%(run_id)s sample=%(sample_id)s trace=%(trace_id)s turn=%(turn)s] "
+    "%(message)s"
+)
+TRACE_LOG_FORMAT = "%(asctime)s %(filename)s:%(lineno)d %(levelname)s [turn=%(turn)s] %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _CONSOLE_HANDLER_NAME = "webagent.console"
+_RUN_FILE_HANDLER_NAME = "webagent.run_file"
+_TRACE_ROUTER_HANDLER_NAME = "webagent.trace_router"
+_DEFAULT_TRACE_FILENAME_TEMPLATE = "{sample_id}_{trace_id}.log"
+
+_scope_var: ContextVar[str] = ContextVar("webagent_log_scope", default="global")
+_run_id_var: ContextVar[str] = ContextVar("webagent_run_id", default="-")
+_sample_id_var: ContextVar[str] = ContextVar("webagent_sample_id", default="-")
+_trace_id_var: ContextVar[str] = ContextVar("webagent_trace_id", default="-")
+_turn_var: ContextVar[str] = ContextVar("webagent_turn", default="-")
+
+
+def _normalize_context_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    text = str(value).strip()
+    return text or "-"
+
+
+def _sanitize_path_part(value: str) -> str:
+    allowed = []
+    for char in value:
+        if char.isalnum() or char in {"-", "_", "."}:
+            allowed.append(char)
+        else:
+            allowed.append("_")
+    sanitized = "".join(allowed).strip("._")
+    return sanitized or "unknown"
+
+
+def get_log_context() -> dict[str, str]:
+    return {
+        "scope": _scope_var.get(),
+        "run_id": _run_id_var.get(),
+        "sample_id": _sample_id_var.get(),
+        "trace_id": _trace_id_var.get(),
+        "turn": _turn_var.get(),
+    }
+
+
+def get_trace_id() -> str | None:
+    trace_id = _trace_id_var.get()
+    return None if trace_id == "-" else trace_id
+
+
+@contextmanager
+def log_context(
+    *,
+    scope: str | None = None,
+    run_id: str | int | None = None,
+    sample_id: str | int | None = None,
+    trace_id: str | None = None,
+    turn: str | int | None = None,
+):
+    tokens: list[tuple[ContextVar[str], Token[str]]] = []
+    updates = (
+        (_scope_var, scope),
+        (_run_id_var, run_id),
+        (_sample_id_var, sample_id),
+        (_trace_id_var, trace_id),
+        (_turn_var, turn),
+    )
+    try:
+        for variable, value in updates:
+            if value is None:
+                continue
+            tokens.append((variable, variable.set(_normalize_context_value(value))))
+        yield
+    finally:
+        for variable, token in reversed(tokens):
+            variable.reset(token)
+
+
+class ContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        context = get_log_context()
+        record.scope = context["scope"]
+        record.run_id = context["run_id"]
+        record.sample_id = context["sample_id"]
+        record.trace_id = context["trace_id"]
+        record.turn = context["turn"]
+        return True
+
+
+class ScopeFilter(logging.Filter):
+    def __init__(self, *scopes: str) -> None:
+        super().__init__()
+        self._scopes = set(scopes)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return getattr(record, "scope", "global") in self._scopes
+
+
+class TraceRouterHandler(logging.Handler):
+    def __init__(
+        self,
+        *,
+        trace_dir: str | Path,
+        level: int = logging.DEBUG,
+        filename_template: str = _DEFAULT_TRACE_FILENAME_TEMPLATE,
+    ) -> None:
+        super().__init__(level=level)
+        self.trace_dir = Path(trace_dir)
+        self.filename_template = filename_template
+        self._handlers: dict[str, logging.FileHandler] = {}
+        self._lock = RLock()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if getattr(record, "scope", "global") != "trace":
+            return
+        trace_id = _normalize_context_value(getattr(record, "trace_id", "-"))
+        if trace_id == "-":
+            return
+        try:
+            handler = self._get_handler(
+                sample_id=_normalize_context_value(getattr(record, "sample_id", "-")),
+                trace_id=trace_id,
+            )
+            handler.emit(record)
+        except Exception:
+            self.handleError(record)
+
+    def close(self) -> None:
+        with self._lock:
+            for handler in self._handlers.values():
+                handler.close()
+            self._handlers.clear()
+        super().close()
+
+    def _get_handler(self, *, sample_id: str, trace_id: str) -> logging.FileHandler:
+        with self._lock:
+            handler = self._handlers.get(trace_id)
+            if handler is not None:
+                return handler
+
+            self.trace_dir.mkdir(parents=True, exist_ok=True)
+            file_name = self.filename_template.format(
+                sample_id=_sanitize_path_part(sample_id),
+                trace_id=_sanitize_path_part(trace_id),
+            )
+            handler = logging.FileHandler(self.trace_dir / file_name, encoding="utf-8")
+            handler.setLevel(self.level)
+            handler.setFormatter(logging.Formatter(TRACE_LOG_FORMAT, datefmt=DATE_FORMAT))
+            _ensure_handler_filter(handler, ContextFilter)
+            self._handlers[trace_id] = handler
+            return handler
+
+
+def _ensure_handler_filter(handler: logging.Handler, filter_cls: type[logging.Filter], *args: Any) -> None:
+    for existing_filter in handler.filters:
+        if isinstance(existing_filter, filter_cls):
+            return
+    handler.addFilter(filter_cls(*args))
+
+
+def _remove_handler(base_logger: logging.Logger, handler_name: str) -> None:
+    for handler in list(base_logger.handlers):
+        if handler.get_name() != handler_name:
+            continue
+        base_logger.removeHandler(handler)
+        handler.close()
+
+
+def configure_run_logging(
+    *,
+    output_dir: str | Path,
+    cfg: Any = None,
+) -> logging.Logger:
+    base_logger = logging.getLogger(DEFAULT_LOGGER_NAME)
+    resolved_level = _resolve_log_level(cfg.get("level") if cfg else None)
+    trace_cfg = cfg.get("trace") if cfg else None
+    trace_enabled = bool(trace_cfg.get("enabled", True)) if trace_cfg else True
+    trace_level = _resolve_log_level(trace_cfg.get("level")) if trace_cfg else resolved_level
+    trace_dir = (
+        Path(trace_cfg.get("dir")) if trace_cfg and trace_cfg.get("dir") else Path(output_dir) / "traces"
+    )
+    filename_template = (
+        str(trace_cfg.get("filename_template"))
+        if trace_cfg and trace_cfg.get("filename_template")
+        else _DEFAULT_TRACE_FILENAME_TEMPLATE
+    )
+    run_log_path = (
+        Path(cfg.get("global_file"))
+        if cfg and cfg.get("global_file")
+        else Path(output_dir) / "run.log"
+    )
+
+    _remove_handler(base_logger, _RUN_FILE_HANDLER_NAME)
+    run_log_path.parent.mkdir(parents=True, exist_ok=True)
+    run_handler = logging.FileHandler(run_log_path, encoding="utf-8")
+    run_handler.set_name(_RUN_FILE_HANDLER_NAME)
+    run_handler.setLevel(resolved_level)
+    run_handler.setFormatter(logging.Formatter(RUN_LOG_FORMAT, datefmt=DATE_FORMAT))
+    _ensure_handler_filter(run_handler, ContextFilter)
+    _ensure_handler_filter(run_handler, ScopeFilter, "global")
+    base_logger.addHandler(run_handler)
+
+    _remove_handler(base_logger, _TRACE_ROUTER_HANDLER_NAME)
+    if trace_enabled:
+        trace_handler = TraceRouterHandler(
+            trace_dir=trace_dir,
+            level=trace_level,
+            filename_template=filename_template,
+        )
+        trace_handler.set_name(_TRACE_ROUTER_HANDLER_NAME)
+        _ensure_handler_filter(trace_handler, ContextFilter)
+        base_logger.addHandler(trace_handler)
+
+    return base_logger
 
 
 def _resolve_log_level(level: str | int | None = None) -> int:
@@ -49,6 +268,7 @@ def setup_logger(
 
     handler.setLevel(resolved_level)
     handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    _ensure_handler_filter(handler, ContextFilter)
 
     logger = logging.getLogger(name)
     if name.startswith(f"{DEFAULT_LOGGER_NAME}."):
