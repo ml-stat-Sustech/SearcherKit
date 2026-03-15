@@ -194,7 +194,7 @@ class QwenParser(Parser):
                 function = tc["function"]
                 arguments = function["arguments"]
                 try:
-                    arguments = json.loads(arguments)
+                    arguments = json.loads(arguments.strip())
                 except json.JSONDecodeError:
                     raise ParsingError(f"Invalid JSON payload for <tool_call>: {arguments}")
                 
@@ -236,7 +236,7 @@ class QwenParser(Parser):
         for payload_raw in re.findall(tool_call_pattern, tool_calls_raw):
             # Notice: Keep tool call order
             try:
-                tc = json.loads(payload_raw)
+                tc = json.loads(payload_raw.strip())
                 tool_calls.append(
                     ToolCall(
                         id="chatcmpl-tool-"+str(cnt),

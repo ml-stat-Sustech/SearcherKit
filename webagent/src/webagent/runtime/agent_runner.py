@@ -370,9 +370,8 @@ class AgentRunner:
                             "stats": stats,
                         }
                         record_path.write_text(
-                            json.dumps(payload, ensure_ascii=False, default=str),
-                            encoding="utf-8",
-                            indent=2
+                            json.dumps(payload, ensure_ascii=False, default=str, indent=2),
+                            encoding="utf-8"
                         )
                         update_trace_metadata(
                             execution={
