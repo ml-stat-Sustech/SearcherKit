@@ -265,7 +265,10 @@ class QwenParser(Parser):
                 "arguments": tc.arguments,
             }
             lines.append("<tool_call>")
-            lines.append(json.dumps(payload, ensure_ascii=False))
+            lines.append(json.dumps(payload,
+                                    sort_keys=True,
+                                    separators=(',', ':'),
+                                    ensure_ascii=False))
             lines.append("</tool_call>")
         return "\n".join(lines)
 
@@ -296,7 +299,9 @@ class QwenParser(Parser):
                             "parameters": parameters,
                         },
                     },
-                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(',', ':'),
+                    ensure_ascii=False
                 )
             )
 

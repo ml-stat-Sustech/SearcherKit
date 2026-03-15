@@ -298,7 +298,7 @@ class AgentRunner:
                 "stats": stats,
             }
             record_path.write_text(
-                json.dumps(payload, ensure_ascii=False, default=str),
+                json.dumps(payload, ensure_ascii=False, indent=2, default=str),
                 encoding="utf-8",
             )
             logger.info(
