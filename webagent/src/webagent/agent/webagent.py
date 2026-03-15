@@ -200,7 +200,7 @@ class WebAgent(Agent):
             return True
         if sum(map(lambda x: x.role == "tool", history)) >= self.max_turn:
             return True
-        if self.context_limit_exceeded:
+        if self.context_limit_exceeded or self.context_token_size >= self.max_tokens:
             return True
         return False
     
