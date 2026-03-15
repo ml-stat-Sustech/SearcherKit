@@ -414,6 +414,8 @@ class AgentRunner:
                     )
                     return stats
 
+            start_time = time.time()
+
             scheduled_tasks: list[tuple[asyncio.Task[dict[str, Any]], int, str]] = []
             for index, (prompt, extra, answer) in enumerate(data_source):
                 summary["total"] += 1
@@ -450,6 +452,8 @@ class AgentRunner:
                     summary["total_turns"] += result["turns"]
                     summary["total_tool_calls"] += result["tool_calls"]
 
+            summary["time_elapsed"] = time.time() - start_time
+
             completed = summary["completed"]
             if completed:
                 summary["avg_turns"] = summary["total_turns"] / completed
@@ -461,8 +465,9 @@ class AgentRunner:
                 encoding="utf-8",
             )
             logger.info(
-                "Completed agent batch run total=%s completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f",
+                "Completed agent batch run total=%s in %.3f sec. completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f",
                 summary["total"],
+                summary["time_elapsed"],
                 summary["completed"],
                 summary["failed"],
                 summary["skipped"],

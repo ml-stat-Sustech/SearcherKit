@@ -182,7 +182,7 @@ class Tool(abc.ABC):
             )
             if self.raise_argument_validation_error:
                 raise
-            return f"[Tool] invalid arguments for {self.name}: {exc}"
+            return f"[Tool] invalid arguments {str(kwargs)}:\n{exc}"
         return await self._run(model.model_dump())
 
     @abc.abstractmethod
