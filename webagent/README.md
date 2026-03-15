@@ -31,9 +31,14 @@ logging:
   trace:
     enabled: true
     dir: ${output_path}/traces
+    format: text
     level: DEBUG
     filename_template: "{sample_id}_{trace_id}.log"
 ```
+
+Set `logging.trace.format: json` to emit one structured JSON trace per sample instead
+of plain text logs. JSON traces include execution metadata, aggregate stats, raw
+event logs, and a `tool_interactions` array with tool-call / tool-response previews.
 
 ## Key Notice
 

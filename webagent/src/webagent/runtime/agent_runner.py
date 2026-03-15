@@ -6,11 +6,12 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from pathlib import Path
+import time
 from typing import Any, Callable, Iterable, Sequence, TYPE_CHECKING
 from uuid import uuid4
 
 from webagent.agent.agent import Agent
-from webagent.log import configure_run_logging, get_logger, log_context
+from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
 from webagent.utils.config import instantiate
 from webagent.utils.retry import retry_async, RetryPolicy
 
@@ -50,6 +51,16 @@ def _history_stats(history: list[ChatMessage]) -> dict[str, int]:
         "tool_calls": tool_calls,
         "tool_messages": tool_messages,
     }
+
+
+def _tool_summary(history: list[ChatMessage]) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for message in history:
+        if message.role != "assistant":
+            continue
+        for tool_call in message.tool_calls or []:
+            summary[tool_call.name] = summary.get(tool_call.name, 0) + 1
+    return summary
 
 
 def _make_run_id() -> str:
@@ -306,6 +317,8 @@ class AgentRunner:
                 trace_id: str,
             ) -> dict[str, Any]:
                 sample_id = f"{index:06d}"
+                started_at = datetime.now().isoformat(timespec="milliseconds")
+                started_monotonic = time.monotonic()
                 with log_context(
                     scope="trace",
                     run_id=run_id,
@@ -313,6 +326,24 @@ class AgentRunner:
                     trace_id=trace_id,
                     turn="-",
                 ):
+                    update_trace_metadata(
+                        run_id=run_id,
+                        sample_id=sample_id,
+                        run={"run_id": run_id},
+                        sample={
+                            "index": index,
+                            "sample_id": sample_id,
+                            "trace_id": trace_id,
+                            "query": prompt,
+                            "record_path": str(record_path),
+                            "started_at": started_at,
+                        },
+                        execution={
+                            "status": "running",
+                            "success": None,
+                            "error": None,
+                        },
+                    )
                     logger.info(
                         "Starting sample execution index=%s output=%s query=%r",
                         index,
@@ -325,27 +356,54 @@ class AgentRunner:
                             extra=extra,
                             retry_policy=resolved_retry_policy,
                         )
-                    except Exception:
+                        stats = _history_stats(history)
+                        tool_summary = _tool_summary(history)
+                        ended_at = datetime.now().isoformat(timespec="milliseconds")
+                        elapsed = round(time.monotonic() - started_monotonic, 3)
+                        payload = {
+                            "index": index,
+                            "trace_id": trace_id,
+                            "input": prompt,
+                            "extra": extra,
+                            "answer": answer,
+                            "history": [_serialize_message(message) for message in history],
+                            "stats": stats,
+                        }
+                        record_path.write_text(
+                            json.dumps(payload, ensure_ascii=False, default=str),
+                            encoding="utf-8",
+                        )
+                        update_trace_metadata(
+                            execution={
+                                "status": "completed",
+                                "success": True,
+                                "error": None,
+                                "ended_at": ended_at,
+                                "elapsed": elapsed,
+                            },
+                            stats={
+                                **stats,
+                                "tool_summary": tool_summary,
+                            },
+                        )
+                    except Exception as exc:
+                        ended_at = datetime.now().isoformat(timespec="milliseconds")
+                        elapsed = round(time.monotonic() - started_monotonic, 3)
+                        update_trace_metadata(
+                            execution={
+                                "status": "failed",
+                                "success": False,
+                                "error": str(exc),
+                                "ended_at": ended_at,
+                                "elapsed": elapsed,
+                            },
+                        )
                         logger.exception(
                             "Sample execution failed index=%s query=%r",
                             index,
                             _preview_query(prompt),
                         )
                         raise
-                    stats = _history_stats(history)
-                    payload = {
-                        "index": index,
-                        "trace_id": trace_id,
-                        "input": prompt,
-                        "extra": extra,
-                        "answer": answer,
-                        "history": [_serialize_message(message) for message in history],
-                        "stats": stats,
-                    }
-                    record_path.write_text(
-                        json.dumps(payload, ensure_ascii=False, default=str),
-                        encoding="utf-8",
-                    )
                     logger.info(
                         "Completed sample execution index=%s path=%s turns=%s tool_calls=%s",
                         index,

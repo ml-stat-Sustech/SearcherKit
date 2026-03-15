@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
+from datetime import datetime
 import os
 from pathlib import Path
 from threading import RLock
@@ -22,7 +24,8 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 _CONSOLE_HANDLER_NAME = "webagent.console"
 _RUN_FILE_HANDLER_NAME = "webagent.run_file"
 _TRACE_ROUTER_HANDLER_NAME = "webagent.trace_router"
-_DEFAULT_TRACE_FILENAME_TEMPLATE = "{sample_id}_{trace_id}.log"
+_DEFAULT_TRACE_TEXT_FILENAME_TEMPLATE = "{sample_id}_{trace_id}.log"
+_DEFAULT_TRACE_JSON_FILENAME_TEMPLATE = "{sample_id}_{trace_id}.json"
 
 _scope_var: ContextVar[str] = ContextVar("webagent_log_scope", default="global")
 _run_id_var: ContextVar[str] = ContextVar("webagent_run_id", default="-")
@@ -112,13 +115,21 @@ class ScopeFilter(logging.Filter):
         return getattr(record, "scope", "global") in self._scopes
 
 
-class TraceRouterHandler(logging.Handler):
+def _deep_merge_dict(target: dict[str, Any], updates: dict[str, Any]) -> None:
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_merge_dict(target[key], value)
+        else:
+            target[key] = value
+
+
+class TextTraceRouterHandler(logging.Handler):
     def __init__(
         self,
         *,
         trace_dir: str | Path,
         level: int = logging.DEBUG,
-        filename_template: str = _DEFAULT_TRACE_FILENAME_TEMPLATE,
+        filename_template: str = _DEFAULT_TRACE_TEXT_FILENAME_TEMPLATE,
     ) -> None:
         super().__init__(level=level)
         self.trace_dir = Path(trace_dir)
@@ -137,7 +148,7 @@ class TraceRouterHandler(logging.Handler):
                 sample_id=_normalize_context_value(getattr(record, "sample_id", "-")),
                 trace_id=trace_id,
             )
-            handler.emit(record)
+            handler.handle(record)
         except Exception:
             self.handleError(record)
 
@@ -167,6 +178,110 @@ class TraceRouterHandler(logging.Handler):
             return handler
 
 
+class JsonTraceRouterHandler(logging.Handler):
+    def __init__(
+        self,
+        *,
+        trace_dir: str | Path,
+        level: int = logging.DEBUG,
+        filename_template: str = _DEFAULT_TRACE_JSON_FILENAME_TEMPLATE,
+    ) -> None:
+        super().__init__(level=level)
+        self.trace_dir = Path(trace_dir)
+        self.filename_template = filename_template
+        self._states: dict[str, dict[str, Any]] = {}
+        self._lock = RLock()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if getattr(record, "scope", "global") != "trace":
+            return
+        trace_id = _normalize_context_value(getattr(record, "trace_id", "-"))
+        if trace_id == "-":
+            return
+
+        try:
+            with self._lock:
+                state = self._get_state(
+                    sample_id=_normalize_context_value(getattr(record, "sample_id", "-")),
+                    trace_id=trace_id,
+                    run_id=_normalize_context_value(getattr(record, "run_id", "-")),
+                )
+                state["events"].append(
+                    {
+                        "timestamp": datetime.fromtimestamp(record.created).isoformat(timespec="milliseconds"),
+                        "level": record.levelname,
+                        "logger": record.name,
+                        "message": record.getMessage(),
+                        "filename": record.filename,
+                        "lineno": record.lineno,
+                        "turn": _normalize_context_value(getattr(record, "turn", "-")),
+                    }
+                )
+                self._flush_state(state)
+        except Exception:
+            self.handleError(record)
+
+    def update_trace(self, *, trace_id: str, sample_id: str | None = None, run_id: str | None = None, **fields: Any) -> None:
+        normalized_trace_id = _normalize_context_value(trace_id)
+        if normalized_trace_id == "-":
+            return
+        with self._lock:
+            state = self._get_state(
+                sample_id=_normalize_context_value(sample_id),
+                trace_id=normalized_trace_id,
+                run_id=_normalize_context_value(run_id),
+            )
+            _deep_merge_dict(state, fields)
+            self._flush_state(state)
+
+    def close(self) -> None:
+        with self._lock:
+            for state in self._states.values():
+                self._flush_state(state)
+            self._states.clear()
+        super().close()
+
+    def _get_state(self, *, sample_id: str, trace_id: str, run_id: str) -> dict[str, Any]:
+        state = self._states.get(trace_id)
+        if state is not None:
+            if sample_id != "-" and state["sample"].get("sample_id") in {None, "-"}:
+                state["sample"]["sample_id"] = sample_id
+            if run_id != "-" and state["run"].get("run_id") in {None, "-"}:
+                state["run"]["run_id"] = run_id
+            return state
+
+        self.trace_dir.mkdir(parents=True, exist_ok=True)
+        file_name = self.filename_template.format(
+            sample_id=_sanitize_path_part(sample_id),
+            trace_id=_sanitize_path_part(trace_id),
+        )
+        state = {
+            "run": {
+                "run_id": run_id,
+            },
+            "sample": {
+                "sample_id": sample_id,
+                "trace_id": trace_id,
+                "trace_file": file_name,
+            },
+            "execution": {},
+            "stats": {},
+            "tool_interactions": [],
+            "events": [],
+            "_path": str(self.trace_dir / file_name),
+        }
+        self._states[trace_id] = state
+        return state
+
+    def _flush_state(self, state: dict[str, Any]) -> None:
+        path = Path(state["_path"])
+        payload = {key: value for key, value in state.items() if key != "_path"}
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+
 def _ensure_handler_filter(handler: logging.Handler, filter_cls: type[logging.Filter], *args: Any) -> None:
     for existing_filter in handler.filters:
         if isinstance(existing_filter, filter_cls):
@@ -182,6 +297,82 @@ def _remove_handler(base_logger: logging.Logger, handler_name: str) -> None:
         handler.close()
 
 
+def _get_named_handler(handler_name: str) -> logging.Handler | None:
+    base_logger = logging.getLogger(DEFAULT_LOGGER_NAME)
+    for handler in base_logger.handlers:
+        if handler.get_name() == handler_name:
+            return handler
+    return None
+
+
+def update_trace_metadata(
+    *,
+    trace_id: str | None = None,
+    sample_id: str | int | None = None,
+    run_id: str | int | None = None,
+    **fields: Any,
+) -> None:
+    context = get_log_context()
+    active_trace_id = trace_id or get_trace_id()
+    if active_trace_id is None:
+        return
+    handler = _get_named_handler(_TRACE_ROUTER_HANDLER_NAME)
+    if not isinstance(handler, JsonTraceRouterHandler):
+        return
+    handler.update_trace(
+        trace_id=active_trace_id,
+        sample_id=(
+            _normalize_context_value(sample_id)
+            if sample_id is not None
+            else context["sample_id"]
+        ),
+        run_id=(
+            _normalize_context_value(run_id)
+            if run_id is not None
+            else context["run_id"]
+        ),
+        **fields,
+    )
+
+
+def append_trace_interaction(
+    interaction: dict[str, Any],
+    *,
+    trace_id: str | None = None,
+    sample_id: str | int | None = None,
+    run_id: str | int | None = None,
+) -> None:
+    context = get_log_context()
+    active_trace_id = trace_id or get_trace_id()
+    if active_trace_id is None:
+        return
+    handler = _get_named_handler(_TRACE_ROUTER_HANDLER_NAME)
+    if not isinstance(handler, JsonTraceRouterHandler):
+        return
+    normalized_trace_id = _normalize_context_value(active_trace_id)
+    normalized_sample_id = (
+        _normalize_context_value(sample_id)
+        if sample_id is not None
+        else context["sample_id"]
+    )
+    normalized_run_id = (
+        _normalize_context_value(run_id)
+        if run_id is not None
+        else context["run_id"]
+    )
+    payload = dict(interaction)
+    payload.setdefault("timestamp", datetime.now().isoformat(timespec="milliseconds"))
+    payload.setdefault("turn", context["turn"])
+    with handler._lock:
+        state = handler._get_state(
+            sample_id=normalized_sample_id,
+            trace_id=normalized_trace_id,
+            run_id=normalized_run_id,
+        )
+        state["tool_interactions"].append(payload)
+        handler._flush_state(state)
+
+
 def configure_run_logging(
     *,
     output_dir: str | Path,
@@ -192,14 +383,25 @@ def configure_run_logging(
     trace_cfg = cfg.get("trace") if cfg else None
     trace_enabled = bool(trace_cfg.get("enabled", True)) if trace_cfg else True
     trace_level = _resolve_log_level(trace_cfg.get("level")) if trace_cfg else resolved_level
+    trace_format = str(trace_cfg.get("format", "text")).strip().lower() if trace_cfg else "text"
     trace_dir = (
         Path(trace_cfg.get("dir")) if trace_cfg and trace_cfg.get("dir") else Path(output_dir) / "traces"
     )
-    filename_template = (
+    raw_filename_template = (
         str(trace_cfg.get("filename_template"))
         if trace_cfg and trace_cfg.get("filename_template")
-        else _DEFAULT_TRACE_FILENAME_TEMPLATE
+        else None
     )
+    if raw_filename_template is None:
+        filename_template = (
+            _DEFAULT_TRACE_JSON_FILENAME_TEMPLATE
+            if trace_format == "json"
+            else _DEFAULT_TRACE_TEXT_FILENAME_TEMPLATE
+        )
+    elif trace_format == "json" and raw_filename_template == _DEFAULT_TRACE_TEXT_FILENAME_TEMPLATE:
+        filename_template = _DEFAULT_TRACE_JSON_FILENAME_TEMPLATE
+    else:
+        filename_template = raw_filename_template
     run_log_path = (
         Path(cfg.get("global_file"))
         if cfg and cfg.get("global_file")
@@ -218,11 +420,20 @@ def configure_run_logging(
 
     _remove_handler(base_logger, _TRACE_ROUTER_HANDLER_NAME)
     if trace_enabled:
-        trace_handler = TraceRouterHandler(
-            trace_dir=trace_dir,
-            level=trace_level,
-            filename_template=filename_template,
-        )
+        if trace_format == "json":
+            trace_handler: logging.Handler = JsonTraceRouterHandler(
+                trace_dir=trace_dir,
+                level=trace_level,
+                filename_template=filename_template,
+            )
+        elif trace_format == "text":
+            trace_handler = TextTraceRouterHandler(
+                trace_dir=trace_dir,
+                level=trace_level,
+                filename_template=filename_template,
+            )
+        else:
+            raise ValueError(f"Unsupported trace log format: {trace_format}")
         trace_handler.set_name(_TRACE_ROUTER_HANDLER_NAME)
         _ensure_handler_filter(trace_handler, ContextFilter)
         base_logger.addHandler(trace_handler)

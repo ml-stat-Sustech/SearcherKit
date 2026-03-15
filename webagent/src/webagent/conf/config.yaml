@@ -76,5 +76,6 @@ logging:
   trace:
     enabled: true
     dir: ${output_path}/traces
+    format: text
     level: DEBUG
     filename_template: "{sample_id}_{trace_id}.log"

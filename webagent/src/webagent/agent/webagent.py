@@ -5,6 +5,7 @@ Web Agent. Based on Alibaba Tongyi DeepResearch repo
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Iterable, Any, TYPE_CHECKING
 
 from openai import BadRequestError
@@ -12,7 +13,7 @@ from openai import BadRequestError
 from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
-from webagent.log import get_logger, log_context
+from webagent.log import append_trace_interaction, get_logger, log_context
 from webagent.utils.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
@@ -20,6 +21,13 @@ if TYPE_CHECKING:
     from webagent.tools.tool import Tool
 
 logger = get_logger(__name__)
+
+
+def _preview_payload(value: Any, limit: int = 300) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
 
 class WebAgent(Agent):
     """
@@ -112,6 +120,12 @@ class WebAgent(Agent):
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
         for tc in tool_call_list:
+            logger.info(
+                "Dispatching tool call id=%s name=%s args=%s",
+                tc.id,
+                tc.name,
+                _preview_payload(dict(tc.arguments)),
+            )
             async def return_error(name):
                 return f"[Tool] Tool {name} doesn't exist"
             if tc.name not in self.tool_dict:
@@ -131,7 +145,55 @@ class WebAgent(Agent):
                     )
                 )
             
-        return await asyncio.gather(*tool_call_coros)
+        gathered = await asyncio.gather(*tool_call_coros, return_exceptions=True)
+        first_exception: Exception | None = None
+        results: list[str] = []
+        for tc, result in zip(tool_call_list, gathered):
+            if isinstance(result, Exception):
+                if first_exception is None:
+                    first_exception = result
+                logger.error(
+                    "Tool response id=%s name=%s failed error=%r",
+                    tc.id,
+                    tc.name,
+                    result,
+                )
+                append_trace_interaction(
+                    {
+                        "call_id": tc.id,
+                        "tool_name": tc.name,
+                        "arguments": dict(tc.arguments),
+                        "arguments_preview": _preview_payload(dict(tc.arguments)),
+                        "response_preview": None,
+                        "response_length": 0,
+                        "status": "failed",
+                        "error": str(result),
+                    }
+                )
+                continue
+
+            response_preview = _preview_payload(result)
+            logger.info(
+                "Tool response id=%s name=%s response=%s",
+                tc.id,
+                tc.name,
+                response_preview,
+            )
+            append_trace_interaction(
+                {
+                    "call_id": tc.id,
+                    "tool_name": tc.name,
+                    "arguments": dict(tc.arguments),
+                    "arguments_preview": _preview_payload(dict(tc.arguments)),
+                    "response_preview": response_preview,
+                    "response_length": len(result),
+                    "status": "error" if result.startswith("[Tool]") else "completed",
+                }
+            )
+            results.append(result)
+        if first_exception is not None:
+            raise first_exception
+        return results
     
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
