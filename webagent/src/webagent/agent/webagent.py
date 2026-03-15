@@ -268,13 +268,11 @@ class WebAgent(Agent):
 
                 history.append(call_res)
 
-                if call_res.tool_calls:
-                    results = await self.call_tools(call_res.tool_calls)
-                    if results:
-                        history.append(tool(results))
-
                 if sum(map(lambda x: x.role == "tool", history)) == self.max_turn - 1 and self.max_turn_prompt:
                     history.append(user(self.max_turn_prompt))
+                    if await self.stop(history):
+                        break
+                    continue # Stop making tool calls
 
                 if self.max_tokens_prompt:
                     if self.context_token_size == -1:
@@ -287,6 +285,14 @@ class WebAgent(Agent):
                             self.max_tokens_prompt_margin,
                         )
                         history.append(user(self.max_tokens_prompt))
+                        if await self.stop(history):
+                            break
+                        continue # Stop making tool calls
+
+                if call_res.tool_calls:
+                    results = await self.call_tools(call_res.tool_calls)
+                    if results:
+                        history.append(tool(results))
 
                 if await self.stop(history):
                     break
