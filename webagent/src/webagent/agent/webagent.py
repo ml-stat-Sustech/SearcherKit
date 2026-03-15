@@ -5,6 +5,7 @@ Web Agent. Based on Alibaba Tongyi DeepResearch repo
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Iterable, Any, TYPE_CHECKING
 
 from openai import BadRequestError
@@ -12,7 +13,7 @@ from openai import BadRequestError
 from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
-from webagent.log import get_logger
+from webagent.log import append_trace_interaction, get_logger, log_context
 from webagent.utils.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
@@ -20,6 +21,13 @@ if TYPE_CHECKING:
     from webagent.tools.tool import Tool
 
 logger = get_logger(__name__)
+
+
+def _preview_payload(value: Any, limit: int = 300) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
 
 class WebAgent(Agent):
     """
@@ -112,6 +120,12 @@ class WebAgent(Agent):
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
         for tc in tool_call_list:
+            logger.info(
+                "Dispatching tool call id=%s name=%s args=%s",
+                tc.id,
+                tc.name,
+                _preview_payload(dict(tc.arguments)),
+            )
             async def return_error(name):
                 return f"[Tool] Tool {name} doesn't exist"
             if tc.name not in self.tool_dict:
@@ -131,7 +145,55 @@ class WebAgent(Agent):
                     )
                 )
             
-        return await asyncio.gather(*tool_call_coros)
+        gathered = await asyncio.gather(*tool_call_coros, return_exceptions=True)
+        first_exception: Exception | None = None
+        results: list[str] = []
+        for tc, result in zip(tool_call_list, gathered):
+            if isinstance(result, Exception):
+                if first_exception is None:
+                    first_exception = result
+                logger.error(
+                    "Tool response id=%s name=%s failed error=%r",
+                    tc.id,
+                    tc.name,
+                    result,
+                )
+                append_trace_interaction(
+                    {
+                        "call_id": tc.id,
+                        "tool_name": tc.name,
+                        "arguments": dict(tc.arguments),
+                        "arguments_preview": _preview_payload(dict(tc.arguments)),
+                        "response_preview": None,
+                        "response_length": 0,
+                        "status": "failed",
+                        "error": str(result),
+                    }
+                )
+                continue
+
+            response_preview = _preview_payload(result)
+            logger.info(
+                "Tool response id=%s name=%s response=%s",
+                tc.id,
+                tc.name,
+                response_preview,
+            )
+            append_trace_interaction(
+                {
+                    "call_id": tc.id,
+                    "tool_name": tc.name,
+                    "arguments": dict(tc.arguments),
+                    "arguments_preview": _preview_payload(dict(tc.arguments)),
+                    "response_preview": response_preview,
+                    "response_length": len(result),
+                    "status": "error" if result.startswith("[Tool]") else "completed",
+                }
+            )
+            results.append(result)
+        if first_exception is not None:
+            raise first_exception
+        return results
     
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
@@ -181,52 +243,53 @@ class WebAgent(Agent):
         self.context_limit_exceeded = False
         while True:
             turn += 1
-            logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
-            try:
-                if self.llm_retry_policy is None:
-                    call_res = await self.parse_and_call_llm(history)
-                else:
-                    call_res = await retry_async(
-                        self.parse_and_call_llm,
-                        history,
-                        policy=self.llm_retry_policy,
-                        op_name="webagent.parse_and_call_llm",
-                        log=logger,
-                    )
-            except BadRequestError as exc:
-                if not self._is_context_length_error(exc):
-                    raise
-                self.context_limit_exceeded = True
-                logger.info(
-                    "Stopping reasoning loop due to model context limit model_error=%s",
-                    str(exc),
-                )
-                break
-            
-            history.append(call_res)
-            
-            if call_res.tool_calls:
-                results = await self.call_tools(call_res.tool_calls)
-                if results:
-                    history.append(tool(results))
-                    
-            if sum(map(lambda x: x.role == "tool", history)) == self.max_turn - 1 and self.max_turn_prompt:
-                history.append(user(self.max_turn_prompt))
-                
-            if self.max_tokens_prompt:
-                if self.context_token_size == -1:
-                    logger.warning("LLM usage metadata missing; skip max_tokens reminder")
-                elif self.context_token_size > self.max_tokens - self.max_tokens_prompt_margin:
+            with log_context(turn=turn):
+                logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
+                try:
+                    if self.llm_retry_policy is None:
+                        call_res = await self.parse_and_call_llm(history)
+                    else:
+                        call_res = await retry_async(
+                            self.parse_and_call_llm,
+                            history,
+                            policy=self.llm_retry_policy,
+                            op_name="webagent.parse_and_call_llm",
+                            log=logger,
+                        )
+                except BadRequestError as exc:
+                    if not self._is_context_length_error(exc):
+                        raise
+                    self.context_limit_exceeded = True
                     logger.info(
-                        "Context token limit approaching total_tokens=%s limit=%s margin=%s",
-                        self.context_token_size,
-                        self.max_tokens,
-                        self.max_tokens_prompt_margin,
+                        "Stopping reasoning loop due to model context limit model_error=%s",
+                        str(exc),
                     )
-                    history.append(user(self.max_tokens_prompt))
-            
-            if await self.stop(history):
-                break
+                    break
+
+                history.append(call_res)
+
+                if call_res.tool_calls:
+                    results = await self.call_tools(call_res.tool_calls)
+                    if results:
+                        history.append(tool(results))
+
+                if sum(map(lambda x: x.role == "tool", history)) == self.max_turn - 1 and self.max_turn_prompt:
+                    history.append(user(self.max_turn_prompt))
+
+                if self.max_tokens_prompt:
+                    if self.context_token_size == -1:
+                        logger.warning("LLM usage metadata missing; skip max_tokens reminder")
+                    elif self.context_token_size > self.max_tokens - self.max_tokens_prompt_margin:
+                        logger.info(
+                            "Context token limit approaching total_tokens=%s limit=%s margin=%s",
+                            self.context_token_size,
+                            self.max_tokens,
+                            self.max_tokens_prompt_margin,
+                        )
+                        history.append(user(self.max_tokens_prompt))
+
+                if await self.stop(history):
+                    break
             
         logger.info("Reasoning completed agent=WebAgent turns=%s messages=%s", turn, len(history))
         return history

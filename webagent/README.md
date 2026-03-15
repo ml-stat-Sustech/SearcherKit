@@ -19,6 +19,27 @@ modify `conf/config.yaml` or `conf/webagent.yaml` or create a new config
 python -m webagent --config-name=[config_name]
 ```
 
+Per-run logging defaults to:
+- `output_path/run.log` for global run-level logs
+- `output_path/traces/*.log` for per-sample trace logs
+
+You can override this with the `logging` section in config:
+
+```yaml
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
+```
+
+Set `logging.trace.format: json` to emit one structured JSON trace per sample instead
+of plain text logs. JSON traces include execution metadata, aggregate stats, raw
+event logs, and a `tool_interactions` array with tool-call / tool-response previews.
+
 ## Key Notice
 
 Implement with following focus

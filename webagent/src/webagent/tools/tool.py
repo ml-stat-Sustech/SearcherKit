@@ -67,7 +67,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from webagent.utils.json_schema import json_schema_to_pydantic
 
-from webagent.log import get_logger, setup_logger
+from webagent.log import get_logger, get_trace_id, setup_logger
 
 logger = get_logger(__name__)
 
@@ -630,7 +630,7 @@ class MCPTool(Tool):
         if not self._connected or self._client is None:
             await self.init(trace_id=trace_id)
 
-        trace = trace_id or self._new_trace_id()
+        trace = trace_id or get_trace_id() or self._new_trace_id()
 
         # semaphore 控制并发数不超过 max_concurrency
         async with self._semaphore:
@@ -808,7 +808,7 @@ class MCPTool(Tool):
         """
         if level == logging.DEBUG and not self.settings.enable_trace_logging:
             return
-        payload = {"trace_id": trace_id or "-", **fields}
+        payload = {"trace_id": trace_id or get_trace_id() or "-", **fields}
         logger.log(level, "%s | %s", message, payload)
 
 

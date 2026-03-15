@@ -4,11 +4,14 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 from dataclasses import asdict, is_dataclass
+from datetime import datetime
 from pathlib import Path
+import time
 from typing import Any, Callable, Iterable, Sequence, TYPE_CHECKING
+from uuid import uuid4
 
 from webagent.agent.agent import Agent
-from webagent.log import get_logger
+from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
 from webagent.utils.config import instantiate
 from webagent.utils.retry import retry_async, RetryPolicy
 
@@ -48,6 +51,25 @@ def _history_stats(history: list[ChatMessage]) -> dict[str, int]:
         "tool_calls": tool_calls,
         "tool_messages": tool_messages,
     }
+
+
+def _tool_summary(history: list[ChatMessage]) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    for message in history:
+        if message.role != "assistant":
+            continue
+        for tool_call in message.tool_calls or []:
+            summary[tool_call.name] = summary.get(tool_call.name, 0) + 1
+    return summary
+
+
+def _make_run_id() -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{timestamp}_{uuid4().hex[:6]}"
+
+
+def _make_trace_id() -> str:
+    return uuid4().hex[:12]
 
 
 class AgentRunner:
@@ -220,12 +242,16 @@ class AgentRunner:
             cfg_overwrite_output = cfg.get("overwrite_output")
             if cfg_overwrite_output is not None:
                 cfg_values["overwrite_output"] = bool(cfg_overwrite_output)
+            cfg_logging = cfg.get("logging")
+            if cfg_logging is not None:
+                cfg_values["logging"] = cfg_logging
 
         explicit_values = {
             "data_source": data_source,
             "output_path": output_path,
             "retry_policy": retry_policy,
             "overwrite_output": overwrite_output,
+            "logging": None,
         }
 
         overlap_fields = [
@@ -258,101 +284,189 @@ class AgentRunner:
         resolved_retry_policy = resolved_values["retry_policy"]
         resolved_overwrite_output = bool(resolved_values["overwrite_output"])
         output_dir = Path(resolved_values["output_path"])
+        logging_cfg = resolved_values["logging"]
 
         # Begin agent run
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info("Starting agent batch run output_dir=%s", output_dir)
+        configure_run_logging(output_dir=output_dir, cfg=logging_cfg)
+        run_id = _make_run_id()
 
-        summary: dict[str, Any] = {
-            "output_dir": str(output_dir),
-            "total": 0,
-            "completed": 0,
-            "failed": 0,
-            "skipped": 0,
-            "total_turns": 0,
-            "total_tool_calls": 0,
-            "avg_turns": 0.0,
-            "avg_tool_calls": 0.0,
-        }
+        with log_context(scope="global", run_id=run_id):
+            logger.info("Starting agent batch run output_dir=%s", output_dir)
 
-        async def _run_one(
-            index: int,
-            prompt: str,
-            extra: dict[str, Any] | None,
-            answer: Any,
-            record_path: Path,
-        ) -> dict[str, Any]:
-            history = await self.submit(
-                prompt,
-                extra=extra,
-                retry_policy=resolved_retry_policy,
-            )
-            stats = _history_stats(history)
-            payload = {
-                "index": index,
-                "input": prompt,
-                "extra": extra,
-                "answer": answer,
-                "history": [_serialize_message(message) for message in history],
-                "stats": stats,
+            summary: dict[str, Any] = {
+                "run_id": run_id,
+                "output_dir": str(output_dir),
+                "total": 0,
+                "completed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_turns": 0,
+                "total_tool_calls": 0,
+                "avg_turns": 0.0,
+                "avg_tool_calls": 0.0,
             }
-            record_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+
+            async def _run_one(
+                index: int,
+                prompt: str,
+                extra: dict[str, Any] | None,
+                answer: Any,
+                record_path: Path,
+                trace_id: str,
+            ) -> dict[str, Any]:
+                sample_id = f"{index:06d}"
+                started_at = datetime.now().isoformat(timespec="milliseconds")
+                started_monotonic = time.monotonic()
+                with log_context(
+                    scope="trace",
+                    run_id=run_id,
+                    sample_id=sample_id,
+                    trace_id=trace_id,
+                    turn="-",
+                ):
+                    update_trace_metadata(
+                        run_id=run_id,
+                        sample_id=sample_id,
+                        run={"run_id": run_id},
+                        sample={
+                            "index": index,
+                            "sample_id": sample_id,
+                            "trace_id": trace_id,
+                            "query": prompt,
+                            "record_path": str(record_path),
+                            "started_at": started_at,
+                        },
+                        execution={
+                            "status": "running",
+                            "success": None,
+                            "error": None,
+                        },
+                    )
+                    logger.info(
+                        "Starting sample execution index=%s output=%s query=%r",
+                        index,
+                        record_path,
+                        _preview_query(prompt),
+                    )
+                    try:
+                        history = await self.submit(
+                            prompt,
+                            extra=extra,
+                            retry_policy=resolved_retry_policy,
+                        )
+                        stats = _history_stats(history)
+                        tool_summary = _tool_summary(history)
+                        ended_at = datetime.now().isoformat(timespec="milliseconds")
+                        elapsed = round(time.monotonic() - started_monotonic, 3)
+                        payload = {
+                            "index": index,
+                            "trace_id": trace_id,
+                            "input": prompt,
+                            "extra": extra,
+                            "answer": answer,
+                            "history": [_serialize_message(message) for message in history],
+                            "stats": stats,
+                        }
+                        record_path.write_text(
+                            json.dumps(payload, ensure_ascii=False, default=str),
+                            encoding="utf-8",
+                            indent=2
+                        )
+                        update_trace_metadata(
+                            execution={
+                                "status": "completed",
+                                "success": True,
+                                "error": None,
+                                "ended_at": ended_at,
+                                "elapsed": elapsed,
+                            },
+                            stats={
+                                **stats,
+                                "tool_summary": tool_summary,
+                            },
+                        )
+                    except Exception as exc:
+                        ended_at = datetime.now().isoformat(timespec="milliseconds")
+                        elapsed = round(time.monotonic() - started_monotonic, 3)
+                        update_trace_metadata(
+                            execution={
+                                "status": "failed",
+                                "success": False,
+                                "error": str(exc),
+                                "ended_at": ended_at,
+                                "elapsed": elapsed,
+                            },
+                        )
+                        logger.exception(
+                            "Sample execution failed index=%s query=%r",
+                            index,
+                            _preview_query(prompt),
+                        )
+                        raise
+                    logger.info(
+                        "Completed sample execution index=%s path=%s turns=%s tool_calls=%s",
+                        index,
+                        record_path,
+                        stats["turns"],
+                        stats["tool_calls"],
+                    )
+                    return stats
+
+            scheduled_tasks: list[tuple[asyncio.Task[dict[str, Any]], int, str]] = []
+            for index, (prompt, extra, answer) in enumerate(data_source):
+                summary["total"] += 1
+                record_path = output_dir / f"{index:06d}.json"
+                if record_path.exists() and not resolved_overwrite_output:
+                    logger.info("Skipping existing output index=%s path=%s", index, record_path)
+                    summary["skipped"] += 1
+                    continue
+
+                trace_id = _make_trace_id()
+                task = asyncio.create_task(
+                    _run_one(index, prompt, extra, answer, record_path, trace_id),
+                    name=f"sample-{index:06d}",
+                )
+                scheduled_tasks.append((task, index, trace_id))
+
+            logger.info("Scheduled batch requests count=%s", len(scheduled_tasks))
+
+            if scheduled_tasks:
+                task_list = [task for task, _, _ in scheduled_tasks]
+                results = await asyncio.gather(*task_list, return_exceptions=True)
+                for (task, index, trace_id), result in zip(scheduled_tasks, results):
+                    if isinstance(result, Exception):
+                        summary["failed"] += 1
+                        logger.error(
+                            "Agent batch item failed index=%s trace_id=%s task=%s error=%r",
+                            index,
+                            trace_id,
+                            task.get_name(),
+                            result,
+                        )
+                        continue
+                    summary["completed"] += 1
+                    summary["total_turns"] += result["turns"]
+                    summary["total_tool_calls"] += result["tool_calls"]
+
+            completed = summary["completed"]
+            if completed:
+                summary["avg_turns"] = summary["total_turns"] / completed
+                summary["avg_tool_calls"] = summary["total_tool_calls"] / completed
+
+            summary_path = output_dir / "summary.json"
+            summary_path.write_text(
+                json.dumps(summary, ensure_ascii=False, indent=2, default=str),
                 encoding="utf-8",
             )
             logger.info(
-                "Wrote result index=%s path=%s turns=%s tool_calls=%s",
-                index,
-                record_path,
-                stats["turns"],
-                stats["tool_calls"],
+                "Completed agent batch run total=%s completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f",
+                summary["total"],
+                summary["completed"],
+                summary["failed"],
+                summary["skipped"],
+                summary["avg_turns"],
+                summary["avg_tool_calls"],
             )
-            return stats
-
-        scheduled_tasks: list[asyncio.Task[dict[str, Any]]] = []
-        for index, (prompt, extra, answer) in enumerate(data_source):
-            summary["total"] += 1
-            record_path = output_dir / f"{index:06d}.json"
-            if record_path.exists() and not resolved_overwrite_output:
-                logger.info("Skipping existing output index=%s path=%s", index, record_path)
-                summary["skipped"] += 1
-                continue
-
-            scheduled_tasks.append(
-                asyncio.create_task(_run_one(index, prompt, extra, answer, record_path))
-            )
-
-        logger.info("Scheduled batch requests count=%s", len(scheduled_tasks))
-
-        if scheduled_tasks:
-            results = await asyncio.gather(*scheduled_tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, Exception):
-                    summary["failed"] += 1
-                    logger.exception("Agent batch item failed", exc_info=result)
-                    continue
-                summary["completed"] += 1
-                summary["total_turns"] += result["turns"]
-                summary["total_tool_calls"] += result["tool_calls"]
-
-        completed = summary["completed"]
-        if completed:
-            summary["avg_turns"] = summary["total_turns"] / completed
-            summary["avg_tool_calls"] = summary["total_tool_calls"] / completed
-
-        summary_path = output_dir / "summary.json"
-        summary_path.write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
-        logger.info(
-            "Completed agent batch run total=%s completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f",
-            summary["total"],
-            summary["completed"],
-            summary["failed"],
-            summary["skipped"],
-            summary["avg_turns"],
-            summary["avg_tool_calls"],
-        )
-        return summary
+            return summary
