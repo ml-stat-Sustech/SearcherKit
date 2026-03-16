@@ -196,9 +196,9 @@ class WebAgent(Agent):
         return results
     
     async def stop(self, history: list[ChatMessage]) -> bool:
-        if history[-1].role == "assistant": # no more tool responses
+        if history[-1].role == "assistant" and not history[-1].tool_calls: # no more tool calls
             return True
-        if sum(map(lambda x: x.role == "tool", history)) >= self.max_turn:
+        if sum(map(lambda x: x.role == "assistant", history)) >= self.max_turn:
             return True
         if self.context_limit_exceeded or self.context_token_size >= self.max_tokens:
             return True

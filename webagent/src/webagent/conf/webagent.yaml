@@ -69,6 +69,7 @@ data_source:
   answer_key: answer
   max_items: null
 
+max_concurrency: 16
 output_path: outputs/agent_history
 overwrite_output: false
 

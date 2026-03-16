@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 async def _run(cfg: DictConfig) -> None:
     agent_cfg = cfg.get("agent")
-    runner = AgentRunner(agent_config=agent_cfg)
+    runner = AgentRunner(agent_config=agent_cfg, max_concurrency=cfg.get("max_concurrency"))
     await runner.run(cfg=cfg)
 
 

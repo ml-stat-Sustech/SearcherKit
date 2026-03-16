@@ -94,3 +94,12 @@ data_source:
 
 output_path: outputs/websailor_history
 overwrite_output: false
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
