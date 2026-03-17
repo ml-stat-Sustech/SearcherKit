@@ -11,13 +11,19 @@ class ToolCall:
     id: str
     name: str
     arguments: Mapping[str, Any]
+    
+@dataclass(slots=True)
+class Tool:
+    name: str
+    description: str | None
+    arguments_schema: Mapping[str, Any] | None # openai tool schema
 
 
 @dataclass(slots=True)
 class SystemMessage:
     content: str
     role: Literal["system"] = "system"
-    tools: list[Mapping[str, Any]] | None = None
+    tools: list[Tool] | None = None
     extensions: dict[str, Any] | None = None
 
 
@@ -45,7 +51,7 @@ class ToolMessage:
 
 ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
-def system(text: str, tools: list[Mapping[str, Any]] | None = None, extensions: dict[str, Any] | None = None) -> SystemMessage:
+def system(text: str, tools: list[Tool] | None = None, extensions: dict[str, Any] | None = None) -> SystemMessage:
     return SystemMessage(content=text, tools=tools, extensions=extensions)
 
 def user(text: str, extensions: dict[str, Any] | None = None) -> UserMessage:

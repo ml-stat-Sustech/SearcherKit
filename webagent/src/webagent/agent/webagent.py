@@ -11,6 +11,7 @@ from typing import Iterable, Any, TYPE_CHECKING
 from openai import BadRequestError
 
 from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
+from webagent.llm.chat_types import Tool as ToolMsgType
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
 from webagent.log import append_trace_interaction, get_logger, log_context
@@ -18,7 +19,7 @@ from webagent.utils.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
-    from webagent.tools.tool import Tool
+    from webagent.tools import BaseTool
 
 logger = get_logger(__name__)
 
@@ -43,7 +44,7 @@ class WebAgent(Agent):
     def __init__(self, 
                  llm_client: Client, 
                  parser: Parser, 
-                 tools: Iterable[Tool], 
+                 tools: Iterable[BaseTool], 
                  system_prompt: str | None = None, 
                  max_turn: int = 10,
                  max_turn_prompt: str | None = None,
@@ -234,7 +235,10 @@ class WebAgent(Agent):
         history: list[ChatMessage] = [
             system(
                 self.system_prompt,
-                tools=[tool.dump_metadata() for tool in self.tool_dict.values()],
+                tools=[ToolMsgType(tool.name, 
+                                   tool.description, 
+                                   tool.arguments_schema.model_json_schema() if tool.arguments_schema else None) 
+                       for tool in self.tool_dict.values()],
             ),
             user(query),
         ]

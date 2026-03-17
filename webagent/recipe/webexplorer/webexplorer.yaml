@@ -19,9 +19,9 @@ retry_policy:
 
 agent:
   llm_client:
-    model: WebExplorer
+    model: /home/jovyan/WebExplorer-8B
     api_key: "EMPTY"
-    base_url: http://127.0.0.1:6001/v1
+    base_url: http://127.0.0.1:8001/v1
     default_kwargs:
       temperature: 0.6
       top_p: 0.95
@@ -32,8 +32,9 @@ agent:
     concurrency_limit: 512
   parser:
     upstream_parsed: false
+    drop_thinking: false
   tools:
-    - target: pkg://webagent.tools.tool:GenericMCPTool
+    - target: pkg://webagent.tools:MCPTool
       mcp_tool_name: search
       endpoint: http://127.0.0.1:8300/mcp/
       auth_header: ""
@@ -76,14 +77,14 @@ agent:
     target: pkg://webagent.utils.retry:RetryPolicy
     max_tries: 5
     exceptions:
-      - pkg://webagent.tools.tool:ToolRecoverableError
+      - pkg://webagent.tools:ToolRecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
 
 data_source:
-  source: data/browsecomp_plus_decrypted_qa.jsonl
+  source: /home/jovyan/BrowseComp-Plus/data/browsecomp_plus_decrypted_qa.jsonl
   input_key: question
   answer_key: answer
   max_items: null

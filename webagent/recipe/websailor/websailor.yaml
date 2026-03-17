@@ -28,24 +28,13 @@ agent:
   parser:
     target: file://recipe/websailor/websailor_parser.py:WebSailorParser
   tools:
-    - target: pkg://webagent.tools.tool:GenericMCPTool
-      mcp_tool_name: search
+    - target: pkg://webagent.tools:MCPTool
+      name: search
       endpoint: http://127.0.0.1:8300/mcp/
-      auth_header: ""
+      transport: "streamable-http"
       max_concurrency: 512
-      response_char_limit: 20000
       enable_trace_logging: true
       raise_on_fatal: true
-      final_answer_generator: null
-    - target: pkg://webagent.tools.tool:GenericMCPTool
-      mcp_tool_name: visit
-      endpoint: http://127.0.0.1:8300/mcp/
-      auth_header: ""
-      max_concurrency: 512
-      response_char_limit: 120000
-      enable_trace_logging: true
-      raise_on_fatal: true
-      final_answer_generator: null
   system_prompt: |
     You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up until you find the corresponding information.
 
@@ -56,17 +45,17 @@ agent:
     2. **Repeated Verification**: Before presenting a Final Answer, you will **cross-check** and **validate the information** you've gathered to confirm its accuracy and reliability.
 
     3. **Attention to Detail**: You will carefully analyze each information source to ensure that all data is current, relevant, and from credible origins.
-  max_turn: 40
+  max_turn: 100
   max_turn_prompt: |
     You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
     <think>your final thinking</think>
     <answer>your answer</answer>
-  max_tokens: 31244
+  max_tokens: 32768
   max_tokens_prompt: |
     You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
     <think>your final thinking</think>
     <answer>your answer</answer>
-  max_tokens_prompt_margin: 500
+  max_tokens_prompt_margin: 3072
   llm_retry_policy:
     target: pkg://webagent.utils.retry:RetryPolicy
     max_tries: 5
@@ -80,7 +69,7 @@ agent:
     target: pkg://webagent.utils.retry:RetryPolicy
     max_tries: 5
     exceptions:
-      - pkg://webagent.tools.tool:ToolRecoverableError
+      - pkg://webagent.tools:ToolRecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
@@ -92,7 +81,8 @@ data_source:
   answer_key: answer
   max_items: null
 
-output_path: outputs/websailor_history
+max_concurrency: 32
+output_path: outputs/WebSailor
 overwrite_output: false
 
 logging:

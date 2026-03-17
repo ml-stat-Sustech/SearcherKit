@@ -14,7 +14,8 @@ import json
 from typing import Any, Iterable, Mapping
 
 from webagent.llm.chat_types import ChatMessage, ToolCall, assistant, system, user
-from webagent.tools.tool import Tool
+from webagent.llm.chat_types import Tool as ToolType
+from webagent.tools import to_openai_tool
 from webagent.log import get_logger
 from webagent.utils.mapping import get_first_or_default, get_or_default
 
@@ -271,7 +272,7 @@ class QwenParser(Parser):
         return "\n".join(lines)
 
 
-    def qwen_tools_block(self, tools: Iterable[Mapping[str, Any]]) -> str:
+    def qwen_tools_block(self, tools: Iterable[ToolType]) -> str:
         lines = [
             "# Tools",
             "",
@@ -281,23 +282,16 @@ class QwenParser(Parser):
             "<tools>",
         ]
         for tool in tools:
-            description = tool.get("description") or ""
-            parameters = tool.get("arguments_schema") or {}
+            description = tool.description or ""
+            parameters = tool.arguments_schema or {}
             if not description:
-                logger.warning("Tool %s has no description", tool.get("name"))
+                logger.warning("Tool %s has no description", tool.name)
             if not parameters:
-                logger.warning("Tool %s has no arguments schema", tool.get("name"))
+                logger.warning("Tool %s has no arguments schema", tool.name)
             lines.append(
                 json.dumps(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": tool.get("name"),
-                            "description": description,
-                            "parameters": parameters,
-                        },
-                    },
-                    ensure_ascii=False
+                    to_openai_tool(tool.name, tool.description, tool.arguments_schema),
+                    ensure_ascii=False,
                 )
             )
 

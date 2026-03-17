@@ -4,7 +4,9 @@ import json
 from typing import Any, Iterable, Mapping
 
 from webagent.llm.chat_types import ChatMessage
+from webagent.llm.chat_types import Tool as ToolMsgType
 from webagent.llm.parser import QwenParser
+from webagent.tools import to_openai_tool
 
 
 class WebSailorParser(QwenParser):
@@ -57,7 +59,7 @@ class WebSailorParser(QwenParser):
         message_list = list(messages)
         out: list[dict[str, Any]] = []
 
-        available_tools: list[Mapping[str, Any]] | None = None
+        available_tools: list[ToolMsgType] | None = None
         for message in message_list:
             if message.role == "system" and message.tools:
                 available_tools = message.tools
@@ -102,24 +104,24 @@ class WebSailorParser(QwenParser):
     def render_first_user_prompt(
         self,
         query: str,
-        tools: Iterable[Mapping[str, Any]] | None,
+        tools: Iterable[ToolMsgType] | None,
     ) -> str:
         tools_block = self.render_tools_block(tools or [])
         prefix = self.first_user_prefix.format(tools_block=tools_block)
         return prefix + self.user_role_prefix + query
 
-    def render_tools_block(self, tools: Iterable[Mapping[str, Any]]) -> str:
+    def render_tools_block(self, tools: Iterable[ToolMsgType]) -> str:
         rendered_tools: list[str] = []
         for tool in tools:
             rendered_tools.append(
                 json.dumps(
                     {
-                        "name": tool.get("name"),
-                        "description": tool.get("description") or "",
-                        "parameters": tool.get("arguments_schema") or {},
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.arguments_schema
                     },
                     ensure_ascii=False,
-                    indent=2,
+                    indent=2
                 )
             )
 

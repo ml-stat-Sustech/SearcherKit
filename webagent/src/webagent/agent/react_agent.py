@@ -7,15 +7,15 @@ from __future__ import annotations
 import asyncio
 from typing import Iterable, Any, TYPE_CHECKING
 
-from webagent.llm.chat_types import tool, system, user
+from webagent.llm.chat_types import tool, system, user, ChatMessage, ToolCall
+from webagent.llm.chat_types import Tool as ToolMsgType
 from webagent.agent.agent import Agent
 from webagent.log import get_logger
 
 if TYPE_CHECKING:
-    from webagent.llm.chat_types import ChatMessage, ToolCall
     from webagent.llm.client import Client
     from webagent.llm.parser import Parser
-    from webagent.tools.tool import Tool
+    from webagent.tools.base import BaseTool
 
 logger = get_logger(__name__)
 
@@ -23,7 +23,7 @@ class ReactAgent(Agent):
     """
     Agent implementation example. React Agent that returns when no more tool calls are requested
     """
-    def __init__(self, llm_client: Client, parser: Parser, tools: Iterable[Tool], system_prompt: str | None = None):
+    def __init__(self, llm_client: Client, parser: Parser, tools: Iterable[BaseTool], system_prompt: str | None = None):
         self.client = llm_client
         self.parser = parser
         self.tool_dict = {t.name: t for t in tools}
@@ -51,7 +51,11 @@ class ReactAgent(Agent):
         history: list[ChatMessage] = [
             system(
                 self.system_prompt,
-                tools=[tool.dump_metadata() for tool in self.tool_dict.values()],
+                tools=[ToolMsgType(
+                    name=tool.name,
+                    description=tool.description,
+                    arguments_schema=tool.arguments_schema.model_json_schema() if tool.arguments_schema else None,
+                    ) for tool in self.tool_dict.values()],
             ),
             user(query),
         ]

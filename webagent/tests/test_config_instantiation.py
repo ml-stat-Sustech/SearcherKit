@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 
 from webagent.llm.client import OpenAIClient
 from webagent.runtime.agent_runner import AgentRunner
-from webagent.tools.tool import GenericMCPTool
+from webagent.tools import MCPTool
 from webagent.utils.retry import RetryPolicy
 
 
@@ -35,7 +35,7 @@ def test_agent_components_from_config() -> None:
         assert tool_name, "tool name must be provided in config"
         assert tool_name in agent.tool_dict
         tool = agent.tool_dict[tool_name]
-        assert isinstance(tool, GenericMCPTool)
+        assert isinstance(tool, MCPTool)
         assert getattr(tool, "name", None) == tool_name
 
         expected_desc = tool_cfg.get("description")
