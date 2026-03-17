@@ -235,9 +235,7 @@ class WebAgent(Agent):
         history: list[ChatMessage] = [
             system(
                 self.system_prompt,
-                tools=[ToolMsgType(tool.name, 
-                                   tool.description, 
-                                   tool.arguments_schema.model_json_schema() if tool.arguments_schema else None) 
+                tools=[ToolMsgType(tool.name, tool.description, tool.inputSchema) 
                        for tool in self.tool_dict.values()],
             ),
             user(query),

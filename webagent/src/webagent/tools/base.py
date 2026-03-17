@@ -5,7 +5,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from jsonschema import validate, ValidationError
 
 from webagent.log import get_logger
 
@@ -18,13 +18,13 @@ logger = get_logger(__name__)
 class BaseTool(abc.ABC):
     name: str
     description: str | None
-    arguments_schema: type[BaseModel] | None
+    inputSchema: Mapping[str, Any] | None
     raise_argument_validation_error: bool
 
-    def __init__(self, name, description: str | None = None, arguments_schema: type[BaseModel] | None = None, *, raise_argument_validation_error: bool = False) -> None:
+    def __init__(self, name, description: str | None = None, inputSchema:  Mapping[str, Any] | None = None, *, raise_argument_validation_error: bool = False) -> None:
         self.name = name
         self.description = description
-        self.arguments_schema = arguments_schema
+        self.inputSchema = inputSchema
         self.raise_argument_validation_error = raise_argument_validation_error
 
     async def init(self, *args: Any, **kwargs: Any) -> None:
@@ -32,10 +32,10 @@ class BaseTool(abc.ABC):
 
     async def run(self, **kwargs: Any) -> str:
         """Execute the tool with the provided arguments."""
-        if self.arguments_schema is None:
+        if self.inputSchema is None:
             return await self._run(kwargs)
         try:
-            model = self.arguments_schema.model_validate(kwargs)
+            validate(instance=kwargs, schema=self.inputSchema)
         except ValidationError as exc:
             logger.warning(
                 "Tool %s arguments validation failed: %s",
@@ -44,42 +44,27 @@ class BaseTool(abc.ABC):
             )
             if self.raise_argument_validation_error:
                 raise
-            return f"[Tool] invalid type for argument:\n{kwargs!r}\rProblem:{exc!r}\n\nArgument type should be:\n{json.dumps(self.arguments_schema.model_json_schema())}"
-        return await self._run(model.model_dump())
+            return f"[Tool] invalid type for tool call argument.\nProblem:{exc!r}\n\nArgument type should be:\n{json.dumps(self.inputSchema)}"
+        return await self._run(**kwargs)
 
     @abc.abstractmethod
     async def _run(self, arguments: dict[str, Any]) -> str:
         """Subclasses implement actual tool execution."""
         raise NotImplementedError
-
-    # def dump_metadata(self) -> dict[str, Any]:
-    #     """Return a JSON-serializable metadata dict for logging."""
-    #     return {
-    #         "name": self.name,
-    #         "description": self.description,
-    #         "arguments_schema": (
-    #             self.arguments_schema.model_json_schema()
-    #             if self.arguments_schema is not None
-    #             else None
-    #         ),
-    #         "type": self.__class__.__name__,
-    #     }
     
     def as_openai_tool(self) -> Mapping[str, Any]:
-        return self.to_openai_tool(self.name, self.description, self.arguments_schema)
+        return to_openai_tool(self.name, self.description, self.inputSchema)
     
 def to_openai_tool(
     name: str,
     description: str | None = None,
-    arguments_schema: type[BaseModel] | Mapping[str, Any] | None = None,
+    arguments_schema: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
     description = description or ""
     if arguments_schema is None:
         parameters: Mapping[str, Any] = {}
     elif isinstance(arguments_schema, Mapping):
         parameters = arguments_schema
-    else:
-        parameters = arguments_schema.model_json_schema()
     if not description:
         logger.warning("Tool %s has no description", name)
     if not parameters:

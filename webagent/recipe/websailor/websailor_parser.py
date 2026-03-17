@@ -118,7 +118,7 @@ class WebSailorParser(QwenParser):
                     {
                         "name": tool.name,
                         "description": tool.description,
-                        "parameters": tool.arguments_schema
+                        "parameters": tool.inputSchema
                     },
                     ensure_ascii=False,
                     indent=2

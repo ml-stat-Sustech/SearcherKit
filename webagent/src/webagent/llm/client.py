@@ -46,9 +46,10 @@ class OpenAIClient(Client):
         model: str,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        default_kwargs: Dict[str, object] | None = None,
         retry_policy: RetryPolicy | None = None,
-        concurrency_limit: int | None = None
+        concurrency_limit: int | None = None,
+        default_call_kwargs: Dict[str, object] | None = None,
+        **extra_client_kwargs
     ) -> None:
         """Initialize an OpenAI chat-completions client wrapper.
 
@@ -64,10 +65,11 @@ class OpenAIClient(Client):
         """
         self.client = AsyncOpenAI(
             base_url = base_url,
-            api_key = api_key
+            api_key = api_key,
+            **extra_client_kwargs
         )
         self.model = model
-        self.default_kwargs = default_kwargs or {}
+        self.default_kwargs = default_call_kwargs or {}
         
         self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
         self._create_completion: Callable[

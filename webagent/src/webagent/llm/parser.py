@@ -283,14 +283,14 @@ class QwenParser(Parser):
         ]
         for tool in tools:
             description = tool.description or ""
-            parameters = tool.arguments_schema or {}
+            parameters = tool.inputSchema or {}
             if not description:
                 logger.warning("Tool %s has no description", tool.name)
             if not parameters:
                 logger.warning("Tool %s has no arguments schema", tool.name)
             lines.append(
                 json.dumps(
-                    to_openai_tool(tool.name, tool.description, tool.arguments_schema),
+                    to_openai_tool(tool.name, tool.description, tool.inputSchema),
                     ensure_ascii=False,
                 )
             )

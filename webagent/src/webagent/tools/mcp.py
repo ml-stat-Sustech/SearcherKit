@@ -52,11 +52,8 @@ from typing import Any, Optional, Union, Literal
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
-from pydantic import BaseModel
 
-from webagent.utils.json_schema import json_schema_to_pydantic
 from webagent.tools import BaseTool
-
 from webagent.log import get_logger, get_trace_id, setup_logger
 
 logger = get_logger(__name__)
@@ -104,7 +101,7 @@ class BaseMCPTool(BaseTool):
         self,
         name: str,
         description: str | None = None,
-        arguments_schema: Optional[type[BaseModel]] = None,
+        arguments_schema: Optional[Mapping[str, Any]] = None,
         *,
         endpoint: str,
         auth_header: Optional[str] = None,
@@ -334,19 +331,18 @@ class BaseMCPTool(BaseTool):
         if description is not None:
             self.description = str(description)
         if schema is not None:
-            self.arguments_schema = self._coerce_schema(schema)
+            self.inputSchema = self._coerce_schema(schema)
 
         self._trace_log(
             logging.DEBUG,
             "MCP tool metadata applied",
             trace_id=trace_id,
             description_set=self.description is not None,
-            schema_set=self.arguments_schema is not None,
+            schema_set=self.inputSchema is not None,
         )
 
     @staticmethod
-    def _coerce_schema(value: Any) -> type[BaseModel] | None:
-        """将 MCP schema 转成 pydantic BaseModel class（JSON Schema -> Pydantic）。"""
+    def _coerce_schema(value: Any) -> Mapping[str, Any] | None:
         if value is None:
             return None
         if isinstance(value, str):
@@ -356,17 +352,8 @@ class BaseMCPTool(BaseTool):
                 logger.warning(f"Failed to parse MCP schema: {value}")
                 return None
             value = parsed
-        if isinstance(value, type) and issubclass(value, BaseModel):
-            return value
-        if isinstance(value, BaseModel):
-            return value.__class__
         if isinstance(value, Mapping):
-            schema = dict(value)
-            model_name = schema.get("title") or "MCPArguments"
-            try:
-                return json_schema_to_pydantic(schema, model_name=str(model_name))
-            except (TypeError, ValueError):
-                return None
+            return value
         return None
 
     # ---- 核心 MCP 调用 ----
@@ -560,9 +547,9 @@ class MCPTool(BaseMCPTool):
 
     async def _run(
         self,
-        arguments: dict[str, Any],
+        **kwargs,
     ) -> str:
-        return await self._run_mcp_tool(arguments)
+        return await self._run_mcp_tool(kwargs)
 
 
 # ---------------------------------------------------------------------------

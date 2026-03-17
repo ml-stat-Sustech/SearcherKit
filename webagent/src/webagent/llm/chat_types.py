@@ -16,7 +16,7 @@ class ToolCall:
 class Tool:
     name: str
     description: str | None
-    arguments_schema: Mapping[str, Any] | None # openai tool schema
+    inputSchema: Mapping[str, Any] | None # mcp tool schema
 
 
 @dataclass(slots=True)
