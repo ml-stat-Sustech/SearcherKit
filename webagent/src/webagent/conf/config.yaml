@@ -28,16 +28,12 @@ agent:
       max_tokens: 1024
     concurrency_limit: 8
   tools: 
-    - target: pkg://webagent.tools.tool:GenericMCPTool
-      mcp_tool_name: search
+    - target: pkg://webagent.tools:MCPTool
+      name: search
       endpoint: http://127.0.0.1:8100/mcp
-      auth_header: ""
       transport: http
       max_concurrency: 8
-      response_char_limit: 20000
       enable_trace_logging: true
-      raise_on_fatal: true
-      final_answer_generator: null
   system_prompt: ""
   max_turn: 10
   max_turn_prompt: null
@@ -59,7 +55,7 @@ agent:
     max_tries: 3
     max_time: 30
     exceptions:
-      - pkg://builtins:Exception
+      - pkg://webagent.tools:ToolRecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0

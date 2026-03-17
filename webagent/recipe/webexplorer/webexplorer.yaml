@@ -19,7 +19,7 @@ retry_policy:
 
 agent:
   llm_client:
-    model: /home/jovyan/WebExplorer-8B
+    model: WebExplorer-8B
     api_key: "EMPTY"
     base_url: http://127.0.0.1:8001/v1
     default_kwargs:
@@ -35,14 +35,10 @@ agent:
     drop_thinking: false
   tools:
     - target: pkg://webagent.tools:MCPTool
-      mcp_tool_name: search
+      name: search
       endpoint: http://127.0.0.1:8300/mcp/
-      auth_header: ""
       max_concurrency: 512
-      response_char_limit: 20000
-      enable_trace_logging: true
       raise_on_fatal: true
-      final_answer_generator: null
   system_prompt: |
     You are a helpful assistant.
 
@@ -84,7 +80,7 @@ agent:
     base: 2.0
 
 data_source:
-  source: /home/jovyan/BrowseComp-Plus/data/browsecomp_plus_decrypted_qa.jsonl
+  source: data/browsecomp_plus_decrypted_qa.jsonl
   input_key: question
   answer_key: answer
   max_items: null
