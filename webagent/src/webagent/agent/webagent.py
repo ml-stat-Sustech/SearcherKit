@@ -84,7 +84,16 @@ class WebAgent(Agent):
         self.max_tokens_prompt_margin = max_tokens_prompt_margin
         self.llm_retry_policy = llm_retry_policy
         self.tool_retry_policy = tool_retry_policy
-        self.context_limit_exceeded = False
+        self.context_max_token_exceeded = False
+        self.history = []
+        
+    def reset(self):
+        self.history = []
+        self.context_token_size = 0
+        
+    @property
+    def turn(self):
+        return sum(map(lambda x: x.role == "assistant", self.history))
 
     @staticmethod
     def _is_context_length_error(exc: BadRequestError) -> bool:
@@ -128,7 +137,7 @@ class WebAgent(Agent):
                 _preview_payload(dict(tc.arguments)),
             )
             async def return_error(name):
-                return f"[Tool] Tool {name} doesn't exist"
+                return f"Error: Tool {name} not found"
             if tc.name not in self.tool_dict:
                 tool_call_coros.append(return_error(tc.name))
                 continue
@@ -196,13 +205,31 @@ class WebAgent(Agent):
             raise first_exception
         return results
     
-    async def stop(self, history: list[ChatMessage]) -> bool:
-        if history[-1].role == "assistant" and not history[-1].tool_calls: # no more tool calls
+    async def stop(self) -> bool:
+        if self.no_more_tool_calls:
+            logger.info(
+                "Agent loop naturally ends without more tool calls",
+            )
             return True
-        if sum(map(lambda x: x.role == "assistant", history)) >= self.max_turn:
+        
+        if self.context_max_token_exceeded:
+            if self.max_tokens_prompt and not self.max_token_reminder_prompted:
+                return False
+            logger.info(
+                "Stopping agent loop due to model context limit, total tokens=%d", 
+                self.context_token_size,
+            )
             return True
-        if self.context_limit_exceeded or self.context_token_size >= self.max_tokens:
+        
+        if self.turn_limit_exceeded:
+            if self.max_turn_prompt and not self.max_turn_reminder_prompted:
+                return False
+            logger.info(
+                "Stopping agent loop due to agent turn limit, total turns=%d", 
+                self.turn + 1
+            )
             return True
+        
         return False
     
     async def parse_and_call_llm(self, history: list[ChatMessage]):
@@ -212,7 +239,9 @@ class WebAgent(Agent):
         else:
             tools = None
         
-        call_result_raw, usage = await self.client.complete_with_usage(self.parser.to_model(history), tools=tools)
+        parsed = self.parser.to_model(history)
+        
+        call_result_raw, usage = await self.client.complete_with_usage(parsed, tools=tools)
 
         self.context_token_size = usage.total_tokens if usage else -1
         logger.debug("LLM turn completed total_tokens=%s", self.context_token_size)
@@ -232,7 +261,8 @@ class WebAgent(Agent):
             assistant, and tool messages.
         """
         await self.init_tools()
-        history: list[ChatMessage] = [
+        self.reset()
+        self.history: list[ChatMessage] = [
             system(
                 self.system_prompt,
                 tools=[ToolMsgType(tool.name, tool.description, tool.inputSchema) 
@@ -240,64 +270,97 @@ class WebAgent(Agent):
             ),
             user(query),
         ]
-        logger.info("Starting reasoning loop agent=WebAgent query=%r", query[:120])
-        turn = 0
-        self.context_limit_exceeded = False
+        logger.info("Starting agent loop query=%r", query[:120])
+        
+        self.max_turn_reminder_prompted = False
+        self.max_token_reminder_prompted = False
         while True:
-            turn += 1
-            with log_context(turn=turn):
-                logger.debug("Calling LLM agent=WebAgent turn=%s history_messages=%s", turn, len(history))
+            with log_context(turn=self.turn):
+                
+                logger.debug("Calling LLM turn=%s history_messages=%s", self.turn, len(self.history))
+                
+                # 1. Reset stop flags
+                self.context_max_token_exceeded = False
+                self.turn_limit_exceeded = False
+                self.no_more_tool_calls = False # No more tool call is set to True if llm call is valid (no exceed context length) and contains no tool calls
+                
+                new_call_result = None
+                new_tool_results = None
+                
+                
+                # 2. Execute agent turn and set stop flags
                 try:
                     if self.llm_retry_policy is None:
-                        call_res = await self.parse_and_call_llm(history)
+                        new_call_result = await self.parse_and_call_llm(self.history)
                     else:
-                        call_res = await retry_async(
+                        new_call_result = await retry_async(
                             self.parse_and_call_llm,
-                            history,
+                            self.history,
                             policy=self.llm_retry_policy,
                             op_name="webagent.parse_and_call_llm",
                             log=logger,
                         )
                 except BadRequestError as exc:
-                    if not self._is_context_length_error(exc):
-                        raise
-                    self.context_limit_exceeded = True
+                    if self._is_context_length_error(exc):
+                        logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
+                        return self.history
+                    raise
+                    
+                if self.turn >= self.max_turn - 1 and new_call_result.tool_calls:
+                    self.turn_limit_exceeded = True
+                    
+                if self.context_token_size >= self.max_tokens - self.max_tokens_prompt_margin:
+                    self.context_max_token_exceeded = True
+                    
+                # call tools from llm result (if any)
+                if new_call_result.tool_calls:
+                    new_tool_results = tool(await self.call_tools(new_call_result.tool_calls))
+                else:
+                    self.no_more_tool_calls = True
+                
+
+                # 3. Decide stop
+                if await self.stop():
+                    # add this turn msg and stop
+                    if new_call_result:
+                        self.history.append(new_call_result)
+                        if new_tool_results:
+                            self.history.append(new_tool_results)
                     logger.info(
-                        "Stopping reasoning loop due to model context limit model_error=%s",
-                        str(exc),
+                        "Agent loop now stopped",
                     )
                     break
-
-                history.append(call_res)
-
-                if sum(map(lambda x: x.role == "tool", history)) == self.max_turn - 1 and self.max_turn_prompt:
-                    history.append(user(self.max_turn_prompt))
-                    if await self.stop(history):
-                        break
-                    continue # Stop making tool calls
-
-                if self.max_tokens_prompt:
-                    if self.context_token_size == -1:
-                        logger.warning("LLM usage metadata missing; skip max_tokens reminder")
-                    elif self.context_token_size > self.max_tokens - self.max_tokens_prompt_margin:
-                        logger.info(
-                            "Context token limit approaching total_tokens=%s limit=%s margin=%s",
-                            self.context_token_size,
-                            self.max_tokens,
-                            self.max_tokens_prompt_margin,
-                        )
-                        history.append(user(self.max_tokens_prompt))
-                        if await self.stop(history):
-                            break
-                        continue # Stop making tool calls
-
-                if call_res.tool_calls:
-                    results = await self.call_tools(call_res.tool_calls)
-                    if results:
-                        history.append(tool(results))
-
-                if await self.stop(history):
-                    break
+                
+                
+                # 4. A chance to wrap up before limit encontered 
+                if self.context_max_token_exceeded and not self.max_token_reminder_prompted and self.max_tokens_prompt:
+                    logger.info(
+                        "Context limit apporaching, total=%d, limit=%d, margin=%d triggered, Requesting model to wrap up",
+                        self.context_token_size,
+                        self.max_tokens,
+                        self.max_tokens_prompt_margin,
+                    )
+                    self.history.append(new_call_result)
+                    self.history.append(user(self.max_tokens_prompt))
+                    self.max_token_reminder_prompted = True
+                    continue
+                if self.turn_limit_exceeded and not self.max_turn_reminder_prompted and self.max_turn_prompt:
+                    logger.info(
+                        "Turn limit apporaching, turn=%d, limit=%d, Requesting model to wrap up",
+                        self.turn,
+                        self.max_turn,
+                    )
+                    self.history.append(new_call_result)
+                    self.history.append(user(self.max_turn_prompt))
+                    self.max_turn_reminder_prompted = True
+                    continue
+                
+                
+                # 5. Append msg of this turn. Turn number would not be increased before here
+                if new_call_result:
+                    self.history.append(new_call_result)
+                    assert new_tool_results # tool results should be set when reached here
+                    self.history.append(new_tool_results)
             
-        logger.info("Reasoning completed agent=WebAgent turns=%s messages=%s", turn, len(history))
-        return history
+        logger.info("Reasoning completed agent=WebAgent turns=%s messages=%s", self.turn, len(self.history))
+        return self.history

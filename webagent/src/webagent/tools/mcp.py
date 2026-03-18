@@ -107,7 +107,6 @@ class BaseMCPTool(BaseTool):
         auth_header: Optional[str] = None,
         transport: Union[Literal["sse"], Literal["streamable-http"]] = "sse",
         max_concurrency: Optional[int] = None,
-        response_char_limit: Optional[int] = None,
         enable_trace_logging: bool = True,
         raise_on_fatal: bool = True,
         raise_argument_validation_error: bool = False,
@@ -127,9 +126,6 @@ class BaseMCPTool(BaseTool):
         if max_concurrency and max_concurrency <= 0:
             raise ValueError(f"max_concurrency must be positive: {max_concurrency}")
         self.max_concurrency = max_concurrency
-        if response_char_limit and response_char_limit <= 0:
-            raise ValueError(f"response_char_limit must be positive: {response_char_limit}")
-        self.response_char_limit = response_char_limit
         self.enable_trace_logging = enable_trace_logging
         self.raise_on_fatal = raise_on_fatal
 
@@ -382,13 +378,7 @@ class BaseMCPTool(BaseTool):
             )
             try:
                 response = await self._client.call_tool(self.mcp_tool_name, arguments)
-                text = self._extract_text(response)
-                # 超长响应守卫：截断或用 final_answer_generator 生成摘要
-                text = await self._apply_response_length_guard(
-                    response_text=text,
-                    arguments=arguments,
-                    trace_id=trace,
-                )
+                # text = self._extract_text(response)
                 self._trace_log(
                     logging.DEBUG,
                     "MCP call completed",
@@ -401,34 +391,6 @@ class BaseMCPTool(BaseTool):
                 raise
             except Exception as exc:
                 return await self._handle_exception(exc, trace_id=trace)
-
-    # ---- 响应处理 ----
-
-    async def _apply_response_length_guard(
-        self,
-        *,
-        response_text: str,
-        arguments: dict[str, Any],
-        trace_id: Optional[str] = None,
-    ) -> str:
-        """如果响应超过 response_char_limit，进行截断。"""
-        if not self.response_char_limit or len(response_text) <= self.response_char_limit:
-            return response_text
-
-        self._trace_log(
-            logging.WARNING,
-            "Response exceeded configured limit; generating condensed final answer",
-            trace_id=trace_id,
-            length=len(response_text),
-            limit=self.response_char_limit,
-        )
-
-        # 直接截断并提示
-        clipped = response_text[: self.response_char_limit]
-        return (
-            f"{clipped}\n\n"
-            "[Truncated] Response exceeded configured content limit. "
-        )
 
     # ---- 异常分类处理 ----
 
@@ -464,36 +426,6 @@ class BaseMCPTool(BaseTool):
         raise ToolRecoverableError from exc
 
     # ---- 静态/工具方法 ----
-
-    @staticmethod
-    def _extract_text(response: Any) -> str:
-        """从 fastmcp 响应对象中提取纯文本。
-
-        支持的响应格式：
-        1. response.content[*].text （fastmcp 标准格式）
-        2. 纯字符串
-        3. dict/Mapping -> JSON
-        4. 其他 -> str()
-        """
-        if response is None:
-            return ""
-
-        content = getattr(response, "content", None)
-        if isinstance(content, list):
-            parts: list[str] = []
-            for item in content:
-                text = getattr(item, "text", None)
-                if isinstance(text, str) and text:
-                    parts.append(text)
-            if parts:
-                return "\n".join(parts)
-
-        if isinstance(response, str):
-            return response
-        if isinstance(response, Mapping):
-            return json.dumps(response, ensure_ascii=False)
-        return str(response)
-
     @staticmethod
     def _new_trace_id() -> str:
         return uuid.uuid4().hex[:12]
@@ -538,18 +470,87 @@ class MCPTool(BaseMCPTool):
         result = await tool.run(query="hello world")
     """
 
-    def __init__(self, name, endpoint, **kwargs: Any) -> None:
+    def __init__(self, name, endpoint, response_char_limit: Optional[int] = None, **kwargs: Any) -> None:
         super().__init__(
             name=name,
             endpoint=endpoint,
             **kwargs)
         self.mcp_tool_name = name
+        if response_char_limit and response_char_limit <= 0:
+            raise ValueError(f"response_char_limit must be positive: {response_char_limit}")
+        self.response_char_limit = response_char_limit
 
     async def _run(
         self,
         **kwargs,
     ) -> str:
-        return await self._run_mcp_tool(kwargs)
+        text = self._extract_text(await self._run_mcp_tool(kwargs))
+        trace = get_trace_id() or self._new_trace_id()
+        # 超长响应守卫：截断
+        text = await self._apply_response_length_guard(
+            response_text=text,
+            arguments=kwargs,
+            trace_id=trace,
+        )
+        return text
+    
+    @staticmethod
+    def _extract_text(response: Any) -> str:
+        """从 fastmcp 响应对象中提取纯文本。
+
+        支持的响应格式：
+        1. response.content[*].text （fastmcp 标准格式）
+        2. 纯字符串
+        3. dict/Mapping -> JSON
+        4. 其他 -> str()
+        """
+        if response is None:
+            return ""
+
+        content = getattr(response, "content", None)
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                text = getattr(item, "text", None)
+                if isinstance(text, str) and text:
+                    parts.append(text)
+            if parts:
+                return "\n".join(parts)
+
+        if isinstance(response, str):
+            return response
+        if isinstance(response, Mapping):
+            return json.dumps(response, ensure_ascii=False)
+        return str(response)
+    
+    
+    # ---- 响应处理 ----
+
+    async def _apply_response_length_guard(
+        self,
+        *,
+        response_text: str,
+        arguments: dict[str, Any],
+        trace_id: Optional[str] = None,
+    ) -> str:
+        """如果响应超过 response_char_limit，进行截断。"""
+        if not self.response_char_limit or len(response_text) <= self.response_char_limit:
+            return response_text
+
+        self._trace_log(
+            logging.WARNING,
+            "Response exceeded configured limit; generating condensed final answer",
+            trace_id=trace_id,
+            length=len(response_text),
+            limit=self.response_char_limit,
+        )
+
+        # 直接截断并提示
+        clipped = response_text[: self.response_char_limit]
+        return (
+            f"{clipped}\n\n"
+            "[Truncated] Response exceeded configured content limit. "
+        )
 
 
 # ---------------------------------------------------------------------------

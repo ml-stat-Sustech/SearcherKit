@@ -54,7 +54,7 @@ class ReactAgent(Agent):
                 tools=[ToolMsgType(
                     name=tool.name,
                     description=tool.description,
-                    arguments_schema=tool.arguments_schema.model_json_schema() if tool.arguments_schema else None,
+                    inputSchema=tool.inputSchema or None,
                     ) for tool in self.tool_dict.values()],
             ),
             user(query),

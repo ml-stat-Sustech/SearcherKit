@@ -45,6 +45,7 @@ class BaseTool(abc.ABC):
             if self.raise_argument_validation_error:
                 raise
             return f"[Tool] invalid type for tool call argument.\nProblem:{exc!r}\n\nArgument type should be:\n{json.dumps(self.inputSchema)}"
+            # return "[Search] Invalid request format: 'query' must be a string, not an array" # TODO
         return await self._run(**kwargs)
 
     @abc.abstractmethod
