@@ -47,7 +47,7 @@ import sys
 import uuid
 from contextlib import nullcontext
 from collections.abc import Mapping
-from typing import Any, Optional, Union, Literal
+from typing import Any, Optional, Union, Literal, TYPE_CHECKING
 
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
@@ -55,6 +55,9 @@ from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 
 from webagent.tools import BaseTool
 from webagent.log import get_logger, get_trace_id, setup_logger
+
+if TYPE_CHECKING:
+    from fastmcp.client.client import CallToolResult
 
 logger = get_logger(__name__)
 
@@ -359,8 +362,8 @@ class BaseMCPTool(BaseTool):
         arguments: dict[str, Any],
         *,
         trace_id: Optional[str] = None,
-    ) -> str:
-        """底层 MCP 调用：含自动初始化、并发控制、响应长度守卫。"""
+    ) -> CallToolResult:
+        """底层 MCP 调用：含自动初始化、并发控制"""
         # 惰性初始化：首次调用时自动连接
         if not self._connected or self._client is None:
             await self.init(trace_id=trace_id)
@@ -383,18 +386,17 @@ class BaseMCPTool(BaseTool):
                     logging.DEBUG,
                     "MCP call completed",
                     trace_id=trace,
-                    tool_name=self.mcp_tool_name,
-                    length=len(text),
+                    tool_name=self.mcp_tool_name
                 )
-                return text
+                return response
             except ToolFatalError:
                 raise
             except Exception as exc:
-                return await self._handle_exception(exc, trace_id=trace)
+                await self._handle_exception(exc, trace_id=trace)
 
     # ---- 异常分类处理 ----
 
-    async def _handle_exception(self, exc: Exception, *, trace_id: Optional[str]) -> str:
+    async def _handle_exception(self, exc: Exception, *, trace_id: Optional[str]) -> None:
         """根据异常消息关键词判断是可恢复错误还是致命错误。
 
         可恢复：网络超时、限流、临时不可用 -> 返回错误消息字符串，让上层重试
