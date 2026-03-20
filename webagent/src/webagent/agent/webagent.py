@@ -6,16 +6,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import copy
 from typing import Iterable, Any, TYPE_CHECKING
 
 from openai import BadRequestError
 
-from webagent.llm.chat_types import ChatMessage, ToolCall, tool, system, user
-from webagent.llm.chat_types import Tool as ToolMsgType
+from webagent.commons.messages import ChatMessage, ToolCall, tool, system, user
+from webagent.commons.messages import Tool as ToolMsgType
 from webagent.llm.parser import Parser, ParsingError
 from webagent.agent.agent import Agent
 from webagent.log import append_trace_interaction, get_logger, log_context
-from webagent.utils.retry import retry_async, RetryPolicy
+from webagent.commons.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
@@ -314,7 +315,10 @@ class WebAgent(Agent):
                     
                 # call tools from llm result (if any)
                 if new_call_result.tool_calls:
-                    new_tool_results = tool(await self.call_tools(new_call_result.tool_calls))
+                    results = await self.call_tools(new_call_result.tool_calls)
+                    for tc, r in zip(new_call_result.tool_calls, results):
+                        tc.result = r
+                    new_tool_results = tool([copy.copy(tc) for tc in new_call_result.tool_calls])
                 else:
                     self.no_more_tool_calls = True
                 

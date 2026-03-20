@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 from webagent.llm.client import OpenAIClient
 from webagent.runtime.agent_runner import AgentRunner
 from webagent.tools import MCPTool
-from webagent.utils.retry import RetryPolicy
+from webagent.commons.retry import RetryPolicy
 
 
 def _load_cfg() -> Any:

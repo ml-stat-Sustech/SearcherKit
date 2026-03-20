@@ -1,3 +1,4 @@
+"""Provider-agnostic message structures."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,10 +8,10 @@ Role = Literal["system", "user", "assistant", "tool"]
 
 @dataclass(slots=True)
 class ToolCall:
-    """Provider-agnostic tool/function invocation emitted by an assistant."""
-    id: str
     name: str
     arguments: Mapping[str, Any]
+    id: str | None = None
+    result: str | None = None
     
 @dataclass(slots=True)
 class Tool:
@@ -45,7 +46,7 @@ class AssistantMessage:
 
 @dataclass(slots=True)
 class ToolMessage:
-    tool_responses: list[str]
+    tool_responses: list[ToolCall]
     role: Literal["tool"] = "tool"
     extensions: dict[str, Any] | None = None
 
@@ -60,5 +61,5 @@ def user(text: str, extensions: dict[str, Any] | None = None) -> UserMessage:
 def assistant(text: str | None, thinking: str | None = None, tool_calls: list[ToolCall] | None = None, extensions: dict[str, Any] | None = None) -> AssistantMessage:
     return AssistantMessage(content=text, thinking=thinking, tool_calls=tool_calls, extensions=extensions)
 
-def tool(tool_responses: list[str], extensions: dict[str, Any] | None = None) -> ToolMessage:
+def tool(tool_responses: list[ToolCall], extensions: dict[str, Any] | None = None) -> ToolMessage:
     return ToolMessage(tool_responses=tool_responses, extensions=extensions)

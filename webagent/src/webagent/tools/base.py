@@ -33,7 +33,7 @@ class BaseTool(abc.ABC):
     async def run(self, **kwargs: Any) -> str:
         """Execute the tool with the provided arguments."""
         if self.inputSchema is None:
-            return await self._run(kwargs)
+            return await self._run(**kwargs)
         try:
             validate(instance=kwargs, schema=self.inputSchema)
         except ValidationError as exc:

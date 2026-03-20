@@ -1,13 +1,12 @@
 # GenericMCPTool configuration
 # Class: webagent.tools.tool.GenericMCPTool
 
-target: pkg://webagent.tools.tool:GenericMCPTool
-mcp_tool_name: null
+target: pkg://webagent.tools:MCPTool
+name: null
+transport: "sse"
 endpoint: http://127.0.0.1:8100/mcp
 auth_header: ""
-transport: null
-max_concurrency: 8
-response_char_limit: 20000
+max_concurrency: null
+response_char_limit: null
 enable_trace_logging: true
 raise_on_fatal: true
-final_answer_generator: null

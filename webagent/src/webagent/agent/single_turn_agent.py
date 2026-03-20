@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-from webagent.llm.chat_types import ChatMessage, system, user
+from webagent.commons.messages import ChatMessage, system, user
 from webagent.agent.agent import Agent
 from webagent.log import get_logger, log_context
 

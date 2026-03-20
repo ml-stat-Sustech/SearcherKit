@@ -7,8 +7,8 @@ from __future__ import annotations
 import asyncio
 from typing import Iterable, Any, TYPE_CHECKING
 
-from webagent.llm.chat_types import tool, system, user, ChatMessage, ToolCall
-from webagent.llm.chat_types import Tool as ToolMsgType
+from webagent.commons.messages import tool, system, user, ChatMessage, ToolCall
+from webagent.commons.messages import Tool as ToolMsgType
 from webagent.agent.agent import Agent
 from webagent.log import get_logger
 

@@ -13,11 +13,11 @@ import abc
 import json
 from typing import Any, Iterable, Mapping
 
-from webagent.llm.chat_types import ChatMessage, ToolCall, assistant, system, user
-from webagent.llm.chat_types import Tool as ToolType
+from webagent.commons.messages import ChatMessage, ToolCall, assistant, system, user
+from webagent.commons.messages import Tool as ToolType
 from webagent.tools import to_openai_tool
 from webagent.log import get_logger
-from webagent.utils.mapping import get_first_or_default, get_or_default
+from webagent.commons.utils import get_first_or_default, get_or_default
 
 logger = get_logger(__name__)
 
@@ -155,7 +155,12 @@ class QwenParser(Parser):
                     item["content"] = "".join(parts)
                 out.append(item)
             elif message.role == "tool":
-                out.append({"role": "user", "content":"\n".join([f"<tool_response>{resp}</tool_response>" for resp in message.tool_responses])})
+                if self.upstream_parsed:
+                    # TODO
+                    for resp in message.tool_responses:
+                        out.append({"role": "tool", "tool_call_id": resp.id, "content": resp.result})
+                else:
+                    out.append({"role": "user", "content":"\n".join([f"<tool_response>{resp.result}</tool_response>" for resp in message.tool_responses])})
             else:
                 raise ValueError(f"Invalid ChatMessage role: {message.role}")
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, Iterable, Mapping
 
-from webagent.llm.chat_types import ChatMessage
-from webagent.llm.chat_types import Tool as ToolMsgType
+from webagent.commons.messages import ChatMessage
+from webagent.commons.messages import Tool as ToolMsgType
 from webagent.llm.parser import QwenParser
 from webagent.tools import to_openai_tool
 

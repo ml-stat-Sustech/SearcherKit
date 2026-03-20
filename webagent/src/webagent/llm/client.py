@@ -17,11 +17,11 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, TYPE_CHEC
 from openai import AsyncOpenAI
 
 from webagent.log import get_logger
-from webagent.utils.retry import wrap_async
+from webagent.commons.retry import wrap_async
 
 if TYPE_CHECKING:
     from openai.types.completion_usage import CompletionUsage
-    from webagent.utils.retry import RetryPolicy
+    from webagent.commons.retry import RetryPolicy
 
 logger = get_logger(__name__)
 

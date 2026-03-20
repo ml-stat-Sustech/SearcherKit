@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable, ParamSpec, TypeVar
 import backoff
 
 from webagent.log import get_logger
-from webagent.utils.mapping import get_or_default
+from webagent.commons.utils import get_or_default
 
 P = ParamSpec("P")
 T = TypeVar("T")

@@ -19,7 +19,7 @@ from webagent.agent.agent import Agent
 from webagent.agent.single_turn_agent import SingleTurnAgent
 from webagent.llm.client import OpenAIClient
 from webagent.llm.parser import QwenParser
-from webagent.utils.retry import RetryPolicy, retry_async
+from webagent.commons.retry import RetryPolicy, retry_async
 
 logger = get_logger(__name__)
 

@@ -4,7 +4,7 @@ import abc
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from webagent.llm.chat_types import ChatMessage
+    from webagent.commons.messages import ChatMessage
 
 class Agent:
     @abc.abstractmethod

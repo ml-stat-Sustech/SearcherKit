@@ -12,11 +12,11 @@ from uuid import uuid4
 
 from webagent.agent.agent import Agent
 from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
-from webagent.utils.config import instantiate
-from webagent.utils.retry import retry_async, RetryPolicy
+from webagent.commons.config import instantiate
+from webagent.commons.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
-    from webagent.llm.chat_types import ChatMessage
+    from webagent.commons.messages import ChatMessage
 
 logger = get_logger(__name__)
 
