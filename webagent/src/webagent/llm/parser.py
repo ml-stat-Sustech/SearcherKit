@@ -139,7 +139,7 @@ class QwenParser(Parser):
                                 "type": "function",
                                 "function": {
                                     "name": tc.name,
-                                    "arguments": tc.arguments,
+                                    "arguments": json.dumps(tc.arguments, ensure_ascii=False),
                                 },
                             }
                             for tc in message.tool_calls
