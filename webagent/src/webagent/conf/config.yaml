@@ -5,7 +5,7 @@ defaults:
   - llm@agent.llm_client: OpenAIClient
   - llm@agent.parser: QwenParser
   - utils@retry_policy: RetryPolicy
-  - data_source@data_source: GenericDataSource
+  - dataloader@dataloader: GenericDataLoader
   - _self_
 
 retry_policy:
@@ -61,7 +61,7 @@ agent:
     factor: 1.0
     base: 2.0
 
-data_source:
+dataloader:
   source: /path/to/data.jsonl
 
 output_path: outputs/agent_history

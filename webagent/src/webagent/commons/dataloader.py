@@ -1,17 +1,35 @@
 from __future__ import annotations
 
+import abc
 import json
-from collections.abc import Iterator
 from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import Any, Literal
 
-from .source import DataSource, DataItem
 
+DataItem = tuple[str, dict[str, Any] | None, Any | None]
+
+
+class BaseLoader(abc.ABC):
+    """Base data source interface yielding (input, extra, answer) tuples."""
+    max_items: int | None = None
+
+    def __init__(self, *, max_items: int | None = None, **kwargs) -> None:
+        self.max_items = max_items
+
+    @abc.abstractmethod
+    def yield_inputs(self) -> Iterator[DataItem]:
+        """Yield (input, extra, answer) tuples matching Agent.run inputs."""
+        raise NotImplementedError
+
+    def __iter__(self) -> Iterator[DataItem]:
+        return self.yield_inputs()
+    
 DataFormat = Literal["jsonl", "parquet"]
 
 
 @dataclass(slots=True)
-class GenericDataSource(DataSource):
+class GenericDataLoader(BaseLoader):
     """Generic data source for jsonl/parquet datasets."""
 
     source: str
@@ -64,3 +82,4 @@ class GenericDataSource(DataSource):
         if self.input_key not in record:
             raise KeyError(f"missing input_key {self.input_key!r} in record")
         return record[self.input_key], None, record.get(self.answer_key)
+

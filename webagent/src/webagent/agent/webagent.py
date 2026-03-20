@@ -18,6 +18,11 @@ from webagent.agent.agent import Agent
 from webagent.log import append_trace_interaction, get_logger, log_context
 from webagent.commons.retry import retry_async, RetryPolicy
 
+# TODO
+class LLMOutputError(Exception):
+    """Raised when there's a problem with the LLM output."""
+    pass
+
 if TYPE_CHECKING:
     from webagent.llm.client import Client
     from webagent.tools import BaseTool
@@ -53,7 +58,8 @@ class WebAgent(Agent):
                  max_tokens_prompt: str | None = None,
                  max_tokens_prompt_margin: int = 128,
                  llm_retry_policy: RetryPolicy | None = None,
-                 tool_retry_policy: RetryPolicy | None = None):
+                 tool_retry_policy: RetryPolicy | None = None,
+                 training: bool = False):
         """
         Initialize a WebAgent instance.
 
@@ -87,6 +93,7 @@ class WebAgent(Agent):
         self.tool_retry_policy = tool_retry_policy
         self.context_max_token_exceeded = False
         self.history = []
+        self.training = training
         
     def reset(self):
         self.history = []
@@ -140,6 +147,8 @@ class WebAgent(Agent):
             async def return_error(name):
                 return f"Error: Tool {name} not found"
             if tc.name not in self.tool_dict:
+                if self.training:
+                    raise LLMOutputError(f"Tool {tc.name} not found")
                 tool_call_coros.append(return_error(tc.name))
                 continue
             

@@ -174,7 +174,7 @@ class AgentRunner:
         self,
         *,
         cfg: Any = None,
-        data_source: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
+        dataloader: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
         output_path: str | Path | None = None,
         retry_policy: RetryPolicy | None = None,
         overwrite_output: bool = False,
@@ -184,7 +184,7 @@ class AgentRunner:
 
         Inputs can be provided either through `cfg` or through explicit parameters.
         The effective runtime values are resolved from the union of both sources:
-        `data_source` and `output_path` are required after merging, while
+        `dataloader` and `output_path` are required after merging, while
         `retry_policy` and `overwrite_output` are optional. When both `cfg` and
         explicit parameters provide the same field, `cfg` takes precedence. This
         matches the intended usage where `cfg` defines the active experiment setup
@@ -192,12 +192,12 @@ class AgentRunner:
         wrappers.
 
         Args:
-            cfg: Optional config object. If present, `cfg.data_source`,
+            cfg: Optional config object. If present, `cfg.dataloader`,
                 `cfg.output_path`, `cfg.retry_policy`, and
                 `cfg.overwrite_output` are used to fill runtime values, with
-                `data_source` and `output_path` treated as required.
-            data_source: Optional iterable yielding `(prompt, extra, answer)` tuples.
-                Used directly unless `cfg.data_source` is provided.
+                `dataloader` and `output_path` treated as required.
+            dataloader: Optional iterable yielding `(prompt, extra, answer)` tuples.
+                Used directly unless `cfg.dataloader` is provided.
             output_path: Optional output directory for trajectory files and
                 `summary.json`. Used unless `cfg.output_path` is provided.
             retry_policy: Optional retry policy for each agent execution. Used
@@ -219,10 +219,10 @@ class AgentRunner:
 
         cfg_values: dict[str, Any] = {}
         if cfg is not None:
-            cfg_data_source = cfg.get("data_source")
-            if cfg_data_source is not None:
-                cfg_values["data_source"] = instantiate(
-                    cfg=cfg_data_source,
+            cfg_dataloader = cfg.get("dataloader")
+            if cfg_dataloader is not None:
+                cfg_values["dataloader"] = instantiate(
+                    cfg=cfg_dataloader,
                     recursive=True,
                     resolve_imports=True,
                 )
@@ -247,7 +247,7 @@ class AgentRunner:
                 cfg_values["logging"] = cfg_logging
 
         explicit_values = {
-            "data_source": data_source,
+            "dataloader": dataloader,
             "output_path": output_path,
             "retry_policy": retry_policy,
             "overwrite_output": overwrite_output,
@@ -271,8 +271,8 @@ class AgentRunner:
         resolved_values.update(cfg_values)
 
         missing_fields: list[str] = []
-        if resolved_values["data_source"] is None:
-            missing_fields.append("data_source")
+        if resolved_values["dataloader"] is None:
+            missing_fields.append("dataloader")
         if resolved_values["output_path"] is None:
             missing_fields.append("output_path")
         if missing_fields:
@@ -280,7 +280,7 @@ class AgentRunner:
                 f"run missing required values after merging cfg and explicit parameters: {', '.join(missing_fields)}"
             )
 
-        data_source = resolved_values["data_source"]
+        dataloader = resolved_values["dataloader"]
         resolved_retry_policy = resolved_values["retry_policy"]
         resolved_overwrite_output = bool(resolved_values["overwrite_output"])
         output_dir = Path(resolved_values["output_path"])
@@ -416,7 +416,7 @@ class AgentRunner:
             start_time = time.time()
 
             scheduled_tasks: list[tuple[asyncio.Task[dict[str, Any]], int, str]] = []
-            for index, (prompt, extra, answer) in enumerate(data_source):
+            for index, (prompt, extra, answer) in enumerate(dataloader):
                 summary["total"] += 1
                 record_path = output_dir / f"{index:06d}.json"
                 if record_path.exists() and not resolved_overwrite_output:
