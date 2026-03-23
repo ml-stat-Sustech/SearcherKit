@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import traceback
 import copy
 from typing import Iterable, Any, TYPE_CHECKING
 
-from openai import BadRequestError
+from openai import BadRequestError, InternalServerError
 
 from webagent.commons.messages import ChatMessage, ToolCall, tool, system, user
 from webagent.commons.messages import Tool as ToolMsgType
@@ -21,6 +22,10 @@ from webagent.commons.retry import retry_async, RetryPolicy
 # TODO
 class LLMOutputError(Exception):
     """Raised when there's a problem with the LLM output."""
+    pass
+
+class LLMContextError(Exception):
+    """Raised when llm exceeds context limit."""
     pass
 
 if TYPE_CHECKING:
@@ -247,7 +252,7 @@ class WebAgent(Agent):
         if getattr(self.parser, "upstream_parsed", False):
             tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
         else:
-            tools = None
+            tools = []
         
         parsed = self.parser.to_model(history)
         
@@ -310,10 +315,11 @@ class WebAgent(Agent):
                             op_name="webagent.parse_and_call_llm",
                             log=logger,
                         )
-                except BadRequestError as exc:
+                except (BadRequestError, InternalServerError) as exc:
                     if self._is_context_length_error(exc):
                         logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
-                        return self.history
+                        raise LLMContextError from exc
+                    traceback.print_exc()
                     raise
                     
                 if self.turn >= self.max_turn - 1 and new_call_result.tool_calls:
@@ -347,7 +353,7 @@ class WebAgent(Agent):
                 
                 # 4. A chance to wrap up before limit encontered 
                 if self.context_max_token_exceeded and not self.max_token_reminder_prompted and self.max_tokens_prompt:
-                    logger.info(
+                    logger.warning(
                         "Context limit apporaching, total=%d, limit=%d, margin=%d triggered, Requesting model to wrap up",
                         self.context_token_size,
                         self.max_tokens,
@@ -358,7 +364,7 @@ class WebAgent(Agent):
                     self.max_token_reminder_prompted = True
                     continue
                 if self.turn_limit_exceeded and not self.max_turn_reminder_prompted and self.max_turn_prompt:
-                    logger.info(
+                    logger.warning(
                         "Turn limit apporaching, turn=%d, limit=%d, Requesting model to wrap up",
                         self.turn,
                         self.max_turn,
