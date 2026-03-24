@@ -360,7 +360,9 @@ class WebAgent(Agent):
                         self.max_tokens_prompt_margin,
                     )
                     self.history.append(new_call_result)
-                    self.history.append(user(self.max_tokens_prompt))
+                    new_tool_results.tool_responses = new_tool_results.tool_responses[:1]
+                    new_tool_results.tool_responses[0].result = self.max_tokens_prompt
+                    self.history.append(new_tool_results)
                     self.max_token_reminder_prompted = True
                     continue
                 if self.turn_limit_exceeded and not self.max_turn_reminder_prompted and self.max_turn_prompt:
@@ -370,7 +372,10 @@ class WebAgent(Agent):
                         self.max_turn,
                     )
                     self.history.append(new_call_result)
-                    self.history.append(user(self.max_turn_prompt))
+                    # self.history.append(user(self.max_turn_prompt))
+                    new_tool_results.tool_responses = new_tool_results.tool_responses[:1]
+                    new_tool_results.tool_responses[0].result = self.max_turn_prompt
+                    self.history.append(new_tool_results)
                     self.max_turn_reminder_prompted = True
                     continue
                 
