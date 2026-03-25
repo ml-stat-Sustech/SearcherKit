@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import random
 from contextlib import nullcontext
-from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, Union, TYPE_CHECKING
 
 from openai import AsyncOpenAI
 
@@ -27,13 +28,14 @@ logger = get_logger(__name__)
 
 class Client:
     @abc.abstractmethod
-    async def complete(self, messages: Iterable[dict[str,Any]], **kwargs) -> dict[str,Any]:
+    async def complete(self, messages: Iterable[dict[str,Any]], session_id: int | None = None,**kwargs) -> dict[str,Any]:
         pass
     
     @abc.abstractmethod
     async def complete_with_usage(
         self,
         messages: Iterable[dict[str, Any]],
+        session_id: int | None = None,
         **kwargs,
     ) -> tuple[dict[str, Any], CompletionUsage | None]:
         pass
@@ -45,7 +47,7 @@ class OpenAIClient(Client):
         *,
         model: str,
         api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
+        base_url: Optional[Union[str|list[str]]] = None,
         retry_policy: RetryPolicy | None = None,
         concurrency_limit: int | None = None,
         default_kwargs: Dict[str, object] | None = None,
@@ -63,17 +65,20 @@ class OpenAIClient(Client):
             concurrency_limit: Maximum number of concurrent LLM requests. `None`
                 means no explicit semaphore limit.
         """
-        self.client = AsyncOpenAI(
-            base_url = base_url,
+        if isinstance(base_url, str) or base_url is None:
+            base_urls = [base_url]
+
+        self.clients = [AsyncOpenAI(
+            base_url = url,
             api_key = api_key,
             **extra_client_kwargs
-        )
+        ) for url in base_urls]
         self.model = model
         self.default_kwargs = default_kwargs or {}
         
         self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
         self._create_completion: Callable[
-            [Iterable[dict[str, Any]], dict[str, Any]],
+            [Iterable[dict[str, Any]], dict[str, Any], Optional[int]],
             Awaitable[Any],
         ] = self._create_completion_no_retry
         if retry_policy is not None:
@@ -83,7 +88,7 @@ class OpenAIClient(Client):
                 op_name="openai.chat.completions.create",
             )
 
-    async def complete(self, messages: Iterable[dict[str,Any]], **kwargs) -> dict[str,Any]:
+    async def complete(self, messages: Iterable[dict[str,Any]], session_id: int | None = None,**kwargs) -> dict[str,Any]:
         """Send chat messages to the model and return the assistant message object.
 
         Args:
@@ -93,20 +98,23 @@ class OpenAIClient(Client):
         Returns:
             The first choice message from the API response.
         """
-        return (await self.complete_with_usage(messages, **kwargs))[0]
+        return (await self.complete_with_usage(messages, session_id, **kwargs))[0]
 
     async def _create_completion_no_retry(
         self,
         messages: list[dict[str, Any]],
         payload: dict[str, Any],
+        session_id: int | None = None,
     ) -> Any:
         logger.debug(
             "Submitting LLM completion model=%s messages=%s",
             self.model,
             len(messages),
         )
+        if not session_id:
+            session_id = random.randint(0, len(self.clients))
         async with self.llm_concurrency_lock:
-            return await self.client.chat.completions.create(
+            return await self.clients[session_id % len(self.clients)].chat.completions.create(
                 model=self.model,
                 messages=messages, # type: ignore
                 **payload,
@@ -115,11 +123,12 @@ class OpenAIClient(Client):
     async def complete_with_usage(
         self,
         messages: Iterable[dict[str, Any]],
+        session_id: int | None = None,
         **kwargs,
     ) -> tuple[dict[str, Any], CompletionUsage | None]:
         message_list = messages if isinstance(messages, list) else list(messages)
         payload = {**self.default_kwargs, **kwargs}
-        resp = await self._create_completion(message_list, payload)
+        resp = await self._create_completion(message_list, payload, session_id)
         logger.debug(
             "LLM completion finished model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
             self.model,

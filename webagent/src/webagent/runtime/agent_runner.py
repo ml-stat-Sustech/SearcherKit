@@ -103,6 +103,7 @@ class AgentRunner:
         )
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
+        self.run_id = 0 # simple incrementing run id
         logger.info("AgentRunner initialized max_concurrency=%s", self.max_concurrency)
 
     @asynccontextmanager
@@ -126,7 +127,8 @@ class AgentRunner:
                 logger.info("Starting agent execution query=%r", _preview_query(query))
                 agent = self.build_agent()
                 try:
-                    history = await agent.run(query, extra=extra)
+                    self.run_id += 1
+                    history = await agent.run(query, extra=extra, session_id=self.run_id)
                 except Exception:
                     logger.exception("Agent execution failed query=%r", _preview_query(query))
                     raise
