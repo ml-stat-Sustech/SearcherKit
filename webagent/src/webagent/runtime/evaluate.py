@@ -15,8 +15,8 @@ from tqdm import tqdm
 import openai
 
 from webagent.log import get_logger, setup_logger
-from webagent.agent.agent import Agent
-from webagent.agent.single_turn_agent import SingleTurnAgent
+from webagent.agent import BaseAgent
+from webagent.agent import SingleTurnAgent
 from webagent.llm.client import OpenAIClient
 from webagent.llm.parser import QwenParser
 from webagent.commons.retry import RetryPolicy, retry_async
@@ -36,7 +36,7 @@ def _attempt_extract_answer_content(content: str) -> str:
         return content
     return answer
 
-def build_agent() -> Agent:
+def build_agent() -> BaseAgent:
     system_prompt = """Output exactly one valid JSON object and nothing else.
 
 Schema:

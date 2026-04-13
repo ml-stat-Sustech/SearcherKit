@@ -5,7 +5,7 @@ from typing import Any, Iterable, Mapping
 
 from webagent.commons.messages import ChatMessage
 from webagent.commons.messages import Tool as ToolMsgType
-from webagent.llm.parser import QwenParser
+from webagent.llm.parser.parser import QwenParser
 from webagent.tools import to_openai_tool
 
 

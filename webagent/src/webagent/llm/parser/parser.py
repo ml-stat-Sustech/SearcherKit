@@ -11,7 +11,8 @@ from __future__ import annotations
 import re
 import abc
 import json
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, overload
+from dataclasses import dataclass, field
 
 from webagent.commons.messages import ChatMessage, ToolCall, assistant, system, user
 from webagent.commons.messages import Tool as ToolType
@@ -33,71 +34,38 @@ class Parser:
     def to_model(self, messages: Iterable[ChatMessage]) -> Iterable[dict[str, Any]]:
         pass
 
-# def to_gpt(
-#     messages: Iterable[ChatMessage],
-#     *,
-#     tools: Sequence[Mapping[str, Any]] | None = None,
-# ) -> dict[str, Any]:
-#     """
-#     Convert internal ChatMessage objects into structured GPT message JSON.
-
-#     Intended for Harmony/OpenAI libraries that accept message JSON and perform
-#     model-specific rendering internally.
-#     """
-
-#     out: list[dict[str, Any]] = []
-#     for message in messages:
-#         item: dict[str, Any] = {"role": message.role}
-#         content = message.content
-#         item["content"] = content
-
-#         if message.name:
-#             item["name"] = message.name
-#         if message.tool_call_id:
-#             item["tool_call_id"] = message.tool_call_id
-
-#         if message.role == "assistant":
-#             thinking = message.extensions.get("thinking")
-#             if isinstance(thinking, str) and thinking.strip():
-#                 item["reasoning"] = thinking
-
-#             if message.tool_calls:
-#                 item["tool_calls"] = [
-#                     {
-#                         "id": tc.id,
-#                         "type": "function",
-#                         "function": {
-#                             "name": tc.name,
-#                             "arguments": json.dumps(_parse_arguments(tc.arguments), ensure_ascii=False)
-#                             if not isinstance(tc.arguments, str)
-#                             else tc.arguments,
-#                         },
-#                     }
-#                     for tc in message.tool_calls
-#                 ]
-
-#         if message.extensions.get("openai") and isinstance(message.extensions["openai"], Mapping):
-#             item.update(dict(message.extensions["openai"]))
-
-#         out.append(item)
-
-#     payload: dict[str, Any] = {"messages": out}
-#     if tools:
-#         payload["tools"] = list(tools)
-#     return payload
+@dataclass
+class QwenParserConfig:
+    upstream_parsed: bool = field(default=False)
+    drop_thinking: bool = field(default=True)
 
 class QwenParser(Parser):
     """Parse `ChatMessage` to Qwen format in the form of OpenAI SDK message types
     """
-    def __init__(self, upstream_parsed = False, drop_thinking = True) -> None:
+    @overload
+    def __init__(self, config: QwenParserConfig) -> None:
+        """_
+        Args:
+            config (QwenParserConfig): Configuration for the parser.
+        """
+        ...
+    @overload
+    def __init__(self, upstream_parsed: bool = False, drop_thinking: bool = True) -> None:
         """_
         Args:
             upstream_parsed (bool, optional): Whether the `thinking` and `tool_call` content are already been parsed. Parser would attempt to read from and write to `reasoning`,`reasoning_content` and `tool_calls` fields of the message dict if set to `True`. Defaults to False.
             drop_thinking (bool, optional): Whether to format `thinking` content into model context (ineffective when using `upstream_parsing`). Defaults to True. 
         """        
+        ...
+
+    def __init__(self, config: QwenParserConfig | None = None, upstream_parsed: bool = False, drop_thinking: bool = True) -> None:
         super().__init__()
-        self.upstream_parsed = upstream_parsed
-        self.drop_thinking = drop_thinking
+        if config:
+            self.upstream_parsed = config.upstream_parsed
+            self.drop_thinking = config.drop_thinking
+        else:
+            self.upstream_parsed = upstream_parsed
+            self.drop_thinking = drop_thinking
     
     def to_model(
         self,

@@ -2,17 +2,28 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, ParamSpec, TypeVar
+from typing import Any, Awaitable, Callable, ParamSpec, TypeVar, overload
 
 import backoff
 
 from webagent.log import get_logger
 from webagent.commons.utils import get_or_default
+from webagent.commons.config import import_from_path
 
 P = ParamSpec("P")
 T = TypeVar("T")
 
 logger = get_logger(__name__)
+
+@dataclass
+class RetryConfig:
+    max_tries: int = 3
+    max_time: float | None = None
+    exceptions: list[str] = ["pkg://Exception"]
+    giveup: str | None = None
+    jitter: str | None = "pkg://backoff.full_jitter"
+    factor: float = 1.0
+    base: float = 1.0
 
 
 @dataclass(slots=True)
@@ -27,23 +38,57 @@ class RetryPolicy:
     factor: float = 1.0
     base: float = 2.0
 
-    def __post_init__(self) -> None:
-        excs = self.exceptions
-        if isinstance(excs, list) or isinstance(excs, set):
-            excs = tuple(excs)
-        elif isinstance(excs, type) and issubclass(excs, BaseException):
-            excs = (excs,)
-        if not isinstance(excs, tuple):
-            raise TypeError("exceptions must be an exception type or tuple of exception types")
-        invalid = [
-            exc
-            for exc in excs
-            if not isinstance(exc, type) or not issubclass(exc, BaseException)
-        ]
-        if invalid:
-            raise TypeError(f"exceptions must be exception types, got: {invalid!r}")
-        self.exceptions = excs
+    @overload
+    def __init__(
+        self,
+        *,
+        config: RetryConfig,
+    ) -> None: ...
 
+    @overload
+    def __init__(
+        self,
+        *,
+        max_tries: int = 3,
+        max_time: float | None = None,
+        exceptions: tuple[type[Exception], ...] = (Exception,),
+        giveup: Callable[[Exception], bool] | None = None,
+        jitter: Callable[[float], float] | None = backoff.full_jitter,
+        factor: float = 1.0,
+        base: float = 2.0,
+    ) -> None: ...
+
+    def __init__(
+        self,
+        *,
+        config: RetryConfig | None = None,
+        max_tries: int = 3,
+        max_time: float | None = None,
+        exceptions: tuple[type[Exception], ...] = (Exception,),
+        giveup: Callable[[Exception], bool] | None = None,
+        jitter: Callable[[float], float] | None = backoff.full_jitter,
+        factor: float = 1.0,
+        base: float = 2.0,
+    ) -> None:
+        if config is not None:
+            exceptions = tuple(import_from_path(e) for e in config.exceptions)
+            giveup = import_from_path(config.giveup) if config.giveup else None
+            jitter = import_from_path(config.jitter) if config.jitter else None
+            self.max_tries = config.max_tries
+            self.max_time = config.max_time
+            self.exceptions = exceptions
+            self.giveup = giveup
+            self.jitter = jitter
+            self.factor = config.factor
+            self.base = config.base
+            return
+        self.max_tries = max_tries
+        self.max_time = max_time
+        self.exceptions = exceptions
+        self.giveup = giveup
+        self.jitter = jitter
+        self.factor = factor
+        self.base = base
 
 def _build_handlers(
     *,

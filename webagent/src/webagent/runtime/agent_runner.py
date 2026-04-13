@@ -10,7 +10,7 @@ import time
 from typing import Any, Callable, Iterable, Sequence, TYPE_CHECKING
 from uuid import uuid4
 
-from webagent.agent.agent import Agent
+from webagent.agent import BaseAgent
 from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
 from webagent.commons.config import instantiate
 from webagent.commons.retry import retry_async, RetryPolicy
@@ -83,7 +83,7 @@ class AgentRunner:
 
     def __init__(
         self,
-        build_agent: Callable[[], Agent] | None = None,
+        build_agent: Callable[[], BaseAgent] | None = None,
         agent_config: Any = None,
         max_concurrency: int | None = None,
     ):

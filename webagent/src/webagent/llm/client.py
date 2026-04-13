@@ -13,7 +13,8 @@ import abc
 import asyncio
 import random
 from contextlib import nullcontext
-from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, Union, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, Union, TYPE_CHECKING, overload
+from dataclasses import dataclass
 
 from openai import AsyncOpenAI
 
@@ -40,17 +41,42 @@ class Client:
     ) -> tuple[dict[str, Any], CompletionUsage | None]:
         pass
 
+@dataclass
+class OpenAIClientConfig:
+    model: str
+    api_key: str | None
+    base_url: str | list[str] | None = None
+    retry_policy: RetryPolicy | None = None
+    concurrency_limit: int | None = None
+    default_kwargs: dict[str, object] | None = None
+    extra_client_kwargs: dict[str, object] | None = None
+
 class OpenAIClient(Client):
     """Wrapper around the `openai` Python SDK."""
+    @overload
+    def __init__(
+        self,
+        *,
+        config: OpenAIClientConfig,
+    ) -> None:
+        """Initialize an OpenAI chat-completions client wrapper.
+
+        Args:
+            config: OpenAI client configuration.
+            **extra_client_kwargs: Extra keyword arguments passed to `openai.Client`.
+        """
+        ...
+
+    @overload
     def __init__(
         self,
         *,
         model: str,
-        api_key: Optional[str] = None,
-        base_url: Optional[Union[str|list[str]]] = None,
+        api_key: str | None = None,
+        base_url: str | list[str] | None = None,
         retry_policy: RetryPolicy | None = None,
         concurrency_limit: int | None = None,
-        default_kwargs: Dict[str, object] | None = None,
+        default_kwargs: dict[str, object] | None = None,
         **extra_client_kwargs
     ) -> None:
         """Initialize an OpenAI chat-completions client wrapper.
@@ -65,6 +91,33 @@ class OpenAIClient(Client):
             concurrency_limit: Maximum number of concurrent LLM requests. `None`
                 means no explicit semaphore limit.
         """
+        ...
+
+    def __init__(
+        self,
+        *,
+        config: OpenAIClientConfig | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        base_url: str | list[str] | None = None,
+        retry_policy: RetryPolicy | None = None,
+        concurrency_limit: int | None = None,
+        default_kwargs: dict[str, object] | None = None,
+        **extra_client_kwargs
+    ) -> None:
+        
+        if config is not None:
+            return self.__init__(
+                model=config.model,
+                api_key=config.api_key,
+                base_url=config.base_url,
+                retry_policy=config.retry_policy,
+                concurrency_limit=config.concurrency_limit,
+                default_kwargs=config.default_kwargs,
+                **(config.extra_client_kwargs or {}),
+            )
+
+
         if isinstance(base_url, str) or base_url is None:
             base_urls = [base_url]
 
@@ -78,7 +131,7 @@ class OpenAIClient(Client):
         
         self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
         self._create_completion: Callable[
-            [Iterable[dict[str, Any]], dict[str, Any], Optional[int]],
+            [list[dict[str, Any]], dict[str, Any], Optional[int]],
             Awaitable[Any],
         ] = self._create_completion_no_retry
         if retry_policy is not None:

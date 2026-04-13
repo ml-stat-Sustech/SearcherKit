@@ -15,7 +15,7 @@ from openai import BadRequestError, InternalServerError
 from webagent.commons.messages import ChatMessage, ToolCall, tool, system, user
 from webagent.commons.messages import Tool as ToolMsgType
 from webagent.llm.parser import Parser, ParsingError
-from webagent.agent.agent import Agent
+from webagent.agent import BaseAgent
 from webagent.log import append_trace_interaction, get_logger, log_context
 from webagent.commons.retry import retry_async, RetryPolicy
 
@@ -41,7 +41,7 @@ def _preview_payload(value: Any, limit: int = 300) -> str:
         return text
     return text[:limit] + "..."
 
-class WebAgent(Agent):
+class WebAgent(BaseAgent):
     """
     Tool-using conversational agent with retry and context-budget safeguards.
 
