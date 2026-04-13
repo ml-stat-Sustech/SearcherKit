@@ -8,5 +8,5 @@ if TYPE_CHECKING:
 
 class Agent:
     @abc.abstractmethod
-    async def run(self, query: str, extra: dict[str, Any] | None = None) -> list[ChatMessage]:
+    async def run(self, query: str, session_id: int | None = None, extra: dict[str, Any] | None = None) -> list[ChatMessage]:
         pass

@@ -283,14 +283,14 @@ class WebAgent(Agent):
         
         parsed = self.parser.to_model(history)
         
-        call_result_raw, usage = await self.client.complete_with_usage(parsed, tools=tools)
+        call_result_raw, usage = await self.client.complete_with_usage(parsed, tools=tools, session_id = self.id)
 
         self.context_token_size = usage.total_tokens if usage else -1
         logger.debug("LLM turn completed total_tokens=%s", self.context_token_size)
 
         return next(iter(self.parser.from_model([call_result_raw])))
 
-    async def run(self, query: str, extra: dict[str, Any] | None = None):
+    async def run(self, query: str, session_id: int | None = None, extra: dict[str, Any] | None = None):
         """
         Run the agent loop for a single user query.
 
@@ -304,6 +304,7 @@ class WebAgent(Agent):
         """
         await self.init_tools()
         self.reset()
+        self.id = session_id
         self.history: list[ChatMessage] = [
             system(
                 self.system_prompt,
