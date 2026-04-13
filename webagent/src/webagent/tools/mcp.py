@@ -97,15 +97,13 @@ class BaseMCPTool(BaseTool):
             result = await tool.run(...)
     """
 
-    # 子类应覆盖此属性，指定要调用的 MCP 工具名称
-    mcp_tool_name: str
-
     def __init__(
         self,
         name: str,
         description: str | None = None,
         arguments_schema: Optional[Mapping[str, Any]] = None,
         *,
+        mcp_tool_name: str,
         endpoint: str,
         auth_header: Optional[str] = None,
         transport: Union[Literal["sse"], Literal["streamable-http"]] = "sse",
@@ -122,6 +120,7 @@ class BaseMCPTool(BaseTool):
         )
         
         self.endpoint = endpoint
+        self.mcp_tool_name = mcp_tool_name
         self.auth_header = auth_header
         if not transport in ("sse", "streamable-http"):
             raise ValueError(f"unsupported transport: {transport!r}")
@@ -476,8 +475,8 @@ class MCPTool(BaseMCPTool):
         super().__init__(
             name=name,
             endpoint=endpoint,
+            mcp_tool_name=name,
             **kwargs)
-        self.mcp_tool_name = name
         if response_char_limit and response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {response_char_limit}")
         self.response_char_limit = response_char_limit

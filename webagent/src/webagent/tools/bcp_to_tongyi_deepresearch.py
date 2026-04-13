@@ -10,9 +10,12 @@ class BrowseCompPlusSearch(BaseMCPTool):
     BrowseComp Plus search tool that presents results in tongyi-deepresearch format.
     https://github.com/texttron/BrowseComp-Plus/blob/main/search_agent/tongyi_utils/tool_search.py
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mcp_tool_name = self.name
+    def __init__(self, mcp_tool_name, endpoint, **kwargs):
+        super().__init__(
+            name = "search",
+            mcp_tool_name=mcp_tool_name,
+            endpoint = endpoint, 
+            **kwargs)
     
     async def _run(self, **kwargs) -> str:
         result = await self._run_mcp_tool(kwargs)

@@ -64,6 +64,7 @@ class WebAgent(Agent):
                  max_tokens_prompt_margin: int = 128,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
+                 raise_repeat_tool_call: bool = False,
                  training: bool = False):
         """
         Initialize a WebAgent instance.
@@ -99,6 +100,8 @@ class WebAgent(Agent):
         self.context_max_token_exceeded = False
         self.history = []
         self.training = training
+        self.raise_repeat_tool_call = raise_repeat_tool_call
+        self.previous_tool_queries = {}
         
     def reset(self):
         self.history = []
@@ -110,6 +113,22 @@ class WebAgent(Agent):
 
     @staticmethod
     def _is_context_length_error(exc: BadRequestError) -> bool:
+        # TODO: For InternalServerError, check message content instead of blindly returning True
+        if isinstance(exc, InternalServerError):
+            return True
+            # text = str(exc).lower()
+            # return any(
+            #     marker in text
+            #     for marker in (
+            #         "context length",
+            #         "maximum context length",
+            #         "max context length",
+            #         "context window",
+            #         "too many tokens",
+            #     )
+            # )
+
+
         response = getattr(exc, "response", None)
         body = getattr(response, "json", None)
         error_payload = body() if callable(body) else {}
@@ -139,6 +158,7 @@ class WebAgent(Agent):
         await asyncio.gather(*[t.init() for t in tools])
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
+        
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
@@ -155,7 +175,11 @@ class WebAgent(Agent):
                 if self.training:
                     raise LLMOutputError(f"Tool {tc.name} not found")
                 tool_call_coros.append(return_error(tc.name))
+
                 continue
+            if self.previous_tool_queries.get(tc.name, {}) == dict(tc.arguments):
+                if self.training and self.raise_repeat_tool_call:
+                    raise LLMOutputError(f"Query {tc.name} has repeated arguments {dict(tc.arguments)}")
             
             if self.tool_retry_policy is None:
                 tool_call_coros.append(self.tool_dict[tc.name].run(**dict(tc.arguments)))
@@ -169,6 +193,9 @@ class WebAgent(Agent):
                         **dict(tc.arguments),
                     )
                 )
+        self.previous_tool_queries = {}
+        for tc in tool_call_list:
+            self.previous_tool_queries[tc.name] = dict(tc.arguments)
             
         gathered = await asyncio.gather(*tool_call_coros, return_exceptions=True)
         first_exception: Exception | None = None
