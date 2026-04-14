@@ -128,17 +128,58 @@ async def _check_es_index(es, index_name: str | None, es_cfg: DictConfig) -> Non
         logger.info("Elasticsearch index '%s' exists with %d documents", index_name, count)
         return
 
+    wiki_dump_path: str | None = es_cfg.get("wiki_dump_path", None)
+    if wiki_dump_path is None:
+        logger.error(
+            "Elasticsearch index '%s' does not exist and wiki_dump_path is not configured. "
+            "Either set wiki_dump_path to build the index, or create it manually.",
+            index_name,
+        )
+        sys.exit(1)
+
     logger.warning("Elasticsearch index '%s' does not exist", index_name)
-    answer = input(f"Create index '{index_name}'? [Y/n] ").strip().lower()
+    answer = input(f"Build index '{index_name}' from '{wiki_dump_path}'? [Y/n] ").strip().lower()
     if answer not in ("", "y", "yes"):
         logger.error("Index '%s' not created, exiting", index_name)
         sys.exit(1)
 
-    from webagent.local_wiki.eswiki.wiki2index_links import create_index
-
-    embedding_dim: int = es_cfg.get("embedding_dim", 384)
+    host: str = es_cfg.host
     include_vector: bool = es_cfg.get("include_vector", False)
-    create_index(es, index_name, embedding_dim, include_vector=include_vector)
+    embedding_dim: int = es_cfg.get("embedding_dim", 1024)
+    model_name: str = es_cfg.get("model_name", "")
+    prompt_strategy: str = es_cfg.get("prompt_strategy", "none")
+    cpu_batch_size: int = es_cfg.get("cpu_batch_size", 200)
+    gpu_batch_size: int = es_cfg.get("gpu_batch_size", 20)
+
+    from pathlib import Path
+    script_path = Path(__file__).resolve().parent.parent / "local_wiki" / "eswiki" / "wiki2index_links.py"
+
+    cmd = [
+        sys.executable, str(script_path),
+        "--es_host", host,
+        "--index_name", index_name,
+        "--wiki_dump_path", wiki_dump_path,
+        "--model_name", model_name,
+        "--embedding_dim", str(embedding_dim),
+        "--prompt_strategy", prompt_strategy,
+        "--cpu_batch_size", str(cpu_batch_size),
+        "--gpu_batch_size", str(gpu_batch_size),
+    ]
+    if include_vector:
+        cmd.append("--dense-vector")
+
+    import os
+    env = os.environ.copy()
+    env_overrides: dict[str, str] = dict(es_cfg.get("env", {}))
+    env.update(env_overrides)
+
+    logger.info("Building index: %s", " ".join(cmd))
+    proc = await asyncio.create_subprocess_exec(*cmd, env=env)
+    returncode = await proc.wait()
+    if returncode != 0:
+        logger.error("wiki2index_links.py exited with code %d", returncode)
+        sys.exit(1)
+    logger.info("Index '%s' built successfully", index_name)
 
 
 async def _check_and_start_mcp_server(mcp_cfg: DictConfig) -> subprocess.Popen[bytes] | None:

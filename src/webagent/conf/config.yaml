@@ -68,20 +68,29 @@ auto_startup:
   enabled: false
   elasticsearch:
     enabled: false
-    host: "http://127.0.0.1:9200"
+    host: "http://192.168.77.12:9200"
     index_name: "wiki20251001_qwen3-embedding-0.6b"
-    embedding_dim: 384
     include_vector: true
+    embedding_dim: 1024
+    model_name: "Qwen3-Embedding-0.6B"
+    prompt_strategy: "none"
+    wiki_dump_path: null
+    cpu_batch_size: 200
+    gpu_batch_size: 20
     startup_timeout_s: 60.0
     options: {}
+    env: {}
   mcp_server:
     enabled: false
     host: "0.0.0.0"
     port: 8100
     workers: 8
     env:
-      ELASTICSEARCH_HOST: ${auto_startup.elasticsearch.host}
-      ELASTICSEARCH_INDEX: ${auto_startup.elasticsearch.index_name}
+      VLLM_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B"
+      VLLM_ENDPOINT: "http://192.168.77.15:8200/v1"
+      SUMMARY_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B-FP8"
+      SUMMARY_BASE_URL: "http://192.168.77.17:8300/v1"
+      SUMMARY_API_KEY: "EMPTY"
     startup_timeout_s: 30.0
 
 output_path: outputs/agent_history
