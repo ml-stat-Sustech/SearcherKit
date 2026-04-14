@@ -16,9 +16,9 @@ from elasticsearch.helpers import bulk
 from elasticsearch.helpers import BulkIndexError
 from sentence_transformers import SentenceTransformer
 
-from prompt import PROMPT_STRATEGIES
-from model import load_model
-from utils import TqdmFileReader
+from .prompt import PROMPT_STRATEGIES
+from .model import load_model
+from .utils import TqdmFileReader
 
 
 # --- 全局配置 ---

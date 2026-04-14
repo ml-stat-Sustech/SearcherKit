@@ -23,6 +23,8 @@ ELASTICSEARCH_RUMTIME_ERRORS = (
     TransportError
 )
 
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST")
+ELASTICSEARCH_INDEX = os.getenv("ELASTICSEARCH_INDEX")
 SUMMARY_MODEL = os.getenv("SUMMARY_MODEL")
 SUMMARY_API_KEY = os.getenv("SUMMARY_API_KEY")
 SUMMARY_BASE_URL = os.getenv("SUMMARY_BASE_URL")
@@ -393,8 +395,8 @@ class LocalWikiVisit:
             return f"{base}{slug}{fragment_suffix}"
         return f"localwiki://{slug}{fragment_suffix}"
 
-es_host = "http://192.168.77.12:9200"
-index = "wiki20251001_qwen3-embedding-0.6b"
+es_host = ELASTICSEARCH_HOST
+index = ELASTICSEARCH_INDEX
 
 # vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://192.168.77.15:8200/v1")
 vllm_model_name = os.getenv("VLLM_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")

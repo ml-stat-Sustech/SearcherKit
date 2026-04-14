@@ -12,10 +12,12 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from webagent.log import get_logger, setup_logger
 from webagent.runtime.agent_runner import AgentRunner
 from webagent.runtime.evaluate import evaluate_main
+from webagent.runtime.startup import check_and_start
 
 logger = get_logger(__name__)
 
 async def _run(cfg: DictConfig) -> None:
+    await check_and_start(cfg)
     agent_cfg = cfg.get("agent")
     runner = AgentRunner(agent_config=agent_cfg, max_concurrency=cfg.get("max_concurrency"))
     await runner.run(cfg=cfg)

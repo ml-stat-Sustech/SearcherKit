@@ -13,9 +13,9 @@ from elasticsearch.helpers import bulk
 from sentence_transformers import SentenceTransformer
 
 # 从本地模块导入
-from prompt import PROMPT_STRATEGIES
-from model import load_model
-from utils import TqdmFileReader
+from ..prompt import PROMPT_STRATEGIES
+from ..model import load_model
+from ..utils import TqdmFileReader
 
 # --- 核心 Elasticsearch 和解析函数 ---
 

@@ -64,6 +64,26 @@ agent:
 dataloader:
   source: /path/to/data.jsonl
 
+auto_startup:
+  enabled: false
+  elasticsearch:
+    enabled: false
+    host: "http://127.0.0.1:9200"
+    index_name: "wiki20251001_qwen3-embedding-0.6b"
+    embedding_dim: 384
+    include_vector: true
+    startup_timeout_s: 60.0
+    options: {}
+  mcp_server:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8100
+    workers: 8
+    env:
+      ELASTICSEARCH_HOST: ${auto_startup.elasticsearch.host}
+      ELASTICSEARCH_INDEX: ${auto_startup.elasticsearch.index_name}
+    startup_timeout_s: 30.0
+
 output_path: outputs/agent_history
 overwrite_output: false
 

@@ -19,9 +19,9 @@ from sentence_transformers import SentenceTransformer
 
 from multiprocessing import Pool, cpu_count # 新增导入
 
-from prompt import PROMPT_STRATEGIES
-from model import load_model
-from utils import TqdmFileReader
+from .prompt import PROMPT_STRATEGIES
+from .model import load_model
+from .utils import TqdmFileReader
 
 
 # --- 全局配置 ---
