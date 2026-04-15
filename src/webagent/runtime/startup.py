@@ -32,39 +32,40 @@ async def check_and_start(cfg: DictConfig) -> None:
     atexit.register(shutdown)
 
 
-def shutdown() -> None:
-    global _es_started_by_us, _mcp_proc
+async def shutdown() -> None:
+    def _shutdown():
+        global _es_started_by_us, _mcp_proc
+        if _mcp_proc is not None:
+            logger.info("Stopping MCP server (pid=%d)", _mcp_proc.pid)
+            _mcp_proc.terminate()
+            try:
+                _mcp_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                _mcp_proc.kill()
+                _mcp_proc.wait(timeout=5)
+            _mcp_proc = None
 
-    if _mcp_proc is not None:
-        logger.info("Stopping MCP server (pid=%d)", _mcp_proc.pid)
-        _mcp_proc.terminate()
-        try:
-            _mcp_proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            _mcp_proc.kill()
-            _mcp_proc.wait(timeout=5)
-        _mcp_proc = None
+        if _es_started_by_us:
+            logger.info("Stopping Elasticsearch")
+            es_bin = shutil.which("elasticsearch")
+            if es_bin is None:
+                logger.warning("elasticsearch binary not found, cannot stop")
+                return
+            try:
+                subprocess.run(
+                    ["pkill", "-f", "org.elasticsearch.bootstrap.Elasticsearch"],
+                    timeout=15,
+                )
+                logger.info("Elasticsearch stopped")
+            except subprocess.TimeoutExpired:
+                logger.warning("Elasticsearch did not stop gracefully, sending SIGKILL")
+                subprocess.run(
+                    ["pkill", "-9", "-f", "org.elasticsearch.bootstrap.Elasticsearch"],
+                    timeout=10,
+                )
+            _es_started_by_us = False
 
-    if _es_started_by_us:
-        logger.info("Stopping Elasticsearch")
-        es_bin = shutil.which("elasticsearch")
-        if es_bin is None:
-            logger.warning("elasticsearch binary not found, cannot stop")
-            return
-        try:
-            subprocess.run(
-                ["pkill", "-f", "org.elasticsearch.bootstrap.Elasticsearch"],
-                timeout=15,
-            )
-            logger.info("Elasticsearch stopped")
-        except subprocess.TimeoutExpired:
-            logger.warning("Elasticsearch did not stop gracefully, sending SIGKILL")
-            subprocess.run(
-                ["pkill", "-9", "-f", "org.elasticsearch.bootstrap.Elasticsearch"],
-                timeout=10,
-            )
-        _es_started_by_us = False
-
+    await asyncio.to_thread(_shutdown)
 
 async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
     global _es_started_by_us
