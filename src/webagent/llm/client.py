@@ -107,7 +107,7 @@ class OpenAIClient(Client):
     ) -> None:
         
         if config is not None:
-            return self.__init__(
+            self.__init__(
                 model=config.model,
                 api_key=config.api_key,
                 base_url=config.base_url,
@@ -116,10 +116,13 @@ class OpenAIClient(Client):
                 default_kwargs=config.default_kwargs,
                 **(config.extra_client_kwargs or {}),
             )
+            return
 
 
         if isinstance(base_url, str) or base_url is None:
             base_urls = [base_url]
+        else:
+            base_urls = base_url
 
         self.clients = [AsyncOpenAI(
             base_url = url,

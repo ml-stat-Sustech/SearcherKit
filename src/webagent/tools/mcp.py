@@ -47,13 +47,14 @@ import sys
 import uuid
 from contextlib import nullcontext
 from collections.abc import Mapping
-from typing import Any, Optional, Union, Literal, TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import Any, Optional, Union, Literal, TYPE_CHECKING, overload
 
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 
-from webagent.tools import BaseTool
+from webagent.tools.base import BaseTool, BaseToolConfig
 from webagent.log import get_logger, get_trace_id, setup_logger
 
 if TYPE_CHECKING:
@@ -72,6 +73,25 @@ class ToolRecoverableError(RuntimeError):
 class ToolFatalError(RuntimeError):
     """致命工具错误——通常意味着配置/连接不可用，应直接上抛给调用者。"""
 
+
+# ---------------------------------------------------------------------------
+# BaseMCPToolConfig
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BaseMCPToolConfig(BaseToolConfig):
+    mcp_tool_name: str = ""
+    endpoint: str = ""
+    auth_header: str | None = None
+    transport: Literal["sse"] | Literal["streamable-http"] = "streamable-http"
+    max_concurrency: int | None = None
+    enable_trace_logging: bool = True
+    raise_on_fatal: bool = True
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        assert self.mcp_tool_name
+        assert self.endpoint
 
 # ---------------------------------------------------------------------------
 # MCPTool：基于 fastmcp 的客户端工具基类
@@ -97,64 +117,79 @@ class BaseMCPTool(BaseTool):
             result = await tool.run(...)
     """
 
+    @overload
+    def __init__(self, *, config: BaseMCPToolConfig) -> None: ...
+    @overload
     def __init__(
         self,
         name: str,
         description: str | None = None,
-        arguments_schema: Optional[Mapping[str, Any]] = None,
+        inputSchema: Mapping[str, Any] | None = None,
         *,
         mcp_tool_name: str,
         endpoint: str,
-        auth_header: Optional[str] = None,
-        transport: Union[Literal["sse"], Literal["streamable-http"]] = "sse",
-        max_concurrency: Optional[int] = None,
+        auth_header: str | None = None,
+        transport: Literal["sse"] | Literal["streamable-http"] = "streamable-http",
+        max_concurrency: int | None = None,
         enable_trace_logging: bool = True,
         raise_on_fatal: bool = True,
         raise_argument_validation_error: bool = False,
+    ) -> None: ...
+
+    def __init__(
+        self,
+        name: str | None = None,
+        description: str | None = None,
+        inputSchema: Mapping[str, Any] | None = None,
+        *,
+        mcp_tool_name: str | None = None,
+        endpoint: str | None = None,
+        auth_header: str | None = None,
+        transport: Literal["sse"] | Literal["streamable-http"] = "streamable-http",
+        max_concurrency: int | None = None,
+        enable_trace_logging: bool = True,
+        raise_on_fatal: bool = True,
+        raise_argument_validation_error: bool = False,
+        config: BaseMCPToolConfig | None = None,
     ) -> None:
-        super().__init__(
-            name,
-            description,
-            arguments_schema,
-            raise_argument_validation_error=raise_argument_validation_error,
-        )
-        
-        self.endpoint = endpoint
-        self.mcp_tool_name = mcp_tool_name
-        self.auth_header = auth_header
-        if not transport in ("sse", "streamable-http"):
-            raise ValueError(f"unsupported transport: {transport!r}")
-        self.transport = transport
-        if max_concurrency and max_concurrency <= 0:
-            raise ValueError(f"max_concurrency must be positive: {max_concurrency}")
-        self.max_concurrency = max_concurrency
-        self.enable_trace_logging = enable_trace_logging
-        self.raise_on_fatal = raise_on_fatal
+        if config:
+            self.__init__(
+                name = config.name,
+                description = config.description,
+                inputSchema = config.inputSchema,
+                mcp_tool_name = config.mcp_tool_name,
+                endpoint = config.endpoint,
+                auth_header = config.auth_header,
+                transport = config.transport,
+                max_concurrency = config.max_concurrency,
+                enable_trace_logging = config.enable_trace_logging,
+            )
+            return
+        else:
+            assert name
+            assert mcp_tool_name
+            assert endpoint
+            super().__init__(
+                name,
+                description,
+                inputSchema,
+                raise_argument_validation_error=raise_argument_validation_error,
+            )
+            self.mcp_tool_name = mcp_tool_name
+            self.endpoint = endpoint
+            self.auth_header = auth_header
+            self.transport = transport
+            if max_concurrency and max_concurrency <= 0:
+                raise ValueError(f"max_concurrency must be positive: {max_concurrency}")
+            self.max_concurrency = max_concurrency
+            self.enable_trace_logging = enable_trace_logging
+            self.raise_on_fatal = raise_on_fatal
 
         self._client: Client | None = None           # fastmcp.Client 实例
         self._connected = False            # 连接状态标记
         self._init_lock = asyncio.Lock()   # 防止 init() 并发重入
         self._conn_lock = asyncio.Lock()   # 保护底层连接操作
         self._semaphore = asyncio.Semaphore(self.max_concurrency) if self.max_concurrency else nullcontext()
-        # Track configured semaphore capacity separately. Do not compare with
-        # semaphore._value, because _value is runtime-available permits.
-
-    # def dump_metadata(self) -> dict[str, Any]:
-    #     base = super().dump_metadata()
-    #     base.update(
-    #         {
-    #             "mcp_tool_name": self.mcp_tool_name,
-    #             "endpoint": self.settings.endpoint,
-    #             "transport": self.settings.transport,
-    #             "max_concurrency": self.settings.max_concurrency,
-    #             "response_char_limit": self.settings.response_char_limit,
-    #             "enable_trace_logging": self.settings.enable_trace_logging,
-    #             "raise_on_fatal": self.settings.raise_on_fatal,
-    #             "auth_header_set": bool(self.settings.auth_header),
-    #         }
-    #     )
-    #     return base
-    #     self._final_answer_generator = final_answer_generator
 
     # ---- async context manager 支持 ----
 
@@ -168,12 +203,7 @@ class BaseMCPTool(BaseTool):
 
     # ---- 初始化 / 关闭 ----
 
-    async def init(
-        self,
-        *,
-        trace_id: Optional[str] = None,
-        **kwargs: Any,
-    ) -> None:
+    async def init(self) -> None:
         """初始化 MCP 连接。
 
         接受三种配置方式（优先级：kwargs > conf > 构造函数/环境变量）：
@@ -186,47 +216,8 @@ class BaseMCPTool(BaseTool):
             if self._connected and self._client is not None:
                 return
 
-            # 显式 kwargs 优先级最高，覆盖一切
-            if "auth_header" in kwargs:
-                if isinstance(kwargs["auth_header"], str):
-                    self.auth_header = kwargs["auth_header"]
-                else:
-                    raise ValueError(f"auth_header must be str, got {kwargs['auth_header']}")
-            if "transport" in kwargs:
-                if isinstance(kwargs["transport"], str) and kwargs["transport"] in ["sse", "streamable-http"]:
-                    self.transport = kwargs["transport"]
-                else:
-                    raise ValueError(f"transport must be 'sse' or 'streamable-http', got {kwargs['transport']}")
-            if "response_char_limit" in kwargs:
-                if isinstance(kwargs["response_char_limit"], int) and kwargs["response_char_limit"] > 0 :
-                    self.response_char_limit = kwargs["response_char_limit"] 
-                else:
-                    raise ValueError(f"response_char_limit must be positive int, got {kwargs["response_char_limit"]}")
-            if "enable_trace_logging" in kwargs:
-                if isinstance(kwargs["enable_trace_logging"], bool):
-                    self.enable_trace_logging = kwargs["enable_trace_logging"]
-                else:
-                    raise ValueError(f"enable_trace_logging must be bool, got {kwargs['enable_trace_logging']}")
-            if "raise_on_fatal" in kwargs:
-                if isinstance(kwargs["raise_on_fatal"], bool):
-                    self.raise_on_fatal = kwargs["raise_on_fatal"]
-                else:
-                    raise ValueError(f"raise_on_fatal must be bool, got {kwargs['raise_on_fatal']}")
-
-            # Rebuild semaphore only when configured capacity actually changes.
-            # Avoid comparing with semaphore._value; that value fluctuates while
-            # tasks are running and does not represent configured capacity.
-            if "max_concurrency" in kwargs:
-                if isinstance(kwargs["max_concurrency"], int) and kwargs["max_concurrency"] > 0 :
-                    new_max_concurrency = kwargs["max_concurrency"] 
-                    if new_max_concurrency != self.max_concurrency:
-                        self.max_concurrency = new_max_concurrency
-                        self._semaphore = asyncio.Semaphore(self.max_concurrency)
-                else:
-                    raise ValueError(f"max_concurrency must be positive int, got {kwargs["max_concurrency"]}")
-
-            await self._connect(trace_id=trace_id)
-            await self._ensure_tool_exists_and_apply_metadata(trace_id=trace_id)
+            await self._connect()
+            await self._ensure_tool_exists_and_apply_metadata()
 
     async def close(self) -> None:
         """优雅关闭 MCP 客户端连接。"""
@@ -244,7 +235,7 @@ class BaseMCPTool(BaseTool):
                 
     # ---- 内部连接管理 ----
 
-    async def _connect(self, *, trace_id: Optional[str] = None) -> None:
+    async def _connect(self) -> None:
         """建立到 MCP 端点的连接（Streamable HTTP 或 SSE）。"""
 
         async with self._conn_lock:
@@ -266,7 +257,6 @@ class BaseMCPTool(BaseTool):
                 self._trace_log(
                     logging.INFO,
                     "Connected to MCP endpoint",
-                    trace_id=trace_id,
                     endpoint=self.endpoint,
                     transport=self.transport,
                 )
@@ -316,7 +306,7 @@ class BaseMCPTool(BaseTool):
             f"MCP tool '{self.mcp_tool_name}' not found at endpoint {self.endpoint}."
         )
 
-    def _apply_tool_metadata(self, info: Any, *, trace_id: Optional[str]) -> None:
+    def _apply_tool_metadata(self, info: Any) -> None:
         """从 MCP 的 tool info 中提取 description 和 arguments schema。"""
         description = getattr(info, "description", None)
         schema = (
@@ -334,7 +324,6 @@ class BaseMCPTool(BaseTool):
         self._trace_log(
             logging.DEBUG,
             "MCP tool metadata applied",
-            trace_id=trace_id,
             description_set=self.description is not None,
             schema_set=self.inputSchema is not None,
         )
@@ -359,22 +348,18 @@ class BaseMCPTool(BaseTool):
     async def _run_mcp_tool(
         self,
         arguments: dict[str, Any],
-        *,
-        trace_id: Optional[str] = None,
     ) -> CallToolResult:
         """底层 MCP 调用：含自动初始化、并发控制"""
         # 惰性初始化：首次调用时自动连接
         if not self._connected or self._client is None:
-            await self.init(trace_id=trace_id)
-
-        trace = trace_id or get_trace_id() or self._new_trace_id()
+            await self.init()
+        assert self._client is not None
 
         # semaphore 控制并发数不超过 max_concurrency
         async with self._semaphore:
             self._trace_log(
                 logging.INFO,
                 "Calling MCP tool",
-                trace_id=trace,
                 tool_name=self.mcp_tool_name,
                 args_preview=self._preview(arguments),
             )
@@ -384,18 +369,17 @@ class BaseMCPTool(BaseTool):
                 self._trace_log(
                     logging.DEBUG,
                     "MCP call completed",
-                    trace_id=trace,
                     tool_name=self.mcp_tool_name
                 )
                 return response
             except ToolFatalError:
                 raise
             except Exception as exc:
-                await self._handle_exception(exc, trace_id=trace)
+                await self._handle_exception(exc)
 
     # ---- 异常分类处理 ----
 
-    async def _handle_exception(self, exc: Exception, *, trace_id: Optional[str]) -> None:
+    async def _handle_exception(self, exc: Exception) -> None:
         """根据异常消息关键词判断是可恢复错误还是致命错误。
 
         可恢复：网络超时、限流、临时不可用 -> 返回错误消息字符串，让上层重试
@@ -413,13 +397,13 @@ class BaseMCPTool(BaseTool):
         if is_recoverable:
             self._trace_log(
                 logging.WARNING, "Recoverable MCP error",
-                trace_id=trace_id, error=message,
+                 error=message,
             )
             raise ToolRecoverableError from exc
 
         self._trace_log(
             logging.ERROR, "Fatal MCP error",
-            trace_id=trace_id, error=message,
+            error=message,
         )
         fatal = ToolFatalError(message)
         if self.raise_on_fatal:
@@ -443,8 +427,6 @@ class BaseMCPTool(BaseTool):
         self,
         level: int,
         message: str,
-        *,
-        trace_id: Optional[str] = None,
         **fields: Any,
     ) -> None:
         """统一的 trace 日志输出。
@@ -454,9 +436,22 @@ class BaseMCPTool(BaseTool):
         """
         if level == logging.DEBUG and not self.enable_trace_logging:
             return
-        payload = {"trace_id": trace_id or get_trace_id() or "-", **fields}
+        payload = {"trace_id": get_trace_id() or "-", **fields}
         logger.log(level, "%s | %s", message, payload)
 
+
+# ---------------------------------------------------------------------------
+# MCPToolConfig
+# ---------------------------------------------------------------------------
+
+@dataclass
+class MCPToolConfig(BaseMCPToolConfig):
+    response_char_limit: int | None = None
+
+    def __post__init__(self) -> None:
+        super().__post_init__()
+        if self.mcp_tool_name:
+            logger.warning("mcp_tool_name would be ignored for creating `MCPTool`")
 
 # ---------------------------------------------------------------------------
 # GenericMCPTool：开箱即用的 MCP 工具（无需子类化）
@@ -471,12 +466,23 @@ class MCPTool(BaseMCPTool):
         result = await tool.run(query="hello world")
     """
 
-    def __init__(self, name, endpoint, response_char_limit: Optional[int] = None, **kwargs: Any) -> None:
-        super().__init__(
-            name=name,
-            endpoint=endpoint,
-            mcp_tool_name=name,
-            **kwargs)
+    @overload
+    def __init__(self, *, config: MCPToolConfig) -> None: ...
+    @overload
+    def __init__(self, name: str, endpoint: str, response_char_limit:int | None = None, **kwargs: Any) -> None: ...
+
+    def __init__(self, name: str | None = None, endpoint: str | None = None, response_char_limit: Optional[int] = None, *, config: MCPToolConfig | None = None, **kwargs: Any) -> None:
+        if config:
+            super().__init__(config=config)
+            response_char_limit = config.response_char_limit
+        else:
+            assert name
+            assert endpoint
+            super().__init__(
+                name=name,
+                endpoint=endpoint,
+                mcp_tool_name=name,
+                **kwargs)
         if response_char_limit and response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {response_char_limit}")
         self.response_char_limit = response_char_limit

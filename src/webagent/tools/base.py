@@ -3,7 +3,8 @@ from __future__ import annotations
 import abc
 import json
 from collections.abc import Mapping
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, overload
 
 from jsonschema import validate, ValidationError
 
@@ -15,17 +16,42 @@ logger = get_logger(__name__)
 # Tool 抽象基类
 # ---------------------------------------------------------------------------
 
+@dataclass
+class BaseToolConfig:
+    name: str = ""
+    description: str | None = field(default=None)
+    inputSchema: Mapping[str, Any] | None = field(default=None)
+    raise_argument_validation_error: bool = field(default=False)
+
+    def __post_init__(self) -> None:
+        assert self.name
+
 class BaseTool(abc.ABC):
     name: str
     description: str | None
     inputSchema: Mapping[str, Any] | None
     raise_argument_validation_error: bool
 
-    def __init__(self, name, description: str | None = None, inputSchema:  Mapping[str, Any] | None = None, *, raise_argument_validation_error: bool = False) -> None:
-        self.name = name
-        self.description = description
-        self.inputSchema = inputSchema
-        self.raise_argument_validation_error = raise_argument_validation_error
+    @overload
+    def __init__(self, *, config: BaseToolConfig) -> None: ...
+    @overload
+    def __init__(self, name: str, description: str | None = None, inputSchema: Mapping[str, Any] | None = None, *, raise_argument_validation_error: bool = False) -> None: ...
+
+    def __init__(self, name: str | None = None, description: str | None = None, inputSchema: Mapping[str, Any] | None = None, *, raise_argument_validation_error: bool = False, config: BaseToolConfig | None = None) -> None:
+        if config:
+            self.__init__(
+                name = config.name,
+                description = config.description,
+                inputSchema = config.inputSchema,
+                raise_argument_validation_error = config.raise_argument_validation_error
+            )
+            return
+        else:
+            assert name
+            self.name = name
+            self.description = description
+            self.inputSchema = inputSchema
+            self.raise_argument_validation_error = raise_argument_validation_error
 
     async def init(self, *args: Any, **kwargs: Any) -> None:
         """Initialize tool resources."""

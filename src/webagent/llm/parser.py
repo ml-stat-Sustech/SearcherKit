@@ -43,7 +43,7 @@ class QwenParser(Parser):
     """Parse `ChatMessage` to Qwen format in the form of OpenAI SDK message types
     """
     @overload
-    def __init__(self, config: QwenParserConfig) -> None:
+    def __init__(self, *, config: QwenParserConfig) -> None:
         """_
         Args:
             config (QwenParserConfig): Configuration for the parser.
@@ -58,7 +58,7 @@ class QwenParser(Parser):
         """        
         ...
 
-    def __init__(self, config: QwenParserConfig | None = None, upstream_parsed: bool = False, drop_thinking: bool = True) -> None:
+    def __init__(self, upstream_parsed: bool = False, drop_thinking: bool = True, *, config: QwenParserConfig | None = None, ) -> None:
         super().__init__()
         if config:
             self.upstream_parsed = config.upstream_parsed
