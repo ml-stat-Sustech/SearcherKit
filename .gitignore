@@ -6,8 +6,6 @@
 # Node artifact files
 node_modules/
 dist/
-DeepResearch/
-Search-R1/
 
 # Compiled Java class files
 *.class
@@ -17,8 +15,6 @@ Search-R1/
 
 # Log files
 *.log
-/log
-/results
 
 # Package files
 *.jar
@@ -55,4 +51,7 @@ Thumbs.db
 # Python related
 __pycache__
 .venv
-*.pyc
+*.egg-info/
+
+# results
+outputs/

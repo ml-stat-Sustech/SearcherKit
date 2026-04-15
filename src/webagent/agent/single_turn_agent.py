@@ -12,7 +12,7 @@ from webagent.log import get_logger, log_context
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
-    from webagent.llm.parser.parser import Parser
+    from webagent.llm.parser import Parser
 
 logger = get_logger(__name__)
 
