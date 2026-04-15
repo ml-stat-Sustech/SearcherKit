@@ -27,6 +27,29 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+@dataclass
+class OpenAIConfig:
+    api_key: str | None
+    base_url: str | list[str] | None = None
+    concurrency_limit: int | None = None
+    extra_client_kwargs: dict[str, object] | None = None
+
+@dataclass
+class ClientConfig:
+    type: str = "openai"
+    model: str = ""
+    retry_policy: RetryPolicy | None = None
+    default_kwargs: dict[str, object] | None = None
+    openai: OpenAIConfig | None = None
+
+    def __post_init__(self):
+        assert self.model
+
+def get_client(config: ClientConfig) -> "Client":
+    if "openai" == config.type.lower():
+        return OpenAIClient(config=config)
+    raise ValueError(f"Cannot infer client type from name: {config.type}")
+
 class Client:
     @abc.abstractmethod
     async def complete(self, messages: Iterable[dict[str,Any]], session_id: int | None = None,**kwargs) -> dict[str,Any]:
@@ -41,29 +64,18 @@ class Client:
     ) -> tuple[dict[str, Any], CompletionUsage | None]:
         pass
 
-@dataclass
-class OpenAIClientConfig:
-    model: str
-    api_key: str | None
-    base_url: str | list[str] | None = None
-    retry_policy: RetryPolicy | None = None
-    concurrency_limit: int | None = None
-    default_kwargs: dict[str, object] | None = None
-    extra_client_kwargs: dict[str, object] | None = None
-
 class OpenAIClient(Client):
     """Wrapper around the `openai` Python SDK."""
     @overload
     def __init__(
         self,
         *,
-        config: OpenAIClientConfig,
+        config: ClientConfig,
     ) -> None:
         """Initialize an OpenAI chat-completions client wrapper.
 
         Args:
             config: OpenAI client configuration.
-            **extra_client_kwargs: Extra keyword arguments passed to `openai.Client`.
         """
         ...
 
@@ -90,13 +102,14 @@ class OpenAIClient(Client):
                 without retries.
             concurrency_limit: Maximum number of concurrent LLM requests. `None`
                 means no explicit semaphore limit.
+            **extra_client_kwargs: Extra keyword arguments passed to `openai.Client`.
         """
         ...
 
     def __init__(
         self,
         *,
-        config: OpenAIClientConfig | None = None,
+        config: ClientConfig | None = None,
         model: str | None = None,
         api_key: str | None = None,
         base_url: str | list[str] | None = None,
@@ -107,14 +120,15 @@ class OpenAIClient(Client):
     ) -> None:
         
         if config is not None:
+            assert config.openai, "Please specify openai config when using openai client"
             self.__init__(
                 model=config.model,
-                api_key=config.api_key,
-                base_url=config.base_url,
+                api_key=config.openai.api_key,
+                base_url=config.openai.base_url,
                 retry_policy=config.retry_policy,
-                concurrency_limit=config.concurrency_limit,
+                concurrency_limit=config.openai.concurrency_limit,
                 default_kwargs=config.default_kwargs,
-                **(config.extra_client_kwargs or {}),
+                **(config.openai.extra_client_kwargs or {}),
             )
             return
 
@@ -129,6 +143,8 @@ class OpenAIClient(Client):
             api_key = api_key,
             **extra_client_kwargs
         ) for url in base_urls]
+
+        assert model
         self.model = model
         self.default_kwargs = default_kwargs or {}
         

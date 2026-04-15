@@ -22,6 +22,16 @@ from webagent.commons.utils import get_first_or_default, get_or_default
 
 logger = get_logger(__name__)
 
+@dataclass
+class QwenParserConfig:
+    upstream_parsed: bool = field(default=False)
+    drop_thinking: bool = field(default=True)
+
+@dataclass
+class ParserConfig:
+    type: str = "qwen"
+    qwen: QwenParserConfig | None = field(default=None)
+
 class ParsingError(Exception):
     """Raised when model message payload cannot be parsed into `ChatMessage`."""
 
@@ -34,19 +44,14 @@ class Parser:
     def to_model(self, messages: Iterable[ChatMessage]) -> Iterable[dict[str, Any]]:
         pass
 
-@dataclass
-class QwenParserConfig:
-    upstream_parsed: bool = field(default=False)
-    drop_thinking: bool = field(default=True)
-
 class QwenParser(Parser):
     """Parse `ChatMessage` to Qwen format in the form of OpenAI SDK message types
     """
     @overload
-    def __init__(self, *, config: QwenParserConfig) -> None:
+    def __init__(self, *, config: ParserConfig) -> None:
         """_
         Args:
-            config (QwenParserConfig): Configuration for the parser.
+            config (ParserConfig): Configuration for the parser.
         """
         ...
     @overload
@@ -58,11 +63,12 @@ class QwenParser(Parser):
         """        
         ...
 
-    def __init__(self, upstream_parsed: bool = False, drop_thinking: bool = True, *, config: QwenParserConfig | None = None, ) -> None:
+    def __init__(self, upstream_parsed: bool = False, drop_thinking: bool = True, *, config: ParserConfig | None = None, ) -> None:
         super().__init__()
         if config:
-            self.upstream_parsed = config.upstream_parsed
-            self.drop_thinking = config.drop_thinking
+            assert config.qwen, "ParserConfig.qwen must be set"
+            self.upstream_parsed = config.qwen.upstream_parsed
+            self.drop_thinking = config.qwen.drop_thinking
         else:
             self.upstream_parsed = upstream_parsed
             self.drop_thinking = drop_thinking
@@ -280,9 +286,7 @@ class QwenParser(Parser):
         )
         return "\n".join(lines)
         
-def get_parser_cls(name: str):
-    if "qwen" in name.lower():
-        return QwenParser
-    raise ValueError(f"Cannot infer parser type from name: {name}")
-
-__all__ = [ "ParsingError", "QwenParser", "get_parser_cls" ]
+def get_parser(config: ParserConfig) -> "Parser":
+    if "qwen" in config.type.lower():
+        return QwenParser(config=config)
+    raise ValueError(f"Cannot infer parser type from name: {config.type}")
