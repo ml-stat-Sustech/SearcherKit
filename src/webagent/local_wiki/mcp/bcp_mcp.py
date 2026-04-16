@@ -191,23 +191,28 @@ class VLLMEncoder:
         embeddings = embeddings / (norms + 1e-9)
         return embeddings
 
+SNIPPET_SIZE = 512 * 5
 
-class LocalWikiSearch:
+class BCPSearch:
 
     def __init__(self,
                  es_host: str,
                  index: str,
-                 vllm_endpoint: str,
+                 embedding_endpoint: str,
                  model_name: str,
                  max_candidates: int = 5,
-                 retriever_type: str = 'api') -> None:
+                 retriever_type: str = 'api',
+                 snippet_length: int | None = SNIPPET_SIZE,
+                 with_highlighted_snippet = True) -> None:
         self.es_host = es_host
         self.es_client = Elasticsearch(self.es_host)
         self.max_candidates = max_candidates
         self.index = index
         self.retriever_type = retriever_type
+        self.snippet_length = snippet_length
+        self.with_highlighted_snippet = with_highlighted_snippet
         if retriever_type == 'api':
-            encoder = VLLMEncoder(vllm_endpoint, model_name)
+            encoder = VLLMEncoder(embedding_endpoint, model_name)
             self.retriever = build_retriever('api', self.es_client, index, encoder)
         elif retriever_type == 'dense':
             model = load_model(model_name)
@@ -225,23 +230,21 @@ class LocalWikiSearch:
             entries = []
             for i, r in enumerate(res):
                 title = r.get("title","[No Title]")
-                score = r.get("score", None)
+                # score = r.get("score", None)
                 url = r.get("url", f"localwiki://{title.replace(' ', '_')}")
                 entry_lines = [f"{i}. [{title}]({url})"]
-                if score is not None:
-                    entry_lines.append(f"Score: {score:.3f}")
+                # if score is not None:
+                #     entry_lines.append(f"Score: {score:.3f}")
                 # snippet = self._build_snippet_block(result, query, snippet_client)
                 snippet = r.get("text")[:512]
                 if snippet:
-                    entry_lines.append(f"Snippet: {snippet}")
+                    entry_lines.append(snippet)
                 entries.append("\n".join(entry_lines).strip())
             blocks.append("\n".join([
                 f"A Local wiki search for '{q}' found {len(res)} results:",
                 "",
                 "## Web Results",
                 "\n\n".join(entries),
-                "",
-                "Call the visit tool (if provided) to inspect full content.",
             ]).strip())
             
         return "\n=======\n".join(blocks)
@@ -258,7 +261,7 @@ class LocalWikiSearch:
         """
         if isinstance(query, str):
             if self.retriever_type == 'api':
-                results = await self.retriever.search(query=query, top_k=self.max_candidates)
+                results = await self.retriever.search(query=query, top_k=self.max_candidates, with_highlighted_snippet=self.with_highlighted_snippet)
             else:
                 results = self.retriever.search(query=query, top_k=self.max_candidates)
             results = [(query, results)]
@@ -271,7 +274,7 @@ class LocalWikiSearch:
 
         return self.parse_search_results(results)
     
-class LocalWikiVisit:
+class BCPVisit:
     def __init__(self, es_host: str, index: str, summary: bool = False) -> None:
         self.es_host = es_host
         self.index = index
@@ -307,105 +310,35 @@ class LocalWikiVisit:
         if not hits:
             print(f"Page with url '{url}' was not found from {self.es_host} in index '{self.index}'.")
             return f"Page with url '{url}' was not found."
-
         title = hits[0].get("_source", {}).get("title", "[No Title]")
         text = hits[0].get("_source", {}).get("text", "")
-        links = hits[0].get("_source", {}).get("links", [])
-
-        annotated = self._inject_inline_links(text, links, url)
 
         if self.summary and self.summary_client:
             summary = await _summarise_visit_page(
                 title=title,
                 url=url,
                 goal=goal or "",
-                content=annotated,
+                content=text,
                 client=self.summary_client,
             )
             if summary:
                 return summary
 
-        return f"# [{title}]({url})\n\n" + annotated
-        
-    def _inject_inline_links(self, content: str, links: Iterable[Dict[str, str]], page_url: str, limit: Optional[int] = None) -> str:
-        if not content or not links:
-            return content
-        if limit == 0:
-            return content
-
-        actionable: List[Tuple[str, str]] = []
-        prefixes_to_skip = ("File:", "Category:")
-        for link in links:
-            target = (link.get("target") or "").strip()
-            if not target or target.startswith(prefixes_to_skip):
-                continue
-            text = (link.get("text") or "").strip()
-            if not text:
-                text = target
-            actionable.append((text, target))
-            if limit and len(actionable) >= limit:
-                break
-
-        base_url = self._derive_link_base(page_url)
-        updated = content
-        for text, target in actionable:
-            link_url = self._build_link_url(target, base_url) # convert wiki title to url
-            marker = f"[{text}]({link_url})"
-            # Only replace the first occurrence
-            updated = updated.replace(text, marker, 1)
-        return updated
+        return f"# [{title}]({url})\n\n" + text
     
-    def _derive_link_base(self, page_url: str) -> Optional[str]:
-        parsed = urlparse(page_url or "")
-        if not parsed.scheme or not parsed.netloc:
-            return None
-        if "/wiki/" in (parsed.path or ""):
-            return f"{parsed.scheme}://{parsed.netloc}/wiki/"
-
-        path = parsed.path or ""
-        slash_idx = path.rfind("/")
-        if slash_idx == -1:
-            base_path = "/"
-        else:
-            base_path = path[: slash_idx + 1] or "/"
-        if not base_path.startswith("/"):
-            base_path = f"/{base_path}"
-        if not base_path.endswith("/"):
-            base_path = f"{base_path}/"
-        return f"{parsed.scheme}://{parsed.netloc}{base_path}"
-
-
-    def _build_link_url(self, target: str, base_url: Optional[str]) -> str:
-        cleaned = (target or "").strip()
-        if not cleaned:
-            return ""
-        parsed = urlparse(cleaned)
-        if parsed.scheme:
-            return cleaned
-
-        if "#" in cleaned:
-            title_part, fragment = cleaned.split("#", 1)
-        else:
-            title_part, fragment = cleaned, ""
-        slug = quote(title_part.replace(" ", "_"))
-        fragment_suffix = f"#{quote(fragment.replace(' ', '_'))}" if fragment else ""
-
-        if base_url:
-            base = base_url if base_url.endswith("/") else f"{base_url}/"
-            return f"{base}{slug}{fragment_suffix}"
-        return f"localwiki://{slug}{fragment_suffix}"
-    
-def create_app():
-
+def create_app():    
     es_host = ELASTICSEARCH_HOST
     index = ELASTICSEARCH_INDEX
 
-    # vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://192.168.77.15:8200/v1")
-    vllm_model_name = os.getenv("VLLM_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
+    assert es_host
+    assert index
+
+    embedding_endpoint = os.getenv("EMBEDDING_ENDPOINT", "http://192.168.77.15:8200/v1")
+    embedding_model_name = os.getenv("EMBEDDING_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
 
 
-    searcher = LocalWikiSearch(es_host, index, "", vllm_model_name, retriever_type='dense')
-    visitor = LocalWikiVisit(es_host, index, summary=True)
+    searcher = BCPSearch(es_host, index, embedding_endpoint, embedding_model_name, retriever_type='api')
+    visitor = BCPVisit(es_host, index, summary=True)
     mcp = FastMCP()
     mcp.add_tool(searcher.search)
     mcp.add_tool(visitor.visit)
