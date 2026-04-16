@@ -29,7 +29,7 @@ async def check_and_start(cfg: DictConfig) -> None:
         global _mcp_proc
         _mcp_proc = await _check_and_start_mcp_server(auto_cfg.mcp_server)
 
-    atexit.register(shutdown)
+    # atexit.register(shutdown)
 
 
 async def shutdown() -> None:

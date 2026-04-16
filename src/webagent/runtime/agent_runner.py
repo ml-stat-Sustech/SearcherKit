@@ -108,11 +108,11 @@ class AgentRunner:
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
         self.run_id = 0 # simple incrementing run id
-        logger.info("AgentRunner initialized max_concurrency=%s", self.max_concurrency)
 
     
     async def init(self):
         await startup.check_and_start(self.cfg)
+        logger.info("AgentRunner initialized max_concurrency=%s", self.max_concurrency)
 
     async def close(self):
         logger.info("Closing AgentRunner")

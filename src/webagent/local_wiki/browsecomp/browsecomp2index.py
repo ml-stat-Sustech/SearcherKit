@@ -114,7 +114,7 @@ def index_bm25(es_client: Elasticsearch, index_name: str, dataset, batch_size: i
     print(f"\n索引的总文档数: {doc_count:,}")
 
 
-def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: SentenceTransformer, prompt_function, cpu_batch_size: int, gpu_batch_size: int):
+def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: SentenceTransformer, prompt_function, cpu_batch_size: int, gpu_batch_size: int, pool=None):
     actions = []
     articles_in_batch = []
     doc_count = 0
@@ -122,6 +122,13 @@ def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: Sent
     print("--- 正在以混合搜索（向量）模式运行 ---")
     print(f"文件处理批次大小 (CPU batch size): {cpu_batch_size}")
     print(f"模型编码批次大小 (GPU batch size): {gpu_batch_size}")
+    if pool is not None:
+        print("多GPU模式已启用，使用 encode_multi_process")
+
+    def _encode(passages):
+        if pool is not None:
+            return model.encode_multi_process(passages, pool, batch_size=gpu_batch_size, normalize_embeddings=True)
+        return model.encode(passages, normalize_embeddings=True, batch_size=gpu_batch_size, show_progress_bar=True)
 
     for article in dataset:
         try:
@@ -143,10 +150,7 @@ def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: Sent
                 passages = [prompt_function(art["text"][:MAX_TEXT_LENGTH_FOR_EMBEDDING]) for art in articles_in_batch]
 
                 print(f"\n[INFO] 开始编码 {len(passages)} 篇文章，使用GPU批大小 {gpu_batch_size}...")
-                vectors = model.encode(
-                    passages, normalize_embeddings=True,
-                    batch_size=gpu_batch_size, show_progress_bar=True
-                )
+                vectors = _encode(passages)
 
                 for i, art in enumerate(articles_in_batch):
                     source = {"title": art["title"], "text": art["text"], "url": art["url"], "links": art["links"]}
@@ -173,10 +177,7 @@ def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: Sent
     if articles_in_batch:
         passages = [prompt_function(art["text"][:MAX_TEXT_LENGTH_FOR_EMBEDDING]) for art in articles_in_batch]
         print(f"\n[INFO] 开始编码最后一批 {len(passages)} 篇文章，使用GPU批大小 {gpu_batch_size}...")
-        vectors = model.encode(
-            passages, normalize_embeddings=True,
-            batch_size=gpu_batch_size, show_progress_bar=True
-        )
+        vectors = _encode(passages)
         for i, art in enumerate(articles_in_batch):
             source = {"title": art["title"], "text": art["text"], "url": art["url"], "links": art["links"]}
             source["text_vector"] = vectors[i].tolist()
@@ -191,9 +192,9 @@ def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: Sent
     print(f"\n索引的总文档数: {doc_count:,}")
 
 
-def index_dataset(es_client: Elasticsearch, index_name: str, dataset, model: SentenceTransformer, prompt_function, cpu_batch_size: int, gpu_batch_size: int, include_vector: bool = True):
+def index_dataset(es_client: Elasticsearch, index_name: str, dataset, model: SentenceTransformer, prompt_function, cpu_batch_size: int, gpu_batch_size: int, include_vector: bool = True, pool=None):
     if include_vector:
-        index_hybrid(es_client, index_name, dataset, model, prompt_function, cpu_batch_size, gpu_batch_size)
+        index_hybrid(es_client, index_name, dataset, model, prompt_function, cpu_batch_size, gpu_batch_size, pool=pool)
     else:
         index_bm25(es_client, index_name, dataset, cpu_batch_size)
 
@@ -213,6 +214,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_batch_size', type=int, default=16, help="在 model.encode() 中实际送入GPU的批次大小 (GPU批处理)。")
 
     parser.add_argument('--dense-vector', action='store_true', help="如果设置，则启用密集向量生成和索引以进行混合搜索。")
+    parser.add_argument('--no_multi_gpu', action='store_true', help="如果设置，则禁用多GPU编码，仅在单GPU上运行。")
 
     args = parser.parse_args()
 
@@ -221,8 +223,12 @@ if __name__ == '__main__':
     print(f"数据集加载完成，共 {len(ds):,} 条文档。")
 
     embedding_model = None
+    pool = None
     if args.dense_vector:
         embedding_model = load_model(args.model_name)
+        if not args.no_multi_gpu:
+            print("正在启动多GPU编码进程池...")
+            pool = embedding_model.start_multi_process_pool()
     else:
         print("--- 未设置 --dense-vector 标志，跳过模型加载 ---")
 
@@ -238,15 +244,21 @@ if __name__ == '__main__':
 
     prompt_func = PROMPT_STRATEGIES.get(args.prompt_strategy)
 
-    index_dataset(
-        es_client=es,
-        index_name=args.index_name,
-        dataset=ds,
-        model=embedding_model,
-        prompt_function=prompt_func,
-        cpu_batch_size=args.cpu_batch_size,
-        gpu_batch_size=args.gpu_batch_size,
-        include_vector=args.dense_vector
-    )
+    try:
+        index_dataset(
+            es_client=es,
+            index_name=args.index_name,
+            dataset=ds,
+            model=embedding_model,
+            prompt_function=prompt_func,
+            cpu_batch_size=args.cpu_batch_size,
+            gpu_batch_size=args.gpu_batch_size,
+            include_vector=args.dense_vector,
+            pool=pool
+        )
+    finally:
+        if pool is not None:
+            print("正在关闭多GPU编码进程池...")
+            embedding_model.stop_multi_process_pool(pool)
 
     print("\n--- 全部完成！索引构建完毕。 ---")

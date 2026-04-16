@@ -16,20 +16,17 @@ def load_model(model_name: str) -> SentenceTransformer:
     if "Qwen3" in model_name:
         print("Detected Qwen3 model, enabling special loading parameters for https://huggingface.co/Qwen/Qwen3-Embedding-8B.")
         
-        # 定义模型加载参数
         model_kwargs = {
-            "attn_implementation": "flash_attention_2", 
-            "device_map": "auto",
+            "attn_implementation": "flash_attention_2",
             "torch_dtype": torch.float16
         }
         
-        # 定义分词器参数
         tokenizer_kwargs = {"padding_side": "left"}
 
-        # 加载模型
         model = SentenceTransformer(
-            model_name, 
-            model_kwargs=model_kwargs, 
+            model_name,
+            device=device,
+            model_kwargs=model_kwargs,
             tokenizer_kwargs=tokenizer_kwargs
         )
     else:
