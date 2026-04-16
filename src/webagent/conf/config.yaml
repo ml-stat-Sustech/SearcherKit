@@ -68,6 +68,7 @@ auto_startup:
   enabled: false
   elasticsearch:
     enabled: false
+    corpus_type: wiki  # wiki | bcp
     host: "http://192.168.77.12:9200"
     index_name: "wiki20251001_qwen3-embedding-0.6b"
     include_vector: true
@@ -75,6 +76,7 @@ auto_startup:
     model_name: "Qwen3-Embedding-0.6B"
     prompt_strategy: "none"
     wiki_dump_path: null
+    bcp_dataset_path: "Tevatron/browsecomp-plus-corpus"
     cpu_batch_size: 200
     gpu_batch_size: 20
     startup_timeout_s: 60.0
