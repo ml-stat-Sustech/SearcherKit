@@ -127,7 +127,7 @@ def index_hybrid(es_client: Elasticsearch, index_name: str, dataset, model: Sent
 
     def _encode(passages):
         if pool is not None:
-            return model.encode_multi_process(passages, pool, batch_size=gpu_batch_size, normalize_embeddings=True)
+            return model.encode(passages, pool=pool, batch_size=gpu_batch_size, normalize_embeddings=True)
         return model.encode(passages, normalize_embeddings=True, batch_size=gpu_batch_size, show_progress_bar=True)
 
     for article in dataset:
