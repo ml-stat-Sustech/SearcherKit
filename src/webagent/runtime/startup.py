@@ -72,11 +72,6 @@ async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
     host: str = es_cfg.host
     index_name: str | None = es_cfg.get("index_name", None)
 
-    es_bin = shutil.which("elasticsearch")
-    if es_bin is None:
-        logger.error("elasticsearch binary not found in PATH")
-        sys.exit(1)
-
     from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
 
     try:
@@ -90,6 +85,12 @@ async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
         pass
 
     logger.info("Starting Elasticsearch in daemon mode")
+
+    es_bin = shutil.which("elasticsearch")
+    if es_bin is None:
+        logger.error("elasticsearch binary not found in PATH")
+        sys.exit(1)
+
     es_opts: dict[str, str] = dict(es_cfg.get("options", {}))
     cmd = [es_bin, "-d"]
     for k, v in es_opts.items():
