@@ -44,13 +44,6 @@ Respond strictly in JSON:
   "rational": "...",
   "evidence": "...",
   "summary": "...",
-  "urls": [
-      {{
-          "url": "...",
-          "title": "...",
-      }},
-      {{...}}
-  ]
 }}
 
 ## User Goal
@@ -124,7 +117,8 @@ async def _summarise_visit_page(
         rational = str(data.get("rational", "")).strip()
         evidence = str(data.get("evidence", "")).strip()
         summary = str(data.get("summary", "")).strip()
-        links = data.get("urls", [])
+        # links = data.get("urls", [])
+        links = None
         formatted = _format_visit_summary_block(url or title, goal, rational, evidence, summary, links)
         if formatted:
             return formatted
@@ -154,8 +148,8 @@ def _format_visit_summary_block(
     if links:
         lines.append("Links:")
         lines.append(_format_links(links))
-    lines.append("According to the above content, if there may be links containing useful information, please use the "
-                 "visit tool to access them. If not, please use the search tool to continue searching.")
+        lines.append("According to the above content, if there may be links containing useful information, please use the "
+                    "visit tool to access them. If not, please use the search tool to continue searching.")
     return "\n".join(lines).strip()
 
 
@@ -247,7 +241,7 @@ class BCPSearch:
                 "\n\n".join(entries),
             ]).strip())
             
-        return "\n=======\n".join(blocks)
+        return "\n\n=======\n\n".join(blocks)
         
     @tool()
     async def search(self, query: Union[str, List[str]]) -> str:
@@ -267,7 +261,7 @@ class BCPSearch:
             results = [(query, results)]
         else:
             if self.retriever_type == 'api':
-                batch_results = await self.retriever.batch_search(queries=query, top_k=self.max_candidates)
+                batch_results = await self.retriever.batch_search(queries=query, top_k=self.max_candidates, with_highlighted_snippet=self.with_highlighted_snippet)
             else:
                 batch_results = self.retriever.batch_search(queries=query, top_k=self.max_candidates)
             results = list(zip(query, batch_results))
@@ -296,7 +290,7 @@ class BCPVisit:
         if isinstance(url, str):
             return await self._visit_single(url, goal)
         results = await asyncio.gather(*[self._visit_single(u, goal) for u in url])
-        return "\n".join(results)
+        return "\n\n=======\n\n".join(results)
         
     async def _visit_single(self, url: str, goal: Optional[str] = None) -> str:
         query = {"query": {"term" : {"url": {"value": url}}}}
