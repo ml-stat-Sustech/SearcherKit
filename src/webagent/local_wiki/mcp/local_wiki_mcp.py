@@ -29,7 +29,7 @@ SUMMARY_MODEL = os.getenv("SUMMARY_MODEL")
 SUMMARY_API_KEY = os.getenv("SUMMARY_API_KEY")
 SUMMARY_BASE_URL = os.getenv("SUMMARY_BASE_URL")
 SUMMARY_MAX_RETRIES = max(1, int(os.getenv("SUMMARY_MAX_RETRIES", "3")))
-SUMMARY_MAX_LENGTH = 32000 # ~ 32768 
+SUMMARY_MAX_LENGTH = 100000 * 4  # ~ 128k token * 4-5 token per char 
 
 VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
 
@@ -37,20 +37,12 @@ VISIT_SUMMARY_PROMPT = """Please process the following webpage content and user 
 1. Locate the portions that directly support the goal.
 2. Extract the most relevant evidence.
 3. Provide a concise summary and judge usefulness.
-4. Find and provide (if any) urls to other pages that may be relevant.
 
 Respond strictly in JSON:
 {{
   "rational": "...",
   "evidence": "...",
   "summary": "...",
-  "urls": [
-      {{
-          "url": "...",
-          "title": "...",
-      }},
-      {{...}}
-  ]
 }}
 
 ## User Goal
@@ -124,8 +116,7 @@ async def _summarise_visit_page(
         rational = str(data.get("rational", "")).strip()
         evidence = str(data.get("evidence", "")).strip()
         summary = str(data.get("summary", "")).strip()
-        links = data.get("urls", [])
-        formatted = _format_visit_summary_block(url or title, goal, rational, evidence, summary, links)
+        formatted = _format_visit_summary_block(url or title, goal, rational, evidence, summary, None)
         if formatted:
             return formatted
     return None
@@ -154,8 +145,8 @@ def _format_visit_summary_block(
     if links:
         lines.append("Links:")
         lines.append(_format_links(links))
-    lines.append("According to the above content, if there may be links containing useful information, please use the "
-                 "visit tool to access them. If not, please use the search tool to continue searching.")
+        lines.append("According to the above content, if there may be links containing useful information, please use the "
+                    "visit tool to access them. If not, please use the search tool to continue searching.")
     return "\n".join(lines).strip()
 
 
@@ -191,6 +182,7 @@ class VLLMEncoder:
         embeddings = embeddings / (norms + 1e-9)
         return embeddings
 
+SNIPPET_SIZE = 512 * 5
 
 class LocalWikiSearch:
 
@@ -200,12 +192,16 @@ class LocalWikiSearch:
                  vllm_endpoint: str,
                  model_name: str,
                  max_candidates: int = 5,
-                 retriever_type: str = 'api') -> None:
+                 retriever_type: str = 'api',
+                 snippet_length: int | None = SNIPPET_SIZE,
+                 with_highlighted_snippet = True) -> None:
         self.es_host = es_host
         self.es_client = Elasticsearch(self.es_host)
         self.max_candidates = max_candidates
         self.index = index
         self.retriever_type = retriever_type
+        self.snippet_length = snippet_length
+        self.with_highlighted_snippet = with_highlighted_snippet
         if retriever_type == 'api':
             encoder = VLLMEncoder(vllm_endpoint, model_name)
             self.retriever = build_retriever('api', self.es_client, index, encoder)
@@ -225,26 +221,26 @@ class LocalWikiSearch:
             entries = []
             for i, r in enumerate(res):
                 title = r.get("title","[No Title]")
-                score = r.get("score", None)
+                # score = r.get("score", None)
                 url = r.get("url", f"localwiki://{title.replace(' ', '_')}")
                 entry_lines = [f"{i}. [{title}]({url})"]
-                if score is not None:
-                    entry_lines.append(f"Score: {score:.3f}")
+                # if score is not None:
+                #     entry_lines.append(f"Score: {score:.3f}")
                 # snippet = self._build_snippet_block(result, query, snippet_client)
-                snippet = r.get("text")[:512]
+                snippet = r.get("text")
                 if snippet:
-                    entry_lines.append(f"Snippet: {snippet}")
+                    entry_lines.append(f"{snippet}")
                 entries.append("\n".join(entry_lines).strip())
             blocks.append("\n".join([
                 f"A Local wiki search for '{q}' found {len(res)} results:",
                 "",
                 "## Web Results",
                 "\n\n".join(entries),
-                "",
-                "Call the visit tool (if provided) to inspect full content.",
+                # "",
+                # "Call the visit tool (if provided) to inspect full content.",
             ]).strip())
             
-        return "\n=======\n".join(blocks)
+        return "\n\n=======\n\n".join(blocks)
         
     @tool()
     async def search(self, query: Union[str, List[str]]) -> str:
@@ -258,7 +254,7 @@ class LocalWikiSearch:
         """
         if isinstance(query, str):
             if self.retriever_type == 'api':
-                results = await self.retriever.search(query=query, top_k=self.max_candidates)
+                results = await self.retriever.search(query=query, top_k=self.max_candidates, with_highlighted_snippet=self.with_highlighted_snippet)
             else:
                 results = self.retriever.search(query=query, top_k=self.max_candidates)
             results = [(query, results)]
@@ -293,7 +289,7 @@ class LocalWikiVisit:
         if isinstance(url, str):
             return await self._visit_single(url, goal)
         results = await asyncio.gather(*[self._visit_single(u, goal) for u in url])
-        return "\n".join(results)
+        return "\n\n=======\n\n".join(results)
         
     async def _visit_single(self, url: str, goal: Optional[str] = None) -> str:
         query = {"query": {"term" : {"url": {"value": url}}}}
@@ -400,11 +396,14 @@ def create_app():
     es_host = ELASTICSEARCH_HOST
     index = ELASTICSEARCH_INDEX
 
-    # vllm_endpoint = os.getenv("VLLM_ENDPOINT", "http://192.168.77.15:8200/v1")
-    vllm_model_name = os.getenv("VLLM_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
+    assert es_host
+    assert index
+
+    embedding_endpoint = os.getenv("EMBEDDING_ENDPOINT", "http://192.168.77.15:8200/v1")
+    embedding_model_name = os.getenv("EMBEDDING_MODEL", "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B")
 
 
-    searcher = LocalWikiSearch(es_host, index, "", vllm_model_name, retriever_type='dense')
+    searcher = LocalWikiSearch(es_host, index, embedding_endpoint, embedding_model_name, retriever_type='api')
     visitor = LocalWikiVisit(es_host, index, summary=True)
     mcp = FastMCP()
     mcp.add_tool(searcher.search)
