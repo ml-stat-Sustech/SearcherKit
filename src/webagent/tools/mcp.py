@@ -74,6 +74,28 @@ class ToolFatalError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
+# 连接池内部结构
+# ---------------------------------------------------------------------------
+
+class _PooledClient:
+    """以 (endpoint, transport) 为键的全局 Client 池条目。
+    因为未知原因，FastMCP会在对同一个endpoint建立多个Client时概率死锁"""
+
+    __slots__ = ("client", "ref_count", "auth_header")
+
+    def __init__(
+        self,
+        *,
+        client: Client | None = None,
+        ref_count: int = 0,
+        auth_header: str | None = None,
+    ) -> None:
+        self.client = client
+        self.ref_count = ref_count
+        self.auth_header = auth_header
+
+
+# ---------------------------------------------------------------------------
 # MCPTool：基于 fastmcp 的客户端工具基类
 # ---------------------------------------------------------------------------
 
@@ -81,6 +103,7 @@ class BaseMCPTool(BaseTool):
     """可复用的 fastmcp 客户端工具基类。
 
     特性：
+    - 全局连接池：以 (endpoint, transport) 为键复用 Client，引用计数管理生命周期
     - 连接可复用（persistent session），减少握手开销
     - asyncio.Semaphore 控制并发上限
     - 内置 trace logging，方便调试
@@ -96,6 +119,9 @@ class BaseMCPTool(BaseTool):
             await tool.init()
             result = await tool.run(...)
     """
+
+    _client_pool: dict[tuple[str, str], _PooledClient] = {}
+    _pool_lock: asyncio.Lock = asyncio.Lock()
 
     def __init__(
         self,
@@ -122,7 +148,7 @@ class BaseMCPTool(BaseTool):
         self.endpoint = endpoint
         self.mcp_tool_name = mcp_tool_name
         self.auth_header = auth_header
-        if not transport in ("sse", "streamable-http"):
+        if transport not in ("sse", "streamable-http"):
             raise ValueError(f"unsupported transport: {transport!r}")
         self.transport = transport
         if max_concurrency and max_concurrency <= 0:
@@ -134,7 +160,6 @@ class BaseMCPTool(BaseTool):
         self._client: Client | None = None           # fastmcp.Client 实例
         self._connected = False            # 连接状态标记
         self._init_lock = asyncio.Lock()   # 防止 init() 并发重入
-        self._conn_lock = asyncio.Lock()   # 保护底层连接操作
         self._semaphore = asyncio.Semaphore(self.max_concurrency) if self.max_concurrency else nullcontext()
         # Track configured semaphore capacity separately. Do not compare with
         # semaphore._value, because _value is runtime-available permits.
@@ -229,48 +254,96 @@ class BaseMCPTool(BaseTool):
             await self._ensure_tool_exists_and_apply_metadata(trace_id=trace_id)
 
     async def close(self) -> None:
-        """优雅关闭 MCP 客户端连接。"""
-        async with self._conn_lock:
-            if self._client is None or not self._connected:
-                return
-            try:
-                await self._client.__aexit__(None, None, None)
-            except Exception as exc:
-                # 【修复】原代码 close() 中没有异常日志，关闭失败时完全静默
-                logger.warning("Error while closing MCP client: %s", exc)
-            finally:
-                self._connected = False
-                self._client = None
+        """优雅关闭 MCP 客户端连接（引用计数归零时才真正关闭）。"""
+        cls = BaseMCPTool
+        key = (self.endpoint, self.transport)
+
+        if self._client is not None:
+            async with cls._pool_lock:
+                entry = cls._client_pool.get(key)
+                if entry is not None and self._client is entry.client:
+                    entry.ref_count -= 1
+                    if entry.ref_count <= 0:
+                        try:
+                            await entry.client.__aexit__(None, None, None)
+                        except Exception as exc:
+                            logger.warning(
+                                "Error while closing pooled MCP client: %s", exc
+                            )
+                        del cls._client_pool[key]
+
+        self._client = None
+        self._connected = False
                 
     # ---- 内部连接管理 ----
 
     async def _connect(self, *, trace_id: Optional[str] = None) -> None:
-        """建立到 MCP 端点的连接（Streamable HTTP 或 SSE）。"""
+        """建立到 MCP 端点的连接（Streamable HTTP 或 SSE）。
 
-        async with self._conn_lock:
-            if self._connected and self._client is not None:
+        使用全局连接池：同一 (endpoint, transport) 的 Client 只创建一次，
+        通过引用计数管理生命周期。auth_header 不一致时抛出 ToolFatalError。
+        """
+        cls = BaseMCPTool
+        key = (self.endpoint, self.transport)
+
+        async with cls._pool_lock:
+            entry = cls._client_pool.get(key)
+            if entry is not None and entry.client is not None:
+                if self._normalize_auth(entry.auth_header) != self._normalize_auth(
+                    self.auth_header
+                ):
+                    raise ToolFatalError(
+                        f"auth_header mismatch for pooled endpoint "
+                        f"{self.endpoint}: pool auth={bool(entry.auth_header)}, "
+                        f"instance auth={bool(self.auth_header)}"
+                    )
+                entry.ref_count += 1
+                self._client = entry.client
+                self._connected = True
+                self._trace_log(
+                    logging.INFO,
+                    "Reused pooled MCP client",
+                    trace_id=trace_id,
+                    endpoint=self.endpoint,
+                    transport=self.transport,
+                    ref_count=entry.ref_count,
+                )
                 return
 
-            # 构造 HTTP headers（如有 auth token 则添加 Authorization）
+            if entry is None:
+                entry = _PooledClient(
+                    ref_count=1,
+                    auth_header=self.auth_header,
+                )
+                cls._client_pool[key] = entry
+            else:
+                entry.ref_count += 1
+                entry.auth_header = self.auth_header
+
             headers: dict[str, str] = {}
             if self.auth_header:
                 headers["Authorization"] = self.auth_header
 
             transport = self._build_transport(headers=headers)
-            self._client = Client(transport)
+            client = Client(transport)
 
-            # 尝试建立持久连接；若客户端支持 __aenter__ 则进入上下文
             try:
-                await self._client.__aenter__()
+                await client.__aenter__()
+                entry.client = client
+                self._client = client
                 self._connected = True
                 self._trace_log(
                     logging.INFO,
-                    "Connected to MCP endpoint",
+                    "Connected to MCP endpoint (pooled)",
                     trace_id=trace_id,
                     endpoint=self.endpoint,
                     transport=self.transport,
+                    ref_count=entry.ref_count,
                 )
             except Exception as exc:
+                entry.ref_count -= 1
+                if entry.ref_count <= 0:
+                    cls._client_pool.pop(key, None)
                 self._connected = False
                 self._client = None
                 raise ToolFatalError(
@@ -427,6 +500,11 @@ class BaseMCPTool(BaseTool):
         raise ToolRecoverableError from exc
 
     # ---- 静态/工具方法 ----
+    @staticmethod
+    def _normalize_auth(auth: str | None) -> str:
+        """将 None 和空串统一为空串，用于 auth_header 一致性比较。"""
+        return auth or ""
+
     @staticmethod
     def _new_trace_id() -> str:
         return uuid.uuid4().hex[:12]
