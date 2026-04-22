@@ -261,19 +261,19 @@ class BaseMCPTool(BaseTool):
         if self._client is not None:
             async with cls._pool_lock:
                 entry = cls._client_pool.get(key)
-                if entry is not None and self._client is entry.client:
+                if entry is not None:
                     entry.ref_count -= 1
                     if entry.ref_count <= 0:
-                        try:
-                            await entry.client.__aexit__(None, None, None)
-                        except Exception as exc:
-                            logger.warning(
-                                "Error while closing pooled MCP client: %s", exc
-                            )
                         del cls._client_pool[key]
-
-        self._client = None
-        self._connected = False
+                try:
+                    await self._client.__aexit__(None, None, None)
+                except Exception as exc:
+                    logger.warning(
+                        "Error while closing pooled MCP client: %s", exc
+                    )
+                finally:
+                    self._client = None
+                    self._connected = False
                 
     # ---- 内部连接管理 ----
 
@@ -298,8 +298,7 @@ class BaseMCPTool(BaseTool):
                         f"instance auth={bool(self.auth_header)}"
                     )
                 entry.ref_count += 1
-                self._client = entry.client.new() # use new for independent new client
-                await self._client.__aenter__()
+                self._client = entry.client
                 self._connected = True
                 self._trace_log(
                     logging.INFO,
@@ -329,10 +328,10 @@ class BaseMCPTool(BaseTool):
             client = Client(transport)
 
             try:
-                self._client = client.new()
-                await self._client.__aenter__()
-                self._connected = True
+                await client.__aenter__()
                 entry.client = client
+                self._client = client
+                self._connected = True
                 self._trace_log(
                     logging.INFO,
                     "Connected to MCP endpoint (pooled)",
