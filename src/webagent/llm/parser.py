@@ -13,6 +13,8 @@ import abc
 import json
 from typing import Any, Iterable, Mapping
 
+import json_repair
+
 from webagent.commons.messages import ChatMessage, ToolCall, assistant, system, user
 from webagent.commons.messages import Tool as ToolType
 from webagent.tools import to_openai_tool
@@ -85,6 +87,15 @@ class Parser:
 #     if tools:
 #         payload["tools"] = list(tools)
 #     return payload
+
+def try_parse_json(raw: str) -> dict:
+    left = raw.find('{')
+    right = raw.rfind('}')
+    if left != -1 and right != -1 and left < right:
+        json_str = raw[left:right + 1]
+        return json_repair.loads(json_str)
+    else:
+        return None
 
 class QwenParser(Parser):
     """Parse `ChatMessage` to Qwen format in the form of OpenAI SDK message types
@@ -198,9 +209,12 @@ class QwenParser(Parser):
             tool_calls: list[ToolCall] = []
             for tc in get_or_default(message, "tool_calls", []):
                 function = tc["function"]
-                arguments = function["arguments"]
+                arguments_raw = function["arguments"]
                 try:
-                    arguments = json.loads(arguments.strip())
+                    # arguments = json.loads(arguments.strip())
+                    arguments = try_parse_json(arguments_raw)
+                    if not arguments:
+                        raise json.JSONDecodeError
                 except json.JSONDecodeError:
                     raise ParsingError(f"Invalid JSON payload for <tool_call>: {arguments}")
                 
@@ -222,7 +236,7 @@ class QwenParser(Parser):
             raise ValueError(f"Invalid Qwen assistant message content: {content!r}")
 
         message_pattern = re.compile(
-            r"^(?:<think>(?P<thinking>.*?)</think>)?"
+            r"^(?:<think>(?P<thinking>.*?)</think>|</think>)?"
             r"(?P<out>(?:(?!<think>|</think>|<tool_call>|</tool_call>).)*)"
             r"(?P<tool_calls>(?:<tool_call>.*?</tool_call>)*)$",
             re.DOTALL,

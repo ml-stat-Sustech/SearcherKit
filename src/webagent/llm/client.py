@@ -67,6 +67,8 @@ class OpenAIClient(Client):
         """
         if isinstance(base_url, str) or base_url is None:
             base_urls = [base_url]
+        else:
+            base_urls = base_url
 
         self.clients = [AsyncOpenAI(
             base_url = url,
