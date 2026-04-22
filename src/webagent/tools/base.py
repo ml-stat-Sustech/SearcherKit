@@ -13,18 +13,38 @@ from webagent.log import get_logger
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Tool 抽象基类
+# Unified Tool configuration
 # ---------------------------------------------------------------------------
 
 @dataclass
-class BaseToolConfig:
-    name: str = ""
-    description: str | None = field(default=None)
-    inputSchema: Mapping[str, Any] | None = field(default=None)
-    raise_argument_validation_error: bool = field(default=False)
+class ToolConfig:
+    """Single configuration schema shared by every tool entry."""
 
-    def __post_init__(self) -> None:
-        assert self.name
+    # Common fields
+    name: str = ""
+    description: str | None = None
+    inputSchema: Mapping[str, Any] | None = None
+    raise_argument_validation_error: bool = False
+
+    # MCP connection
+    endpoint: str | None = None
+    transport: str = "streamable-http"
+    auth_header: str | None = None
+    max_concurrency: int | None = None
+    enable_trace_logging: bool = True
+    raise_on_fatal: bool = True
+    mcp_tool_name: str = ""
+
+    # MCPTool specific
+    response_char_limit: int | None = None
+
+    # Factory extension
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Tool abstract base class
+# ---------------------------------------------------------------------------
 
 class BaseTool(abc.ABC):
     name: str
@@ -33,19 +53,33 @@ class BaseTool(abc.ABC):
     raise_argument_validation_error: bool
 
     @overload
-    def __init__(self, *, config: BaseToolConfig) -> None: ...
-    @overload
-    def __init__(self, name: str, description: str | None = None, inputSchema: Mapping[str, Any] | None = None, *, raise_argument_validation_error: bool = False) -> None: ...
+    def __init__(self, *, config: ToolConfig) -> None: ...
 
-    def __init__(self, name: str | None = None, description: str | None = None, inputSchema: Mapping[str, Any] | None = None, *, raise_argument_validation_error: bool = False, config: BaseToolConfig | None = None) -> None:
+    @overload
+    def __init__(
+        self,
+        name: str,
+        description: str | None = None,
+        inputSchema: Mapping[str, Any] | None = None,
+        *,
+        raise_argument_validation_error: bool = False,
+    ) -> None: ...
+
+    def __init__(
+        self,
+        name: str | None = None,
+        description: str | None = None,
+        inputSchema: Mapping[str, Any] | None = None,
+        *,
+        raise_argument_validation_error: bool = False,
+        config: ToolConfig | None = None,
+        **kwargs: Any,
+    ) -> None:
         if config:
-            self.__init__(
-                name = config.name,
-                description = config.description,
-                inputSchema = config.inputSchema,
-                raise_argument_validation_error = config.raise_argument_validation_error
-            )
-            return
+            self.name = config.name
+            self.description = config.description
+            self.inputSchema = config.inputSchema
+            self.raise_argument_validation_error = config.raise_argument_validation_error
         else:
             assert name
             self.name = name
@@ -70,28 +104,34 @@ class BaseTool(abc.ABC):
             )
             if self.raise_argument_validation_error:
                 raise
-            return f"[Tool] invalid type for tool call argument.\nProblem:{exc!r}\n\nArgument type should be:\n{json.dumps(self.inputSchema)}"
-            # return "[Search] Invalid request format: 'query' must be a string, not an array" # TODO
+            return (
+                f"[Tool] invalid type for tool call argument.\n"
+                f"Problem:{exc!r}\n\n"
+                f"Argument type should be:\n{json.dumps(self.inputSchema)}"
+            )
         return await self._run(**kwargs)
 
     @abc.abstractmethod
     async def _run(self, arguments: dict[str, Any]) -> str:
         """Subclasses implement actual tool execution."""
         raise NotImplementedError
-    
+
     def as_openai_tool(self) -> Mapping[str, Any]:
         return to_openai_tool(self.name, self.description, self.inputSchema)
-    
+
+
 def to_openai_tool(
     name: str,
     description: str | None = None,
-    arguments_schema: Mapping[str, Any] | None = None,
+    inputSchema: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
     description = description or ""
-    if arguments_schema is None:
+    if inputSchema is None:
         parameters: Mapping[str, Any] = {}
-    elif isinstance(arguments_schema, Mapping):
-        parameters = arguments_schema
+    elif isinstance(inputSchema, Mapping):
+        parameters = inputSchema
+    else:
+        parameters = {}
     if not description:
         logger.warning("Tool %s has no description", name)
     if not parameters:

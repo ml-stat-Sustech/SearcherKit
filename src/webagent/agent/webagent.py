@@ -15,6 +15,7 @@ from openai import BadRequestError, InternalServerError
 
 from webagent.commons.messages import ChatMessage, ToolCall, tool, system, user
 from webagent.commons.messages import Tool as ToolMsgType
+from webagent.tools import BaseTool, ToolConfig, build_tool
 from webagent.llm.parser import Parser, ParsingError, ParserConfig, get_parser
 from webagent.llm.client import Client, ClientConfig, get_client
 from webagent.agent import BaseAgent
@@ -32,7 +33,6 @@ class LLMContextError(Exception):
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
-    from webagent.tools import BaseTool
 
 logger = get_logger(__name__)
 
@@ -47,7 +47,7 @@ def _preview_payload(value: Any, limit: int = 300) -> str:
 class WebAgentConfig:
     llm_client: ClientConfig
     parser: ParserConfig
-    tools: list[BaseTool] = [] # TODO
+    tools: list[ToolConfig] = []
     system_prompt: str | None = None
     max_turn: int = 10
     max_turn_prompt: str | None = None
@@ -94,7 +94,7 @@ class WebAgent(BaseAgent):
         Args:
             llm_client: LLM client used to generate assistant responses.
             parser: Parser that converts between internal and model message formats.
-            tools: Iterable of available tools indexed by name.
+            tools: Iterable of tools used by agent.
             system_prompt: Optional system prompt prepended to every run.
             max_turn: Maximum number of tool-response turns before stopping.
             max_turn_prompt: Optional user prompt injected near turn limit.
@@ -128,6 +128,7 @@ class WebAgent(BaseAgent):
         if config:
             client = get_client(config.llm_client)
             parser = get_parser(config.parser)
+            tools = [build_tool(tool_cfg) for tool_cfg in config.tools]
             if config.llm_retry_config:
                 llm_retry_policy = RetryPolicy(config=config.llm_retry_config)
             if config.tool_retry_config:
@@ -135,7 +136,7 @@ class WebAgent(BaseAgent):
             self.__init__(
                 llm_client=client,
                 parser=parser,
-                tools=config.tools,
+                tools=tools,
                 system_prompt=config.system_prompt,
                 max_turn=config.max_turn,
                 max_turn_prompt=config.max_turn_prompt,
@@ -154,7 +155,20 @@ class WebAgent(BaseAgent):
             
         self.client = llm_client
         self.parser = parser
-        self.tool_dict = {t.name: t for t in tools}
+        self.tool_dict: dict[str, BaseTool] = {}
+        for t in tools:
+            if isinstance(t, BaseTool):
+                self.tool_dict[t.name] = t
+            elif isinstance(t, ToolConfig):
+                tool = build_tool(t)
+                self.tool_dict[tool.name] = tool
+            elif isinstance(t, dict):
+                tool = build_tool(ToolConfig(**t))
+                self.tool_dict[tool.name] = tool
+            else:
+                raise TypeError(
+                    f"tools items must be BaseTool, ToolConfig or dict, got {type(t)}"
+                )
         self.system_prompt = system_prompt or ""
         self.max_turn = max_turn
         self.max_turn_prompt = max_turn_prompt

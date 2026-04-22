@@ -1,16 +1,15 @@
-from .base import BaseTool, BaseToolConfig, to_openai_tool
-from .mcp import BaseMCPTool, BaseMCPToolConfig, MCPTool, MCPToolConfig, ToolFatalError, ToolRecoverableError
+from .base import BaseTool, ToolConfig, to_openai_tool
+from .factory import register_tool, build_tool
+from .mcp import BaseMCPTool, MCPTool, ToolFatalError, ToolRecoverableError
 
 __all__ = [
     "BaseTool",
-    "BaseToolConfig",
+    "ToolConfig",
     "BaseMCPTool",
-    "BaseMCPToolConfig",
     "MCPTool",
-    "MCPToolConfig",
-    
+    "register_tool",
+    "build_tool",
     "to_openai_tool",
-    
     "ToolFatalError",
     "ToolRecoverableError",
 ]

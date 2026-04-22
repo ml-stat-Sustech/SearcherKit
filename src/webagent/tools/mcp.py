@@ -54,7 +54,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 
-from webagent.tools.base import BaseTool, BaseToolConfig
+from webagent.tools.base import BaseTool, ToolConfig
 from webagent.log import get_logger, get_trace_id, setup_logger
 
 if TYPE_CHECKING:
@@ -95,26 +95,7 @@ class _PooledClient:
         self.auth_header = auth_header
 
 # ---------------------------------------------------------------------------
-# BaseMCPToolConfig
-# ---------------------------------------------------------------------------
-
-@dataclass
-class BaseMCPToolConfig(BaseToolConfig):
-    mcp_tool_name: str = ""
-    endpoint: str = ""
-    auth_header: str | None = None
-    transport: Literal["sse"] | Literal["streamable-http"] = "streamable-http"
-    max_concurrency: int | None = None
-    enable_trace_logging: bool = True
-    raise_on_fatal: bool = True
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        assert self.mcp_tool_name
-        assert self.endpoint
-
-# ---------------------------------------------------------------------------
-# MCPTool：基于 fastmcp 的客户端工具基类
+# BaseMCPTool：基于 fastmcp 的客户端工具基类
 # ---------------------------------------------------------------------------
 
 class BaseMCPTool(BaseTool):
@@ -141,7 +122,7 @@ class BaseMCPTool(BaseTool):
     _pool_lock: asyncio.Lock = asyncio.Lock()
 
     @overload
-    def __init__(self, *, config: BaseMCPToolConfig) -> None: ...
+    def __init__(self, *, config: ToolConfig) -> None: ...
     @overload
     def __init__(
         self,
@@ -173,21 +154,21 @@ class BaseMCPTool(BaseTool):
         enable_trace_logging: bool = True,
         raise_on_fatal: bool = True,
         raise_argument_validation_error: bool = False,
-        config: BaseMCPToolConfig | None = None,
+        config: ToolConfig | None = None,
+        **kwargs: Any,
     ) -> None:
         if config:
-            self.__init__(
-                name = config.name,
-                description = config.description,
-                inputSchema = config.inputSchema,
-                mcp_tool_name = config.mcp_tool_name,
-                endpoint = config.endpoint,
-                auth_header = config.auth_header,
-                transport = config.transport,
-                max_concurrency = config.max_concurrency,
-                enable_trace_logging = config.enable_trace_logging,
-            )
-            return
+            resolved_mcp_tool_name = config.mcp_tool_name or config.name
+            assert resolved_mcp_tool_name
+            assert config.endpoint
+            super().__init__(config=config)
+            self.mcp_tool_name = resolved_mcp_tool_name
+            self.endpoint = config.endpoint
+            self.auth_header = config.auth_header
+            self.transport = config.transport  # type: ignore[assignment]
+            self.max_concurrency = config.max_concurrency
+            self.enable_trace_logging = config.enable_trace_logging
+            self.raise_on_fatal = config.raise_on_fatal
         else:
             assert name
             assert mcp_tool_name
@@ -202,11 +183,12 @@ class BaseMCPTool(BaseTool):
             self.endpoint = endpoint
             self.auth_header = auth_header
             self.transport = transport
-            if max_concurrency and max_concurrency <= 0:
-                raise ValueError(f"max_concurrency must be positive: {max_concurrency}")
             self.max_concurrency = max_concurrency
             self.enable_trace_logging = enable_trace_logging
             self.raise_on_fatal = raise_on_fatal
+
+        if self.max_concurrency and self.max_concurrency <= 0:
+            raise ValueError(f"max_concurrency must be positive: {self.max_concurrency}")
 
         self._client: Client | None = None           # fastmcp.Client 实例
         self._connected = False            # 连接状态标记
@@ -516,19 +498,6 @@ class BaseMCPTool(BaseTool):
 
 
 # ---------------------------------------------------------------------------
-# MCPToolConfig
-# ---------------------------------------------------------------------------
-
-@dataclass
-class MCPToolConfig(BaseMCPToolConfig):
-    response_char_limit: int | None = None
-
-    def __post__init__(self) -> None:
-        super().__post_init__()
-        if self.mcp_tool_name:
-            logger.warning("mcp_tool_name would be ignored for creating `MCPTool`")
-
-# ---------------------------------------------------------------------------
 # GenericMCPTool：开箱即用的 MCP 工具（无需子类化）
 # ---------------------------------------------------------------------------
 
@@ -542,11 +511,19 @@ class MCPTool(BaseMCPTool):
     """
 
     @overload
-    def __init__(self, *, config: MCPToolConfig) -> None: ...
+    def __init__(self, *, config: ToolConfig) -> None: ...
     @overload
-    def __init__(self, name: str, endpoint: str, response_char_limit:int | None = None, **kwargs: Any) -> None: ...
+    def __init__(self, name: str, endpoint: str, response_char_limit: int | None = None, **kwargs: Any) -> None: ...
 
-    def __init__(self, name: str | None = None, endpoint: str | None = None, response_char_limit: Optional[int] = None, *, config: MCPToolConfig | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        name: str | None = None,
+        endpoint: str | None = None,
+        response_char_limit: Optional[int] = None,
+        *,
+        config: ToolConfig | None = None,
+        **kwargs: Any,
+    ) -> None:
         if config:
             super().__init__(config=config)
             response_char_limit = config.response_char_limit
@@ -557,7 +534,8 @@ class MCPTool(BaseMCPTool):
                 name=name,
                 endpoint=endpoint,
                 mcp_tool_name=name,
-                **kwargs)
+                **kwargs,
+            )
         if response_char_limit and response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {response_char_limit}")
         self.response_char_limit = response_char_limit
