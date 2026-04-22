@@ -8,7 +8,7 @@ import asyncio
 import json
 import traceback
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, Any, TYPE_CHECKING, overload
 
 from openai import BadRequestError, InternalServerError
@@ -16,8 +16,8 @@ from openai import BadRequestError, InternalServerError
 from webagent.commons.messages import ChatMessage, ToolCall, tool, system, user
 from webagent.commons.messages import Tool as ToolMsgType
 from webagent.tools import BaseTool, ToolConfig, build_tool
-from webagent.llm.parser import Parser, ParsingError, ParserConfig, get_parser
-from webagent.llm.client import Client, ClientConfig, get_client
+from webagent.llm.parser import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
+from webagent.llm.client import Client, ClientConfig, get_client, OpenAIConfig
 from webagent.agent import BaseAgent
 from webagent.log import append_trace_interaction, get_logger, log_context
 from webagent.commons.retry import retry_async, RetryPolicy, RetryConfig
@@ -45,9 +45,16 @@ def _preview_payload(value: Any, limit: int = 300) -> str:
 
 @dataclass
 class WebAgentConfig:
-    llm_client: ClientConfig
-    parser: ParserConfig
-    tools: list[ToolConfig] = []
+    llm_client: ClientConfig = field(default_factory=lambda: ClientConfig(
+        type="openai",
+        model="",
+        openai=OpenAIConfig(),
+    ))
+    parser: ParserConfig = field(default_factory=lambda: ParserConfig(
+        type="qwen",
+        qwen=QwenParserConfig(),
+    ))
+    tools: list[ToolConfig] = field(default_factory=list)
     system_prompt: str | None = None
     max_turn: int = 10
     max_turn_prompt: str | None = None

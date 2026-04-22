@@ -23,7 +23,7 @@ class ToolConfig:
     # Common fields
     name: str = ""
     description: str | None = None
-    inputSchema: Mapping[str, Any] | None = None
+    inputSchema: dict[str, Any] | None = None
     raise_argument_validation_error: bool = False
 
     # MCP connection

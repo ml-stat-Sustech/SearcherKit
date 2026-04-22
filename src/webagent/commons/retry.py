@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, ParamSpec, TypeVar, overload
 
 import backoff
@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 class RetryConfig:
     max_tries: int = 3
     max_time: float | None = None
-    exceptions: list[str] = ["pkg://Exception"]
+    exceptions: list[str] = field(default_factory=lambda: ["pkg://Exception"])
     giveup: str | None = None
     jitter: str | None = "pkg://backoff.full_jitter"
     factor: float = 1.0
@@ -32,9 +32,9 @@ class RetryPolicy:
 
     max_tries: int = 3
     max_time: float | None = None
-    exceptions: tuple[type[Exception], ...] = (Exception,)
-    giveup: Callable[[Exception], bool] | None = None
-    jitter: Callable[[float], float] | None = backoff.full_jitter
+    exceptions: Any = None
+    giveup: Any = None
+    jitter: Any = None
     factor: float = 1.0
     base: float = 2.0
 

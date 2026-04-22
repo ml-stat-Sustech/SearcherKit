@@ -29,8 +29,8 @@ DataFormat = Literal["jsonl", "parquet"]
 
 @dataclass
 class DataConfig:
-    source: str
-    fmt: DataFormat
+    source: str = ""
+    fmt: str = "jsonl"
     input_key: str = "prompt"
     answer_key: str = "answer"
     max_items: int | None = None
@@ -66,6 +66,23 @@ class GenericDataLoader(BaseLoader):
         self.input_key = input_key
         self.answer_key = answer_key
         self.max_items = max_items
+
+    @classmethod
+    def from_omegaconf(cls, cfg: Any = None, **kwargs: Any) -> "GenericDataLoader":
+        """Construct from OmegaConf/dict config."""
+        if cfg is not None:
+            if hasattr(cfg, "source"):
+                config = DataConfig(
+                    source=cfg.source,
+                    fmt=getattr(cfg, "fmt", "jsonl"),
+                    input_key=getattr(cfg, "input_key", "prompt"),
+                    answer_key=getattr(cfg, "answer_key", "answer"),
+                    max_items=getattr(cfg, "max_items", None),
+                )
+            else:
+                config = DataConfig(**cfg)
+            return cls(config=config)
+        return cls(**kwargs)
 
     def yield_inputs(self) -> Iterator[DataItem]:
         if self.fmt == "jsonl":

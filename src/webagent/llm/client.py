@@ -19,31 +19,30 @@ from dataclasses import dataclass
 from openai import AsyncOpenAI
 
 from webagent.log import get_logger
-from webagent.commons.retry import wrap_async
+from webagent.commons.retry import wrap_async, RetryPolicy
 
 if TYPE_CHECKING:
     from openai.types.completion_usage import CompletionUsage
-    from webagent.commons.retry import RetryPolicy
 
 logger = get_logger(__name__)
 
 @dataclass
 class OpenAIConfig:
-    api_key: str | None
-    base_url: str | list[str] | None = None
+    api_key: str | None = None
+    base_url: Any | None = None
     concurrency_limit: int | None = None
-    extra_client_kwargs: dict[str, object] | None = None
+    extra_client_kwargs: Any | None = None
 
 @dataclass
 class ClientConfig:
     type: str = "openai"
     model: str = ""
     retry_policy: RetryPolicy | None = None
-    default_kwargs: dict[str, object] | None = None
+    default_kwargs: Any | None = None
     openai: OpenAIConfig | None = None
 
     def __post_init__(self):
-        assert self.model
+        pass
 
 def get_client(config: ClientConfig) -> "Client":
     if "openai" == config.type.lower():

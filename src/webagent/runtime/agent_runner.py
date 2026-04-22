@@ -3,15 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, field, is_dataclass
 from datetime import datetime
 from pathlib import Path
 import time
-from typing import Any, Callable, Iterable, Sequence, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import Any, Iterable, Sequence, TYPE_CHECKING, overload
 from uuid import uuid4
 
 from webagent.agent import BaseAgent
+from webagent.agent.webagent import WebAgent, WebAgentConfig
 from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
+from omegaconf import OmegaConf
 from webagent.commons.config import instantiate
 from webagent.commons.retry import retry_async, RetryPolicy
 
@@ -72,38 +75,38 @@ def _make_trace_id() -> str:
     return uuid4().hex[:12]
 
 
+@dataclass
+class RunConfig:
+    agent: WebAgentConfig = field(default_factory=WebAgentConfig)
+    max_concurrency: int | None = None
+    dataloader: Any | None = None
+    output_path: str | None = None
+    retry_policy: RetryPolicy | None = None
+    overwrite_output: bool = False
+    logging: dict[str, Any] | None = None
+
 class AgentRunner:
     """
     Agent Runner:
     - Manage runtime resources
-    - Create agent (from code or config)
+    - Create agent (from config)
     - Accept and run agent tasks (with concurrency limit if provided)
     - Manage retry and logging
     """
-
     def __init__(
         self,
-        build_agent: Callable[[], BaseAgent] | None = None,
-        agent_config: Any = None,
-        max_concurrency: int | None = None,
+        *,
+        config: Any = None,
     ):
-        if not build_agent and not agent_config:
-            raise ValueError("Either build_agent or agent_config must be provided")
-        if build_agent and agent_config:
-            logger.warning("Both build_agent and agent_config were provided; using build_agent")
-        if max_concurrency is not None and max_concurrency < 1:
+        if config is None:
+            raise ValueError("config must be provided")
+        if config.max_concurrency is not None and config.max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1 or None")
 
-        self.build_agent = build_agent or (
-            lambda: instantiate(
-                cfg=agent_config,
-                recursive=True,
-                resolve_imports=True,
-            )
-        )
-        self.max_concurrency = max_concurrency
-        self._semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
-        self.run_id = 0 # simple incrementing run id
+        self.build_agent = lambda: WebAgent(config=config.agent)
+        self.max_concurrency = config.max_concurrency
+        self._semaphore = asyncio.Semaphore(config.max_concurrency) if config.max_concurrency else None
+        self.run_id = 0
         logger.info("AgentRunner initialized max_concurrency=%s", self.max_concurrency)
 
     @asynccontextmanager
@@ -235,11 +238,32 @@ class AgentRunner:
 
             cfg_retry_policy = cfg.get("retry_policy")
             if cfg_retry_policy is not None:
-                cfg_values["retry_policy"] = instantiate(
-                    cfg=cfg_retry_policy,
-                    recursive=True,
-                    resolve_imports=True,
-                )
+                from webagent.commons.retry import RetryPolicy, RetryConfig
+                if isinstance(cfg_retry_policy, RetryPolicy):
+                    cfg_values["retry_policy"] = cfg_retry_policy
+                elif isinstance(cfg_retry_policy, RetryConfig):
+                    cfg_values["retry_policy"] = RetryPolicy(config=cfg_retry_policy)
+                elif isinstance(cfg_retry_policy, dict):
+                    cfg_values["retry_policy"] = RetryPolicy(
+                        config=RetryConfig(**cfg_retry_policy)
+                    )
+                else:
+                    # Convert DictConfig (or other OmegaConf config) to object
+                    retry_cfg = OmegaConf.to_object(cfg_retry_policy)
+                    if isinstance(retry_cfg, RetryPolicy):
+                        cfg_values["retry_policy"] = retry_cfg
+                    elif isinstance(retry_cfg, RetryConfig):
+                        cfg_values["retry_policy"] = RetryPolicy(config=retry_cfg)
+                    elif isinstance(retry_cfg, dict):
+                        cfg_values["retry_policy"] = RetryPolicy(
+                            config=RetryConfig(**retry_cfg)
+                        )
+                    else:
+                        cfg_values["retry_policy"] = instantiate(
+                            cfg=cfg_retry_policy,
+                            recursive=True,
+                            resolve_imports=True,
+                        )
 
             cfg_overwrite_output = cfg.get("overwrite_output")
             if cfg_overwrite_output is not None:
