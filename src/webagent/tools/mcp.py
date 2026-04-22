@@ -298,7 +298,8 @@ class BaseMCPTool(BaseTool):
                         f"instance auth={bool(self.auth_header)}"
                     )
                 entry.ref_count += 1
-                self._client = entry.client
+                self._client = entry.client.new() # use new for independent new client
+                await self._client.__aenter__()
                 self._connected = True
                 self._trace_log(
                     logging.INFO,
@@ -328,10 +329,10 @@ class BaseMCPTool(BaseTool):
             client = Client(transport)
 
             try:
-                await client.__aenter__()
-                entry.client = client
-                self._client = client
+                self._client = client.new()
+                await self._client.__aenter__()
                 self._connected = True
+                entry.client = client
                 self._trace_log(
                     logging.INFO,
                     "Connected to MCP endpoint (pooled)",
