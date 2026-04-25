@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from typing import Sequence
 
 from searchagent.plugins.browsecomp_plus.source import BrowseCompPlusSource
 from searchagent.plugins.indexing import deploy_to_elasticsearch
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Index BrowseComp Plus into Elasticsearch")
+def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog, description="Index BrowseComp Plus into Elasticsearch")
     parser.add_argument("--dataset_path", required=True, help="Hugging Face dataset name or local JSON/JSONL/parquet path")
     parser.add_argument("--split", default="train", help="Dataset split")
     parser.add_argument("--es_host", required=True, help="Elasticsearch host URL")
@@ -28,8 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    cli = build_parser().parse_args()
+def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> None:
+    cli = build_parser(prog=prog).parse_args(argv)
     if cli.dense_vector and not cli.model_name:
         raise ValueError("--model_name is required with --dense-vector")
     if cli.dense_vector and cli.embedding_dim < 1:

@@ -8,7 +8,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 from contextlib import nullcontext
 
 from tqdm import tqdm
@@ -92,7 +92,7 @@ reasoning: Explain why the extracted_final_answer is correct or incorrect based 
 correct: Output true if extracted_final_answer matches the [correct_answer] given above, or is within a small margin of error for numerical problems. Output false otherwise, i.e. if there if there is any inconsistency, ambiguity, non-equivalency, or if the extracted answer is incorrect.
 
 
-confidence: The extracted confidence score between 0|\%| and 100|\%| from [response]. Put 100 if there is no confidence score available.
+confidence: The extracted confidence score between 0% and 100% from [response]. Put 100 if there is no confidence score available.
 """.strip().format(
         question=question,
         response=response,
@@ -263,8 +263,11 @@ async def _run_evaluate(
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 
 
-def evaluate_main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate saved agent run records with an LLM judge.")
+def evaluate_main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="Evaluate saved agent run records with an LLM judge.",
+    )
     parser.add_argument("input_dir", help="Directory containing agent run record JSON files.")
     parser.add_argument("output_dir", help="Directory to write evaluation result JSON files.")
     parser.add_argument(
@@ -273,7 +276,7 @@ def evaluate_main() -> None:
         default=None,
         help="Maximum number of concurrent judge requests.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     setup_logger()
     asyncio.run(

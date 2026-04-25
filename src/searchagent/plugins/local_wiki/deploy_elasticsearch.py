@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from typing import Sequence
 
 from searchagent.plugins.indexing import deploy_to_elasticsearch
 from searchagent.plugins.local_wiki.source import WikiDumpSource
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Index a MediaWiki dump into Elasticsearch")
+def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog, description="Index a MediaWiki dump into Elasticsearch")
     parser.add_argument("--wiki_dump_path", required=True, help="Path to a MediaWiki XML or XML.bz2 dump")
     parser.add_argument("--es_host", required=True, help="Elasticsearch host URL")
     parser.add_argument("--index_name", required=True, help="Elasticsearch index name")
@@ -28,8 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
-    cli = build_parser().parse_args()
+def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> None:
+    cli = build_parser(prog=prog).parse_args(argv)
     if cli.dense_vector and not cli.model_name:
         raise ValueError("--model_name is required with --dense-vector")
     if cli.dense_vector and cli.embedding_dim < 1:

@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-searchagent = "searchagent.__main__:main"
+searchagent = "searchagent.cli.main:main"
 
 [project.optional-dependencies]
 vllm = [
