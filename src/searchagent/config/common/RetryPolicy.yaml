@@ -1,6 +1,5 @@
 # RetryPolicy configuration
 # Class: searchagent.common.retry.RetryPolicy
-target: pkg://searchagent.common.retry:RetryPolicy
 max_tries: 3
 max_time: null
 exceptions:

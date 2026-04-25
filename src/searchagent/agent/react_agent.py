@@ -13,8 +13,8 @@ from searchagent.agent import BaseAgent
 from searchagent.log import get_logger
 
 if TYPE_CHECKING:
-    from searchagent.llm.client import Client
-    from searchagent.llm.parser import Parser
+    from searchagent.llm.base import Client
+    from searchagent.llm.parsers import Parser
     from searchagent.tools import BaseTool
 
 logger = get_logger(__name__)

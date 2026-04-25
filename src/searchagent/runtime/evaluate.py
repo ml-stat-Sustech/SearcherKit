@@ -17,8 +17,8 @@ import openai
 from searchagent.log import get_logger, setup_logger
 from searchagent.agent import BaseAgent
 from searchagent.agent import SingleTurnAgent
-from searchagent.llm.client import OpenAIClient
-from searchagent.llm.parser import QwenParser
+from searchagent.llm.openai import OpenAIClient
+from searchagent.llm.parsers import QwenParser
 from searchagent.common.retry import RetryPolicy, retry_async
 
 logger = get_logger(__name__)

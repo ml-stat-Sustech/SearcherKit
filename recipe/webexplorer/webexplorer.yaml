@@ -1,17 +1,17 @@
-# WebExplorer-style WebAgent config.
+# WebExplorer-style SearchAgent config.
 #
-# This recipe keeps the project's default WebAgent + QwenParser runtime and
+# This recipe keeps the project's default SearchAgent + WebExplorerParser runtime and
 # aligns the model sampling settings with the official WebExplorer inference
 # code. It assumes the MCP server exposes `search` and `browse` tools.
 # If your MCP server uses `visit` instead of `browse`, rename `mcp_tool_name`
 # accordingly.
 
 defaults:
-  - agent@agent: WebAgent
+  - agent@agent: SearchAgent
   - llm@agent.llm_client: OpenAIClient
   - llm@agent.parser: QwenParser
-  - utils@retry_policy: RetryPolicy
-  - dataloader@dataloader: GenericDataLoader
+  - common@retry_policy: RetryPolicy
+  - common@dataloader: GenericDataLoader
   - _self_
 
 retry_policy:
@@ -19,9 +19,8 @@ retry_policy:
 
 agent:
   llm_client:
+    type: openai
     model: WebExplorer-8B
-    api_key: "EMPTY"
-    base_url: http://127.0.0.1:8001/v1
     default_kwargs:
       temperature: 0.6
       top_p: 0.95
@@ -29,12 +28,16 @@ agent:
       stop:
         - "<tool_response>"
         - "\n<tool_response>"
-    concurrency_limit: 512
+    openai:
+      api_key: "EMPTY"
+      base_url: http://127.0.0.1:8001/v1
+      concurrency_limit: 512
+      extra_client_kwargs: null
   parser:
-    upstream_parsed: false
-    drop_thinking: false
+    type: webexplorer
+    target: pkg://searchagent.llm.parsers.webexplorer:WebExplorerParser
   tools:
-    - target: pkg://webagent.tools:MCPTool
+    - type: mcp
       name: search
       endpoint: http://127.0.0.1:8300/mcp/
       max_concurrency: 512
@@ -60,20 +63,18 @@ agent:
     Based on all the information above, provide your final answer now in the format:
     <answer>your answer</answer>
   max_tokens_prompt_margin: 3072
-  llm_retry_policy:
-    target: pkg://webagent.utils.retry:RetryPolicy
+  llm_retry_config:
     max_tries: 5
     exceptions:
-      - pkg://webagent.llm.parser:ParsingError
+      - pkg://searchagent.llm.parsers:ParsingError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
-  tool_retry_policy:
-    target: pkg://webagent.utils.retry:RetryPolicy
+  tool_retry_config:
     max_tries: 5
     exceptions:
-      - pkg://webagent.tools:ToolRecoverableError
+      - pkg://searchagent.tools:ToolRecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0

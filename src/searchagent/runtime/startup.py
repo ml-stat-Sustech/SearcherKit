@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import atexit
 import shutil
 import subprocess
 import sys
@@ -16,7 +15,6 @@ from searchagent.log import get_logger
 logger = get_logger(__name__)
 
 _es_started_by_us: bool = False
-_mcp_proc: subprocess.Popen[bytes] | None = None
 
 
 def _cfg_get(cfg: Any, key: str, default: Any = None) -> Any:
@@ -40,26 +38,9 @@ async def check_and_start(cfg: Any) -> None:
     if _cfg_get(elasticsearch_cfg, "enabled", False):
         await _start_and_check_elasticsearch(elasticsearch_cfg)
 
-    mcp_server_cfg = _cfg_get(auto_cfg, "mcp_server", {})
-    if _cfg_get(mcp_server_cfg, "enabled", False):
-        global _mcp_proc
-        _mcp_proc = await _check_and_start_mcp_server(mcp_server_cfg)
-
-    # atexit.register(shutdown)
-
-
 async def shutdown() -> None:
     def _shutdown():
-        global _es_started_by_us, _mcp_proc
-        if _mcp_proc is not None:
-            logger.info("Stopping MCP server (pid=%d)", _mcp_proc.pid)
-            _mcp_proc.terminate()
-            try:
-                _mcp_proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                _mcp_proc.kill()
-                _mcp_proc.wait(timeout=5)
-            _mcp_proc = None
+        global _es_started_by_us
 
         if _es_started_by_us:
             logger.info("Stopping Elasticsearch")
@@ -180,10 +161,10 @@ async def _check_es_index(es: Any, index_name: str | None, es_cfg: Any) -> None:
     gpu_batch_size: int = _cfg_get(es_cfg, "gpu_batch_size", 20)
 
     from pathlib import Path
-    base = Path(__file__).resolve().parent.parent / "integrations" / "local_wiki"
+    base = Path(__file__).resolve().parent.parent / "plugins" / "local_wiki"
 
     if corpus_type == "wiki":
-        script_path = base / "eswiki" / "wiki2index_links.py"
+        script_path = base / "deploy_elasticsearch.py"
         cmd = [
             sys.executable, str(script_path),
             "--es_host", host,
@@ -198,7 +179,7 @@ async def _check_es_index(es: Any, index_name: str | None, es_cfg: Any) -> None:
         if include_vector:
             cmd.append("--dense-vector")
     else:
-        script_path = base / "browsecomp" / "browsecomp2index.py"
+        script_path = Path(__file__).resolve().parent.parent / "plugins" / "browsecomp_plus" / "deploy_elasticsearch.py"
         cmd = [
             sys.executable, str(script_path),
             "--es_host", host,
@@ -225,61 +206,6 @@ async def _check_es_index(es: Any, index_name: str | None, es_cfg: Any) -> None:
         logger.error("Index build script exited with code %d", returncode)
         sys.exit(1)
     logger.info("Index '%s' built successfully", index_name)
-
-
-async def _check_and_start_mcp_server(mcp_cfg: Any) -> subprocess.Popen[bytes] | None:
-    host: str = _cfg_get(mcp_cfg, "host")
-    port: int = _cfg_get(mcp_cfg, "port")
-    workers: int = _cfg_get(mcp_cfg, "workers", 8)
-    timeout_s: float = _cfg_get(mcp_cfg, "startup_timeout_s", 30.0)
-    env_overrides: dict[str, str] = dict(_cfg_get(mcp_cfg, "env", {}))
-
-    if await _port_open(host, port):
-        logger.info("MCP server already running on %s:%s", host, port)
-        return None
-
-    if not shutil.which("uvicorn"):
-        logger.error("uvicorn not found, cannot start MCP server")
-        sys.exit(1)
-
-    cmd = [
-        sys.executable, "-m", "uvicorn",
-        "searchagent.integrations.local_wiki.mcp.local_wiki_mcp:create_app",
-        "--factory",
-        "--host", host,
-        "--port", str(port),
-        "--workers", str(workers),
-    ]
-
-    import os
-    env = os.environ.copy()
-    env.update(env_overrides)
-
-    logger.info("Starting MCP server: %s", " ".join(cmd))
-    proc = subprocess.Popen(cmd, env=env)
-
-    try:
-        await _wait_for_port(host=host, port=port, timeout_s=timeout_s)
-        logger.info("MCP server started on %s:%s (pid=%d)", host, port, proc.pid)
-    except TimeoutError:
-        proc.terminate()
-        proc.wait(timeout=10)
-        logger.error("MCP server failed to start within %.1fs", timeout_s)
-        sys.exit(1)
-
-    return proc
-
-
-async def _port_open(host: str, port: int) -> bool:
-    try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(host, port), timeout=3.0
-        )
-        writer.close()
-        await writer.wait_closed()
-        return True
-    except OSError:
-        return False
 
 
 async def _wait_for_port(*, host: str, port: int, timeout_s: float) -> None:

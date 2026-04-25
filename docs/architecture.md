@@ -8,7 +8,7 @@ src/searchagent/
 |-- agent/          # agent loops and orchestration
 |-- common/         # messages, retry, config, dataloader utilities
 |-- config/         # Hydra config templates
-|-- integrations/   # concrete optional backends, such as local_wiki
+|-- plugins/        # concrete optional backends, such as local_wiki
 |-- llm/            # LLM protocols, clients, and parsers
 |-- runtime/        # batch runner, startup, evaluation, logging
 |-- sources/        # data source contracts and adapters
@@ -35,8 +35,8 @@ Agent
 
 The built-in `ElasticsearchSource` handles common web/document indexes with
 `title`, `text`, `url`, and optional metadata fields. BrowseComp Plus indexes
-created by `integrations/local_wiki/browsecomp/browsecomp2index.py` are wired
-by configuring `document_id_field` and `fetch_field` to `url`.
+created by `plugins/browsecomp_plus/deploy_elasticsearch.py` are wired by
+configuring `document_id_field` and `fetch_field` to `url`.
 
 ## Configuration Flow
 
@@ -96,10 +96,24 @@ agent:
       source: bcp
 ```
 
+## Plugin Deployment
+
+`searchagent.plugins.local_wiki` reads MediaWiki XML/XML.bz2 dumps, extracts
+plain text plus internal links, and can deploy the normalized documents to
+Elasticsearch with optional dense vectors.
+
+`searchagent.plugins.browsecomp_plus` reads Hugging Face datasets or local
+JSON/JSONL/parquet files, normalizes common title/text/url/id fields, and uses
+the same Elasticsearch vector indexing helper.
+
+Both plugin deployment CLIs write `title`, `text`, `url`, `links`, optional
+`metadata`, and optional `text_vector`, so they can be queried through the
+built-in `ElasticsearchSource`.
+
 ## Extension Flow
 
 1. Implement `searchagent.sources.DataSource` for a backend.
 2. Configure `SearchTool` and `VisitTool` with that source.
-3. Add optional backend-specific code under `integrations/` or an external
+3. Add optional backend-specific code under `plugins/` or an external
    package.
 4. Keep agent logic independent from the concrete data source.

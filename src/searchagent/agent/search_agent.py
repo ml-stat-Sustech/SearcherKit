@@ -16,8 +16,8 @@ from searchagent.common.messages import ChatMessage, ToolCall, tool, system, use
 from searchagent.common.messages import Tool as ToolMsgType
 from searchagent.tools import BaseTool, ToolConfig, build_tool
 from searchagent.sources import DataSource, build_sources
-from searchagent.llm.parser import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
-from searchagent.llm.client import Client, ClientConfig, get_client, OpenAIConfig
+from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
+from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
 from searchagent.errors import LLMError
 from searchagent.log import append_trace_interaction, get_logger, log_context
@@ -33,7 +33,7 @@ class LLMContextError(LLMError):
     pass
 
 if TYPE_CHECKING:
-    from searchagent.llm.client import Client
+    from searchagent.llm.base import Client
 
 logger = get_logger(__name__)
 
@@ -363,7 +363,7 @@ class SearchAgent(BaseAgent):
     
     async def parse_and_call_llm(self, history: list[ChatMessage]):
         # TODO: better implementation. 
-        if getattr(self.parser, "upstream_parsed", False):
+        if self.parser.uses_provider_tools:
             tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
         else:
             tools = []

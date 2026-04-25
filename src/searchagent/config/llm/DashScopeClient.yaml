@@ -1,0 +1,10 @@
+# DashScope OpenAI-compatible client configuration
+type: dashscope
+model: ""
+retry_policy: null
+default_kwargs: null
+dashscope:
+  api_key: null
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  concurrency_limit: null
+  extra_client_kwargs: null

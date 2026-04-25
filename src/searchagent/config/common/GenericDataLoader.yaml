@@ -1,8 +1,7 @@
 # GenericDataSource configuration
 # Class: searchagent.data_source.generic.GenericDataSource
 
-target: pkg://searchagent.common.dataloader:GenericDataLoader
-source: null
+source: ""
 fmt: jsonl
 input_key: prompt
 answer_key: answer

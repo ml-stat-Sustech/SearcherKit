@@ -1,13 +1,13 @@
-# WebSailor-style WebAgent config.
+# WebSailor-style SearchAgent config.
 #
-# This keeps the project's WebAgent runtime, but aligns the LLM call kwargs and
+# This keeps the project's SearchAgent runtime, but aligns the LLM call kwargs and
 # prompt layout with Alibaba DeepResearch WebSailor more closely.
 
 defaults:
-  - agent@agent: WebAgent
+  - agent@agent: SearchAgent
   - llm@agent.llm_client: OpenAIClient
-  - utils@retry_policy: RetryPolicy
-  - dataloadere@dataloader: GenericDataLoader
+  - common@retry_policy: RetryPolicy
+  - common@dataloader: GenericDataLoader
   - _self_
 
 retry_policy:
@@ -15,20 +15,24 @@ retry_policy:
 
 agent:
   llm_client:
+    type: openai
     model: WebSailor-7B
-    api_key: "EMPTY"
-    base_url: http://127.0.0.1:6001/v1
     default_kwargs:
       temperature: 0.6
       top_p: 0.95
       stop:
         - "\n<tool_response>"
         - "<tool_response>"
-    concurrency_limit: 512
+    openai:
+      api_key: "EMPTY"
+      base_url: http://127.0.0.1:6001/v1
+      concurrency_limit: 512
+      extra_client_kwargs: null
   parser:
-    target: file://recipe/websailor/websailor_parser.py:WebSailorParser
+    type: websailor
+    target: pkg://searchagent.llm.parsers.websailor:WebSailorParser
   tools:
-    - target: pkg://webagent.tools:MCPTool
+    - type: mcp
       name: search
       endpoint: http://127.0.0.1:8300/mcp/
       transport: "streamable-http"
@@ -56,20 +60,18 @@ agent:
     <think>your final thinking</think>
     <answer>your answer</answer>
   max_tokens_prompt_margin: 3072
-  llm_retry_policy:
-    target: pkg://webagent.commons.retry:RetryPolicy
+  llm_retry_config:
     max_tries: 5
     exceptions:
-      - pkg://webagent.llm.parser:ParsingError
+      - pkg://searchagent.llm.parsers:ParsingError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
-  tool_retry_policy:
-    target: pkg://webagent.commons.retry:RetryPolicy
+  tool_retry_config:
     max_tries: 5
     exceptions:
-      - pkg://webagent.tools:ToolRecoverableError
+      - pkg://searchagent.tools:ToolRecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0

@@ -1,0 +1,10 @@
+# Local Transformers client configuration
+type: transformers
+model: ""
+retry_policy: null
+default_kwargs: null
+transformers:
+  device: null
+  dtype: null
+  model_kwargs: null
+  generation_kwargs: null

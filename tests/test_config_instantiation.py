@@ -6,7 +6,12 @@ from typing import Any
 from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
-from searchagent.llm.client import OpenAIClient
+from searchagent.llm.base import ClientConfig, DashScopeConfig, OllamaConfig, VllmConfig, get_client
+from searchagent.llm.dashscope import DashScopeClient
+from searchagent.llm.ollama import OllamaClient
+from searchagent.llm.openai import OpenAIClient
+from searchagent.llm.parsers import ParserConfig, get_parser
+from searchagent.llm.vllm import VllmClient
 from searchagent.runtime.agent_runner import AgentRunner
 from searchagent.tools import BaseTool
 from searchagent.common.retry import RetryPolicy
@@ -42,3 +47,32 @@ def test_agent_components_from_config() -> None:
         expected_args = tool_cfg.get("inputSchema")
         assert getattr(tool, "description", None) == expected_desc
         assert getattr(tool, "inputSchema", None) == expected_args
+
+
+def test_parser_target_config_instantiates_custom_parser() -> None:
+    websailor_parser = get_parser(
+        ParserConfig(
+            type="websailor",
+            target="pkg://searchagent.llm.parsers.websailor:WebSailorParser",
+        )
+    )
+    webexplorer_parser = get_parser(
+        ParserConfig(
+            type="webexplorer",
+            target="pkg://searchagent.llm.parsers.webexplorer:WebExplorerParser",
+        )
+    )
+
+    assert type(websailor_parser).__name__ == "WebSailorParser"
+    assert type(webexplorer_parser).__name__ == "WebExplorerParser"
+
+
+def test_openai_compatible_provider_configs_instantiate_clients() -> None:
+    providers = [
+        (ClientConfig(type="dashscope", model="qwen", dashscope=DashScopeConfig()), DashScopeClient),
+        (ClientConfig(type="vllm", model="qwen", vllm=VllmConfig()), VllmClient),
+        (ClientConfig(type="ollama", model="qwen", ollama=OllamaConfig()), OllamaClient),
+    ]
+
+    for config, expected_type in providers:
+        assert isinstance(get_client(config), expected_type)

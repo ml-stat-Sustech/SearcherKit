@@ -1,11 +1,10 @@
-# OpenAIClient configuration
-# Class: searchagent.llm.openai.OpenAIClient
-type: openai
+# vLLM OpenAI-compatible server client configuration
+type: vllm
 model: ""
 retry_policy: null
 default_kwargs: null
-openai:
+vllm:
   api_key: null
-  base_url: null
+  base_url: http://127.0.0.1:8000/v1
   concurrency_limit: null
   extra_client_kwargs: null

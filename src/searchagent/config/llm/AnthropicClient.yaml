@@ -1,10 +1,9 @@
-# OpenAIClient configuration
-# Class: searchagent.llm.openai.OpenAIClient
-type: openai
+# Anthropic client configuration
+type: anthropic
 model: ""
 retry_policy: null
 default_kwargs: null
-openai:
+anthropic:
   api_key: null
   base_url: null
   concurrency_limit: null

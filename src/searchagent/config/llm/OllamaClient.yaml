@@ -1,0 +1,10 @@
+# Ollama OpenAI-compatible client configuration
+type: ollama
+model: ""
+retry_policy: null
+default_kwargs: null
+ollama:
+  api_key: ollama
+  base_url: http://127.0.0.1:11434/v1
+  concurrency_limit: null
+  extra_client_kwargs: null

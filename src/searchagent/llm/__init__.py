@@ -1,12 +1,35 @@
-from .base import LLMClient, LLMResult
-from .client import Client, ClientConfig, OpenAIClient, OpenAIConfig, get_client
-from .parser import Parser, ParserConfig, ParsingError, QwenParser, QwenParserConfig, get_parser
+from .anthropic import AnthropicClient
+from .base import (
+    AnthropicConfig,
+    Client,
+    ClientConfig,
+    DashScopeConfig,
+    LLMClient,
+    LLMResult,
+    OllamaConfig,
+    OpenAIConfig,
+    TransformersConfig,
+    VllmConfig,
+    get_client,
+)
+from .dashscope import DashScopeClient
+from .ollama import OllamaClient
+from .openai import OpenAIClient
+from .parsers import Parser, ParserConfig, ParsingError, QwenParser, QwenParserConfig, WebExplorerParser, WebSailorParser, get_parser
+from .transformers import TransformersClient
+from .vllm import VllmClient
 
 __all__ = [
+    "AnthropicClient",
+    "AnthropicConfig",
     "Client",
     "ClientConfig",
+    "DashScopeClient",
+    "DashScopeConfig",
     "LLMClient",
     "LLMResult",
+    "OllamaClient",
+    "OllamaConfig",
     "OpenAIClient",
     "OpenAIConfig",
     "Parser",
@@ -14,6 +37,12 @@ __all__ = [
     "ParsingError",
     "QwenParser",
     "QwenParserConfig",
+    "WebExplorerParser",
+    "WebSailorParser",
+    "TransformersClient",
+    "TransformersConfig",
+    "VllmClient",
+    "VllmConfig",
     "get_client",
     "get_parser",
 ]

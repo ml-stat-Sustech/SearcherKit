@@ -11,8 +11,8 @@ from searchagent.agent import BaseAgent
 from searchagent.log import get_logger, log_context
 
 if TYPE_CHECKING:
-    from searchagent.llm.client import Client
-    from searchagent.llm.parser import Parser
+    from searchagent.llm.base import Client
+    from searchagent.llm.parsers import Parser
 
 logger = get_logger(__name__)
 

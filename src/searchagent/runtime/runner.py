@@ -44,6 +44,7 @@ class RunConfig:
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
     overwrite_output: bool = False
     logging: dict[str, Any] | None = None
+    auto_startup: Any | None = None
 
 class AgentRunner:
     """
@@ -165,7 +166,7 @@ class AgentRunner:
         `retry_policy` and `overwrite_output` are optional. When both `cfg` and
         explicit parameters provide the same field, `cfg` takes precedence. This
         matches the intended usage where `cfg` defines the active experiment setup
-        and explicit parameters are mainly for secondary integrations or custom
+        and explicit parameters are mainly for secondary plugins or custom
         wrappers.
 
         Args:
@@ -273,7 +274,7 @@ class AgentRunner:
         ]
         if overlap_fields:
             # cfg usually represents the intended experiment setup, while explicit
-            # parameters are secondary overrides used by downstream integrations.
+            # parameters are secondary overrides used by downstream plugins.
             logger.warning(
                 "Both cfg and explicit parameters were provided for %s; cfg values take precedence",
                 overlap_fields,

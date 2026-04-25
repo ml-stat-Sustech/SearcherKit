@@ -13,9 +13,9 @@ retry_policy:
 
 agent:
   llm_client:
+    type: openai
     model: Qwen3-8B
-    api_key: "a"
-    base_url: http://127.0.0.1:8001/v1
+    retry_policy: null
     default_kwargs:
       temperature: 0.7
       top_p: 0.8
@@ -25,9 +25,16 @@ agent:
       stop:
         - "<tool_response>"
         - "\n<tool_response>"
-    concurrency_limit: 512
+    openai:
+      api_key: "a"
+      base_url: http://127.0.0.1:8001/v1
+      concurrency_limit: 512
+      extra_client_kwargs: null
   parser:
-    upstream_parsed: false
+    type: qwen
+    qwen:
+      upstream_parsed: false
+      drop_thinking: true
   sources: []
   # Example native source-backed tools:
   # sources:
@@ -65,20 +72,20 @@ agent:
   max_tokens: 131072
   max_tokens_prompt: "You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
   max_tokens_prompt_margin: 3072
-  llm_retry_policy:
-    target: pkg://searchagent.common.retry:RetryPolicy
+  llm_retry_config:
     max_tries: 5
+    max_time: null
     exceptions:
-      - pkg://searchagent.llm.parser:ParsingError
+      - pkg://searchagent.llm.parsers:ParsingError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
-  tool_retry_policy: 
-    target: pkg://searchagent.common.retry:RetryPolicy
+  tool_retry_config:
     max_tries: 5
+    max_time: null
     exceptions:
-      - pkg://searchagent.tools.mcp:ToolRecoverableError
+      - pkg://searchagent.tools:ToolRecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
