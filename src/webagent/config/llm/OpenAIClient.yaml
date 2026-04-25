@@ -1,9 +1,0 @@
-# OpenAIClient configuration
-# Class: webagent.llm.client.OpenAIClient
-target: pkg://webagent.llm.client:OpenAIClient
-model: null
-api_key: null
-base_url: null
-default_kwargs: null
-retry_policy: null
-concurrency_limit: null

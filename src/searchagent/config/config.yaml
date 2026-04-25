@@ -1,0 +1,154 @@
+# Full config example for a Qwen-backed SearchAgent
+
+defaults:
+  - _self_
+
+retry_policy:
+  max_tries: 3
+  max_time: null
+  exceptions:
+    - pkg://searchagent.errors:RecoverableError
+  giveup: null
+  jitter: pkg://backoff:full_jitter
+  factor: 1.0
+  base: 2.0
+
+agent:
+  llm_client:
+    type: openai
+    model: Qwen3-8B
+    retry_policy: null
+    default_kwargs:
+      temperature: 0.2
+      max_tokens: 1024
+    openai:
+      api_key: YOUR_API_KEY
+      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      concurrency_limit: 8
+      extra_client_kwargs: null
+
+  parser:
+    type: qwen
+    qwen:
+      upstream_parsed: false
+      drop_thinking: true
+
+  # Sources define how SearchAgent connects to searchable data backends.
+  # Tools can reference a named source through `source: <name>`.
+  sources: []
+    # - name: memory
+    #   target: pkg://searchagent.sources:MemorySource
+    #   documents:
+    #     - id: doc-1
+    #       title: Example
+    #       text: Example document body
+    # - name: bcp
+    #   target: pkg://searchagent.sources:ElasticsearchSource
+    #   hosts: http://127.0.0.1:9200
+    #   index: browsecomp_hybrid
+    #   search_fields: [title^2, text]
+    #   document_id_field: url
+    #   fetch_field: url
+    #   highlight_fragment_size: 128
+    #   snippet_chars: 512
+    #   metadata_fields: [links]
+
+  # Tools expose agent-callable actions. `type` chooses the implementation;
+  # `name` is the function name visible to the model.
+  tools: []
+    # - type: search
+    #   name: search
+    #   source: bcp
+    # - type: visit
+    #   name: visit
+    #   source: bcp
+
+    # - type: mcp
+    #   name: web_search
+    #   mcp_tool_name: search
+    #   endpoint: http://127.0.0.1:8100/mcp
+
+  system_prompt: ""
+  max_turn: 10
+  max_turn_prompt: null
+  max_tokens: 1024
+  max_tokens_prompt: null
+  max_tokens_prompt_margin: 128
+
+  training: false
+  raise_repeat_tool_call: false
+
+  llm_retry_config:
+    max_tries: 3
+    max_time: 30
+    exceptions:
+      - pkg://searchagent.llm.parser:ParsingError
+    giveup: null
+    jitter: pkg://backoff:full_jitter
+    factor: 1.0
+    base: 2.0
+
+  tool_retry_config:
+    max_tries: 3
+    max_time: 30
+    exceptions:
+      - pkg://searchagent.tools:ToolRecoverableError
+    giveup: null
+    jitter: pkg://backoff:full_jitter
+    factor: 1.0
+    base: 2.0
+
+dataloader:
+  target: pkg://searchagent.common.dataloader:GenericDataLoader
+  source: /path/to/data.jsonl
+  fmt: jsonl
+
+auto_startup:
+  enabled: false
+  elasticsearch:
+    enabled: false
+    corpus_type: wiki  # wiki | bcp
+    host: "http://192.168.77.12:9200"
+    index_name: "wiki20251001_qwen3-embedding-0.6b"
+    include_vector: true
+    embedding_dim: 1024
+    model_name: "Qwen3-Embedding-0.6B"
+    prompt_strategy: "none"
+    wiki_dump_path: null
+    bcp_dataset_path: "Tevatron/browsecomp-plus-corpus"
+    cpu_batch_size: 200
+    gpu_batch_size: 20
+    startup_timeout_s: 6000.0
+    options: {}
+    env: {}
+  mcp_server:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8100
+    workers: 8
+    env:
+      VLLM_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B"
+      VLLM_ENDPOINT: "http://192.168.77.15:8200/v1"
+      SUMMARY_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B-FP8"
+      SUMMARY_BASE_URL: "http://192.168.77.17:8300/v1"
+      SUMMARY_API_KEY: "EMPTY"
+    startup_timeout_s: 30.0
+
+output_path: outputs/agent_history
+overwrite_output: false
+max_concurrency: null
+
+checkpoint:
+  enabled: true
+  dir: null
+  resume: true
+  filename: manifest.json
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"

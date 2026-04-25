@@ -1,0 +1,5 @@
+# QwenParser configuration
+# Class: searchagent.llm.parser.QwenParser
+target: pkg://searchagent.llm.parser:QwenParser
+upstream_parsed: false
+drop_thinking: true

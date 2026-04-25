@@ -1,0 +1,4 @@
+# MemorySource configuration
+# Class: searchagent.sources.MemorySource
+target: pkg://searchagent.sources:MemorySource
+documents: []

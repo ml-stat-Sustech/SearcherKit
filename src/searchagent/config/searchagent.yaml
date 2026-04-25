@@ -1,0 +1,110 @@
+# Full config example for a Qwen-backed SearchAgent
+
+defaults:
+  - agent@agent: SearchAgent
+  - llm@agent.llm_client: OpenAIClient
+  - llm@agent.parser: QwenParser
+  - common@retry_policy: RetryPolicy
+  - common@dataloader: GenericDataLoader
+  - _self_
+
+retry_policy:
+  max_tries: 3
+
+agent:
+  llm_client:
+    model: Qwen3-8B
+    api_key: "a"
+    base_url: http://127.0.0.1:8001/v1
+    default_kwargs:
+      temperature: 0.7
+      top_p: 0.8
+      presence_penalty: 1.5
+      extra_body: 
+        top_k: 20
+      stop:
+        - "<tool_response>"
+        - "\n<tool_response>"
+    concurrency_limit: 512
+  parser:
+    upstream_parsed: false
+  sources: []
+  # Example native source-backed tools:
+  # sources:
+  #   - name: memory
+  #     target: pkg://searchagent.sources:MemorySource
+  #     documents:
+  #       - id: "doc-1"
+  #         title: "Example"
+  #         text: "Example document body"
+  #   - name: bcp
+  #     target: pkg://searchagent.sources:ElasticsearchSource
+  #     hosts: http://127.0.0.1:9200
+  #     index: browsecomp_hybrid
+  #     search_fields: [title^2, text]
+  #     document_id_field: url
+  #     fetch_field: url
+  #     highlight_fragment_size: 128
+  #     snippet_chars: 512
+  #     metadata_fields: [links]
+  # tools:
+  #   - type: search
+  #     name: search
+  #     source: bcp
+  #   - type: visit
+  #     name: visit
+  #     source: bcp
+  #   - type: mcp
+  #     name: web_search
+  #     mcp_tool_name: search
+  #     endpoint: http://127.0.0.1:8100/mcp
+  tools: []
+  system_prompt: "You are a deep research assistant. Your core function is to conduct thorough, multi-source investigations into any topic. You must handle both broad, open-domain inquiries and queries within specialized academic fields. For every request, synthesize information from credible, diverse sources to deliver a comprehensive, accurate, and objective response. When you have gathered sufficient information and are ready to provide the definitive response, you must enclose the entire final answer within <answer></answer> tags."
+  max_turn: 100
+  max_turn_prompt: "You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
+  max_tokens: 131072
+  max_tokens_prompt: "You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
+  max_tokens_prompt_margin: 3072
+  llm_retry_policy:
+    target: pkg://searchagent.common.retry:RetryPolicy
+    max_tries: 5
+    exceptions:
+      - pkg://searchagent.llm.parser:ParsingError
+    giveup: null
+    jitter: pkg://backoff:full_jitter
+    factor: 1.0
+    base: 2.0
+  tool_retry_policy: 
+    target: pkg://searchagent.common.retry:RetryPolicy
+    max_tries: 5
+    exceptions:
+      - pkg://searchagent.tools.mcp:ToolRecoverableError
+    giveup: null
+    jitter: pkg://backoff:full_jitter
+    factor: 1.0
+    base: 2.0
+
+dataloader:
+  source: data/browsecomp_plus_decrypted_qa.jsonl
+  input_key: question
+  answer_key: answer
+  max_items: null
+
+max_concurrency: 16
+output_path: outputs/agent_history
+overwrite_output: false
+
+checkpoint:
+  enabled: true
+  dir: null
+  resume: true
+  filename: manifest.json
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"

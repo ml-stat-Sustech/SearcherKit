@@ -6,22 +6,22 @@ from typing import Any
 from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
-from webagent.llm.client import OpenAIClient
-from webagent.runtime.agent_runner import AgentRunner
-from webagent.tools import MCPTool
-from webagent.commons.retry import RetryPolicy
+from searchagent.llm.client import OpenAIClient
+from searchagent.runtime.agent_runner import AgentRunner
+from searchagent.tools import BaseTool
+from searchagent.common.retry import RetryPolicy
 
 
 def _load_cfg() -> Any:
     repo_root = Path(__file__).resolve().parents[1]
-    conf_dir = repo_root / "src" / "webagent" / "conf"
+    conf_dir = repo_root / "src" / "searchagent" / "config"
     with initialize_config_dir(config_dir=str(conf_dir), version_base=None):
         return compose(config_name="config")
 
 
 def test_agent_components_from_config() -> None:
     cfg = _load_cfg()
-    runner = AgentRunner(agent_config=cfg.agent)
+    runner = AgentRunner(config=cfg)
     agent = runner.build_agent()
 
     assert isinstance(agent.client, OpenAIClient)
@@ -35,10 +35,10 @@ def test_agent_components_from_config() -> None:
         assert tool_name, "tool name must be provided in config"
         assert tool_name in agent.tool_dict
         tool = agent.tool_dict[tool_name]
-        assert isinstance(tool, MCPTool)
+        assert isinstance(tool, BaseTool)
         assert getattr(tool, "name", None) == tool_name
 
         expected_desc = tool_cfg.get("description")
-        expected_args = tool_cfg.get("arguments_schema", tool_cfg.get("arguments"))
+        expected_args = tool_cfg.get("inputSchema")
         assert getattr(tool, "description", None) == expected_desc
-        assert getattr(tool, "arguments_schema", None) == expected_args
+        assert getattr(tool, "inputSchema", None) == expected_args

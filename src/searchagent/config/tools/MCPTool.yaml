@@ -1,0 +1,14 @@
+# MCPTool configuration
+# Class: searchagent.tools.mcp.MCPTool
+
+target: pkg://searchagent.tools:MCPTool
+type: mcp
+name: web_search
+mcp_tool_name: search
+transport: "sse"
+endpoint: http://127.0.0.1:8100/mcp
+auth_header: ""
+max_concurrency: null
+response_char_limit: null
+enable_trace_logging: true
+raise_on_fatal: true

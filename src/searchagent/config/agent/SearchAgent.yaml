@@ -1,0 +1,14 @@
+# SearchAgent configuration
+# Class: searchagent.agent.search_agent.SearchAgent
+
+target: pkg://searchagent.agent.search_agent:SearchAgent
+llm_client: null
+parser: null
+sources: []
+tools: null
+system_prompt: ""
+max_turn: 10
+max_turn_prompt: null
+max_tokens: 1024
+max_tokens_prompt: null
+max_tokens_prompt_margin: 128

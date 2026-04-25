@@ -1,0 +1,9 @@
+# OpenAIClient configuration
+# Class: searchagent.llm.client.OpenAIClient
+target: pkg://searchagent.llm.client:OpenAIClient
+model: null
+api_key: null
+base_url: null
+default_kwargs: null
+retry_policy: null
+concurrency_limit: null

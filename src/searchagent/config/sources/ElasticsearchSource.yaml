@@ -1,0 +1,20 @@
+# ElasticsearchSource configuration
+# Class: searchagent.sources.ElasticsearchSource
+target: pkg://searchagent.sources:ElasticsearchSource
+hosts: http://127.0.0.1:9200
+index: ""
+search_fields:
+  - title^2
+  - text
+title_field: title
+text_field: text
+url_field: url
+document_id_field: null
+fetch_field: null
+metadata_fields:
+  - links
+highlight: true
+highlight_fragment_size: 256
+snippet_chars: 512
+request_timeout: null
+client_kwargs: {}
