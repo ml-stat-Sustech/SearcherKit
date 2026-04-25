@@ -44,7 +44,7 @@ async def _run(cfg: DictConfig) -> None:
         await runner.run()
 
 
-@hydra.main(config_path="conf", config_name="config", version_base=None)
+@hydra.main(config_path="config", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     setup_logger()
     asyncio.run(_run(cfg))

@@ -1,9 +1,0 @@
-# GenericDataSource configuration
-# Class: webagent.data_source.generic.GenericDataSource
-
-target: pkg://webagent.commons.dataloader:GenericDataLoader
-source: null
-fmt: jsonl
-input_key: prompt
-answer_key: answer
-max_items: null

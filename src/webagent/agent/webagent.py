@@ -56,11 +56,11 @@ class WebAgentConfig:
     ))
     tools: list[ToolConfig] = field(default_factory=list)
     system_prompt: str | None = None
-    max_turn: int = 10
+    max_turn: int = 100
     max_turn_prompt: str | None = None
-    max_tokens: int = 1024
+    max_tokens: int = 131072
     max_tokens_prompt: str | None = None
-    max_tokens_prompt_margin: int = 128
+    max_tokens_prompt_margin: int = 3072
     llm_retry_config: RetryConfig | None = None
     tool_retry_config: RetryConfig | None = None
     raise_repeat_tool_call: bool = False

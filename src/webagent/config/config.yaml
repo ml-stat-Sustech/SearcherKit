@@ -1,29 +1,26 @@
-# Full config example for a Qwen-backed WebAgent
-
-defaults:
-  - _self_
-
 retry_policy:
   max_tries: 3
-  max_time: null
-  exceptions:
-    - pkg://builtins:Exception
-  giveup: null
-  jitter: pkg://backoff:full_jitter
-  factor: 1.0
-  base: 2.0
 
+# ===========================================================
+# AGENT: LLM client, parser, tools & behavior
+# ===========================================================
 agent:
   llm_client:
     type: openai
     model: Qwen3-8B
     default_kwargs:
-      temperature: 0.2
-      max_tokens: 1024
+      temperature: 0.7
+      top_p: 0.8
+      presence_penalty: 1.5
+      extra_body:
+        top_k: 20
+      stop:
+        - "<tool_response>"
+        - "\n<tool_response>"
     openai:
-      api_key: YOUR_API_KEY
-      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      concurrency_limit: 8
+      api_key: "${oc.env:OPENAI_API_KEY}"
+      base_url: http://127.0.0.1:8001/v1
+      concurrency_limit: 512
 
   parser:
     type: qwen
@@ -31,104 +28,69 @@ agent:
       upstream_parsed: false
       drop_thinking: true
 
-  # ---------------------------------------------------------------------------
-  # Tools: unified ToolConfig schema
-  #
-  # Every tool must be registered beforehand via ``register_tool(name, cls)``
-  # or ``register_tool(name, builder_fn)``.  The ``name`` field is the lookup
-  # key and is also passed as the tool's ``name`` argument.
-  #
-  # The ``extra`` dict is reserved for tool-specific custom parameters.
-  # Builder functions may read arbitrary keys from ``cfg.extra``.
-  # Registered classes receive it as ``extra=...`` if they accept the keyword.
-  # ---------------------------------------------------------------------------
   tools:
     - name: search
-      endpoint: http://127.0.0.1:8100/mcp
-      transport: streamable-http
-      max_concurrency: 8
-      enable_trace_logging: true
-
+      endpoint: http://127.0.0.1:8300/mcp/
+      max_concurrency: 512
+      raise_on_fatal: true
     - name: visit
-      endpoint: http://127.0.0.1:8100/mcp
-      transport: streamable-http
-      max_concurrency: 4
-      enable_trace_logging: true
+      endpoint: http://127.0.0.1:8300/mcp/
+      max_concurrency: 256
+      raise_on_fatal: true
 
-    # Example of a custom tool with extra parameters (requires a builder fn)
-    # - name: my_calculator
-    #   endpoint: http://127.0.0.1:8300/mcp
-    #   extra:
-    #     precision: 10
-    #     timeout: 30
+  system_prompt: >-
+    You are a deep research assistant. Your core function is to conduct
+    thorough, multi-source investigations into any topic. You must handle both
+    broad, open-domain inquiries and queries within specialized academic fields.
+    For every request, synthesize information from credible, diverse sources to
+    deliver a comprehensive, accurate, and objective response. When you have
+    gathered sufficient information and are ready to provide the definitive
+    response, you must enclose the entire final answer within
+    <answer></answer> tags.
 
-  system_prompt: ""
-  max_turn: 10
-  max_turn_prompt: null
-  max_tokens: 1024
-  max_tokens_prompt: null
-  max_tokens_prompt_margin: 128
+  max_turn: 100
+  max_turn_prompt: >-
+    You have now reached the maximum tool call turns you can handle. You should
+    stop making tool calls and, based on all the information above, think again
+    and provide what you consider the most likely answer in the following
+    format:
 
-  training: false
-  raise_repeat_tool_call: false
+    <answer>your answer</answer>
+
+  max_tokens: 131072
+  max_tokens_prompt: >-
+    You have now reached the maximum context length you can handle. You should
+    stop making tool calls and, based on all the information above, think again
+    and provide what you consider the most likely answer in the following
+    format:
+
+    <answer>your answer</answer>
+
+  max_tokens_prompt_margin: 3072
 
   llm_retry_config:
-    max_tries: 3
-    max_time: 30
+    max_tries: 5
     exceptions:
       - pkg://webagent.llm.parser:ParsingError
     giveup: null
-    jitter: pkg://backoff:full_jitter
+    jitter: pkg://backoff.full_jitter
     factor: 1.0
     base: 2.0
 
   tool_retry_config:
-    max_tries: 3
-    max_time: 30
+    max_tries: 5
     exceptions:
       - pkg://webagent.tools:ToolRecoverableError
     giveup: null
-    jitter: pkg://backoff:full_jitter
+    jitter: pkg://backoff.full_jitter
     factor: 1.0
     base: 2.0
 
-dataloader:
-  source: /path/to/data.jsonl
-  fmt: jsonl
-
-auto_startup:
-  enabled: false
-  elasticsearch:
-    enabled: false
-    corpus_type: wiki  # wiki | bcp
-    host: "http://192.168.77.12:9200"
-    index_name: "wiki20251001_qwen3-embedding-0.6b"
-    include_vector: true
-    embedding_dim: 1024
-    model_name: "Qwen3-Embedding-0.6B"
-    prompt_strategy: "none"
-    wiki_dump_path: null
-    bcp_dataset_path: "Tevatron/browsecomp-plus-corpus"
-    cpu_batch_size: 200
-    gpu_batch_size: 20
-    startup_timeout_s: 6000.0
-    options: {}
-    env: {}
-  mcp_server:
-    enabled: false
-    host: "0.0.0.0"
-    port: 8100
-    workers: 8
-    env:
-      VLLM_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B"
-      VLLM_ENDPOINT: "http://192.168.77.15:8200/v1"
-      SUMMARY_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B-FP8"
-      SUMMARY_BASE_URL: "http://192.168.77.17:8300/v1"
-      SUMMARY_API_KEY: "EMPTY"
-    startup_timeout_s: 30.0
-
+# ===========================================================
+# RUNTIME: concurrency, output & logging
+# ===========================================================
+max_concurrency: 16
 output_path: outputs/agent_history
-overwrite_output: false
 
 logging:
   global_file: ${output_path}/run.log
@@ -138,3 +100,39 @@ logging:
     format: text
     level: DEBUG
     filename_template: "{sample_id}_{trace_id}.log"
+
+# ===========================================================
+# DATALOADER
+# ===========================================================
+dataloader:
+  source: data/browsecomp_plus_decrypted_qa.jsonl
+  input_key: question
+
+# ===========================================================
+# AUTO STARTUP: elasticsearch + MCP server
+# ===========================================================
+auto_startup:
+  enabled: false
+  elasticsearch:
+    enabled: false
+    host: ""
+    index_name: null
+    corpus_type: wiki
+    wiki_dump_path: null
+    bcp_dataset_path: Tevatron/browsecomp-plus-corpus
+    include_vector: false
+    embedding_dim: 1024
+    model_name: Qwen3-Embedding-0.6B
+    prompt_strategy: "none"
+    cpu_batch_size: 200
+    gpu_batch_size: 20
+    startup_timeout_s: 60.0
+    options: {}
+    env: {}
+  mcp_server:
+    enabled: false
+    host: 0.0.0.0
+    port: 8100
+    workers: 8
+    startup_timeout_s: 30.0
+    env: {}

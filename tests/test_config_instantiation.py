@@ -14,9 +14,9 @@ from webagent.commons.retry import RetryPolicy
 
 def _load_cfg() -> Any:
     repo_root = Path(__file__).resolve().parents[1]
-    conf_dir = repo_root / "src" / "webagent" / "conf"
+    conf_dir = repo_root / "src" / "webagent" / "config"
     with initialize_config_dir(config_dir=str(conf_dir), version_base=None):
-        return compose(config_name="config")
+        return compose(config_name="webagent")
 
 
 def test_agent_components_from_config() -> None:
