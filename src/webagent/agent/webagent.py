@@ -8,16 +8,19 @@ import asyncio
 import json
 import traceback
 import copy
-from typing import Iterable, Any, TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import Iterable, Any, TYPE_CHECKING, overload
 
 from openai import BadRequestError, InternalServerError
 
 from webagent.commons.messages import ChatMessage, ToolCall, tool, system, user
 from webagent.commons.messages import Tool as ToolMsgType
-from webagent.llm.parser import Parser, ParsingError
-from webagent.agent.agent import Agent
+from webagent.tools import BaseTool, ToolConfig, build_tool
+from webagent.llm.parser import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
+from webagent.llm.client import Client, ClientConfig, get_client, OpenAIConfig
+from webagent.agent import BaseAgent
 from webagent.log import append_trace_interaction, get_logger, log_context
-from webagent.commons.retry import retry_async, RetryPolicy
+from webagent.commons.retry import retry_async, RetryPolicy, RetryConfig
 
 # TODO
 class LLMOutputError(Exception):
@@ -30,7 +33,6 @@ class LLMContextError(Exception):
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
-    from webagent.tools import BaseTool
 
 logger = get_logger(__name__)
 
@@ -41,7 +43,30 @@ def _preview_payload(value: Any, limit: int = 300) -> str:
         return text
     return text[:limit] + "..."
 
-class WebAgent(Agent):
+@dataclass
+class WebAgentConfig:
+    llm_client: ClientConfig = field(default_factory=lambda: ClientConfig(
+        type="openai",
+        model="",
+        openai=OpenAIConfig(),
+    ))
+    parser: ParserConfig = field(default_factory=lambda: ParserConfig(
+        type="qwen",
+        qwen=QwenParserConfig(),
+    ))
+    tools: list[ToolConfig] = field(default_factory=list)
+    system_prompt: str | None = None
+    max_turn: int = 10
+    max_turn_prompt: str | None = None
+    max_tokens: int = 1024
+    max_tokens_prompt: str | None = None
+    max_tokens_prompt_margin: int = 128
+    llm_retry_config: RetryConfig | None = None
+    tool_retry_config: RetryConfig | None = None
+    raise_repeat_tool_call: bool = False
+    training: bool = False
+
+class WebAgent(BaseAgent):
     """
     Tool-using conversational agent with retry and context-budget safeguards.
 
@@ -52,6 +77,10 @@ class WebAgent(Agent):
     4. Optionally inject reminder prompts near configured turn/token limits.
     5. Stop when no more tool calls are needed or turn budget is exhausted.
     """
+    @overload
+    def __init__(self, *, config: WebAgentConfig): ...
+
+    @overload
     def __init__(self, 
                  llm_client: Client, 
                  parser: Parser, 
@@ -72,7 +101,7 @@ class WebAgent(Agent):
         Args:
             llm_client: LLM client used to generate assistant responses.
             parser: Parser that converts between internal and model message formats.
-            tools: Iterable of available tools indexed by name.
+            tools: Iterable of tools used by agent.
             system_prompt: Optional system prompt prepended to every run.
             max_turn: Maximum number of tool-response turns before stopping.
             max_turn_prompt: Optional user prompt injected near turn limit.
@@ -85,9 +114,68 @@ class WebAgent(Agent):
             tool_retry_policy: Retry policy for tool execution. If `None`, retries
                 are disabled.
         """
+        ...
+    
+    def __init__(self, 
+                 llm_client: Client | None = None, 
+                 parser: Parser | None = None, 
+                 tools: Iterable[BaseTool] = [], 
+                 system_prompt: str | None = None, 
+                 max_turn: int = 10,
+                 max_turn_prompt: str | None = None,
+                 max_tokens: int = 1024,
+                 max_tokens_prompt: str | None = None,
+                 max_tokens_prompt_margin: int = 128,
+                 llm_retry_policy: RetryPolicy | None = None,
+                 tool_retry_policy: RetryPolicy | None = None,
+                 raise_repeat_tool_call: bool = False,
+                 training: bool = False,
+                 *,
+                 config: WebAgentConfig | None = None):
+        if config:
+            client = get_client(config.llm_client)
+            parser = get_parser(config.parser)
+            tools = [build_tool(tool_cfg) for tool_cfg in config.tools]
+            if config.llm_retry_config:
+                llm_retry_policy = RetryPolicy(config=config.llm_retry_config)
+            if config.tool_retry_config:
+                tool_retry_policy = RetryPolicy(config=config.tool_retry_config)
+            self.__init__(
+                llm_client=client,
+                parser=parser,
+                tools=tools,
+                system_prompt=config.system_prompt,
+                max_turn=config.max_turn,
+                max_turn_prompt=config.max_turn_prompt,
+                max_tokens=config.max_tokens,
+                max_tokens_prompt=config.max_tokens_prompt,
+                max_tokens_prompt_margin=config.max_tokens_prompt_margin,
+                llm_retry_policy=llm_retry_policy,
+                tool_retry_policy=tool_retry_policy,
+                raise_repeat_tool_call=config.raise_repeat_tool_call,
+                training=config.training,
+            )
+            return
+
+        assert llm_client
+        assert parser
+            
         self.client = llm_client
         self.parser = parser
-        self.tool_dict = {t.name: t for t in tools}
+        self.tool_dict: dict[str, BaseTool] = {}
+        for t in tools:
+            if isinstance(t, BaseTool):
+                self.tool_dict[t.name] = t
+            elif isinstance(t, ToolConfig):
+                tool = build_tool(t)
+                self.tool_dict[tool.name] = tool
+            elif isinstance(t, dict):
+                tool = build_tool(ToolConfig(**t))
+                self.tool_dict[tool.name] = tool
+            else:
+                raise TypeError(
+                    f"tools items must be BaseTool, ToolConfig or dict, got {type(t)}"
+                )
         self.system_prompt = system_prompt or ""
         self.max_turn = max_turn
         self.max_turn_prompt = max_turn_prompt
@@ -113,22 +201,10 @@ class WebAgent(Agent):
         return sum(map(lambda x: x.role == "assistant", self.history))
 
     @staticmethod
-    def _is_context_length_error(exc: BadRequestError) -> bool:
-        # TODO: For InternalServerError, check message content instead of blindly returning True
+    def _is_context_length_error(exc: BadRequestError | InternalServerError) -> bool:
+        # TODO: AReal OpenAI Client would return 500 InternalServerError wrapping BadRequestError. For InternalServerError, check message content instead of blindly returning True
         if isinstance(exc, InternalServerError):
             return True
-            # text = str(exc).lower()
-            # return any(
-            #     marker in text
-            #     for marker in (
-            #         "context length",
-            #         "maximum context length",
-            #         "max context length",
-            #         "context window",
-            #         "too many tokens",
-            #     )
-            # )
-
 
         response = getattr(exc, "response", None)
         body = getattr(response, "json", None)

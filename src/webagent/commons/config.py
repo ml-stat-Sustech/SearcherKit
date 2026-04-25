@@ -42,7 +42,7 @@ def _to_container(cfg: Any) -> Any:
     raise TypeError(f"cfg must be a mapping or DictConfig, got {type(cfg)!r}")
 
 
-def _import_from_path(path: str) -> Any:
+def import_from_path(path: str) -> Any:
     """Import a path like 'pkg://pkg.mod[:attr]' or 'file:///abs/mod.py[:attr]'."""
     if not isinstance(path, str):
         raise ValueError(
@@ -101,7 +101,7 @@ def _resolve_imports(value: Any, *, target_key: str) -> Any:
         value.startswith(_PKG_PREFIX) or value.startswith(_FILE_PREFIX)
     ):
         try:
-            return _import_from_path(value)
+            return import_from_path(value)
         except (
             ModuleNotFoundError,
             ImportError,
@@ -144,7 +144,7 @@ def instantiate(
     if factory is None:
         if target is None:
             raise ValueError("factory is None and cfg has no target")
-        factory = _import_from_path(target)
+        factory = import_from_path(target)
 
     if recursive:
         for key, value in list(data.items()):

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
 from webagent.commons.messages import ChatMessage, system, user
-from webagent.agent.agent import Agent
+from webagent.agent import BaseAgent
 from webagent.log import get_logger, log_context
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class SingleTurnAgent(Agent):
+class SingleTurnAgent(BaseAgent):
     """
     Minimal conversational agent that performs exactly one LLM completion.
     """

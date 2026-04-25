@@ -1,11 +1,6 @@
 # Full config example for a Qwen-backed WebAgent
 
 defaults:
-  - agent@agent: WebAgent
-  - llm@agent.llm_client: OpenAIClient
-  - llm@agent.parser: QwenParser
-  - commons@retry_policy: RetryPolicy
-  - commons@dataloader: GenericDataLoader
   - _self_
 
 retry_policy:
@@ -20,28 +15,64 @@ retry_policy:
 
 agent:
   llm_client:
+    type: openai
     model: Qwen3-8B
-    api_key: YOUR_API_KEY
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     default_kwargs:
       temperature: 0.2
       max_tokens: 1024
-    concurrency_limit: 8
-  tools: 
-    - target: pkg://webagent.tools:MCPTool
-      name: search
+    openai:
+      api_key: YOUR_API_KEY
+      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      concurrency_limit: 8
+
+  parser:
+    type: qwen
+    qwen:
+      upstream_parsed: false
+      drop_thinking: true
+
+  # ---------------------------------------------------------------------------
+  # Tools: unified ToolConfig schema
+  #
+  # Every tool must be registered beforehand via ``register_tool(name, cls)``
+  # or ``register_tool(name, builder_fn)``.  The ``name`` field is the lookup
+  # key and is also passed as the tool's ``name`` argument.
+  #
+  # The ``extra`` dict is reserved for tool-specific custom parameters.
+  # Builder functions may read arbitrary keys from ``cfg.extra``.
+  # Registered classes receive it as ``extra=...`` if they accept the keyword.
+  # ---------------------------------------------------------------------------
+  tools:
+    - name: search
       endpoint: http://127.0.0.1:8100/mcp
-      transport: http
+      transport: streamable-http
       max_concurrency: 8
       enable_trace_logging: true
+
+    - name: visit
+      endpoint: http://127.0.0.1:8100/mcp
+      transport: streamable-http
+      max_concurrency: 4
+      enable_trace_logging: true
+
+    # Example of a custom tool with extra parameters (requires a builder fn)
+    # - name: my_calculator
+    #   endpoint: http://127.0.0.1:8300/mcp
+    #   extra:
+    #     precision: 10
+    #     timeout: 30
+
   system_prompt: ""
   max_turn: 10
   max_turn_prompt: null
   max_tokens: 1024
   max_tokens_prompt: null
   max_tokens_prompt_margin: 128
-  llm_retry_policy:
-    target: pkg://webagent.commons.retry:RetryPolicy
+
+  training: false
+  raise_repeat_tool_call: false
+
+  llm_retry_config:
     max_tries: 3
     max_time: 30
     exceptions:
@@ -50,8 +81,8 @@ agent:
     jitter: pkg://backoff:full_jitter
     factor: 1.0
     base: 2.0
-  tool_retry_policy:
-    target: pkg://webagent.commons.retry:RetryPolicy
+
+  tool_retry_config:
     max_tries: 3
     max_time: 30
     exceptions:
@@ -62,7 +93,9 @@ agent:
     base: 2.0
 
 dataloader:
+  target: pkg://webagent.commons.dataloader:GenericDataLoader
   source: /path/to/data.jsonl
+  fmt: jsonl
 
 auto_startup:
   enabled: false

@@ -13,18 +13,41 @@ import abc
 import asyncio
 import random
 from contextlib import nullcontext
-from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, Union, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Dict, Iterable, Optional, Union, TYPE_CHECKING, overload
+from dataclasses import dataclass
 
 from openai import AsyncOpenAI
 
 from webagent.log import get_logger
-from webagent.commons.retry import wrap_async
+from webagent.commons.retry import wrap_async, RetryPolicy
 
 if TYPE_CHECKING:
     from openai.types.completion_usage import CompletionUsage
-    from webagent.commons.retry import RetryPolicy
 
 logger = get_logger(__name__)
+
+@dataclass
+class OpenAIConfig:
+    api_key: str | None = None
+    base_url: Any | None = None
+    concurrency_limit: int | None = None
+    extra_client_kwargs: Any | None = None
+
+@dataclass
+class ClientConfig:
+    type: str = "openai"
+    model: str = ""
+    retry_policy: RetryPolicy | None = None
+    default_kwargs: Any | None = None
+    openai: OpenAIConfig | None = None
+
+    def __post_init__(self):
+        pass
+
+def get_client(config: ClientConfig) -> "Client":
+    if "openai" == config.type.lower():
+        return OpenAIClient(config=config)
+    raise ValueError(f"Cannot infer client type from name: {config.type}")
 
 class Client:
     @abc.abstractmethod
@@ -42,15 +65,29 @@ class Client:
 
 class OpenAIClient(Client):
     """Wrapper around the `openai` Python SDK."""
+    @overload
+    def __init__(
+        self,
+        *,
+        config: ClientConfig,
+    ) -> None:
+        """Initialize an OpenAI chat-completions client wrapper.
+
+        Args:
+            config: OpenAI client configuration.
+        """
+        ...
+
+    @overload
     def __init__(
         self,
         *,
         model: str,
-        api_key: Optional[str] = None,
-        base_url: Optional[Union[str|list[str]]] = None,
+        api_key: str | None = None,
+        base_url: str | list[str] | None = None,
         retry_policy: RetryPolicy | None = None,
         concurrency_limit: int | None = None,
-        default_kwargs: Dict[str, object] | None = None,
+        default_kwargs: dict[str, object] | None = None,
         **extra_client_kwargs
     ) -> None:
         """Initialize an OpenAI chat-completions client wrapper.
@@ -64,7 +101,37 @@ class OpenAIClient(Client):
                 without retries.
             concurrency_limit: Maximum number of concurrent LLM requests. `None`
                 means no explicit semaphore limit.
+            **extra_client_kwargs: Extra keyword arguments passed to `openai.Client`.
         """
+        ...
+
+    def __init__(
+        self,
+        *,
+        config: ClientConfig | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        base_url: str | list[str] | None = None,
+        retry_policy: RetryPolicy | None = None,
+        concurrency_limit: int | None = None,
+        default_kwargs: dict[str, object] | None = None,
+        **extra_client_kwargs
+    ) -> None:
+        
+        if config is not None:
+            assert config.openai, "Please specify openai config when using openai client"
+            self.__init__(
+                model=config.model,
+                api_key=config.openai.api_key,
+                base_url=config.openai.base_url,
+                retry_policy=config.retry_policy,
+                concurrency_limit=config.openai.concurrency_limit,
+                default_kwargs=config.default_kwargs,
+                **(config.openai.extra_client_kwargs or {}),
+            )
+            return
+
+
         if isinstance(base_url, str) or base_url is None:
             base_urls = [base_url]
         else:
@@ -75,12 +142,14 @@ class OpenAIClient(Client):
             api_key = api_key,
             **extra_client_kwargs
         ) for url in base_urls]
+
+        assert model
         self.model = model
         self.default_kwargs = default_kwargs or {}
         
         self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
         self._create_completion: Callable[
-            [Iterable[dict[str, Any]], dict[str, Any], Optional[int]],
+            [list[dict[str, Any]], dict[str, Any], Optional[int]],
             Awaitable[Any],
         ] = self._create_completion_no_retry
         if retry_policy is not None:

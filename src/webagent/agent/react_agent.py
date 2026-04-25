@@ -9,17 +9,17 @@ from typing import Iterable, Any, TYPE_CHECKING
 
 from webagent.commons.messages import tool, system, user, ChatMessage, ToolCall
 from webagent.commons.messages import Tool as ToolMsgType
-from webagent.agent.agent import Agent
+from webagent.agent import BaseAgent
 from webagent.log import get_logger
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client
     from webagent.llm.parser import Parser
-    from webagent.tools.base import BaseTool
+    from webagent.tools import BaseTool
 
 logger = get_logger(__name__)
 
-class ReactAgent(Agent):
+class ReactAgent(BaseAgent):
     """
     Agent implementation example. React Agent that returns when no more tool calls are requested
     """
