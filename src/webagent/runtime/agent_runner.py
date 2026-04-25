@@ -13,6 +13,7 @@ from uuid import uuid4
 from webagent.agent.agent import Agent
 from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
 from webagent.commons.config import instantiate
+from webagent.runtime import startup
 from webagent.commons.retry import retry_async, RetryPolicy
 
 if TYPE_CHECKING:
@@ -84,9 +85,11 @@ class AgentRunner:
     def __init__(
         self,
         build_agent: Callable[[], Agent] | None = None,
-        agent_config: Any = None,
-        max_concurrency: int | None = None,
+        config: Any = None,
+        # max_concurrency: int | None = None,
     ):
+        agent_config = config.get("agent")
+        max_concurrency = config.get("max_concurrency")
         if not build_agent and not agent_config:
             raise ValueError("Either build_agent or agent_config must be provided")
         if build_agent and agent_config:
@@ -101,10 +104,26 @@ class AgentRunner:
                 resolve_imports=True,
             )
         )
+        self.cfg = config
         self.max_concurrency = max_concurrency
         self._semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
         self.run_id = 0 # simple incrementing run id
+
+    
+    async def init(self):
+        await startup.check_and_start(self.cfg)
         logger.info("AgentRunner initialized max_concurrency=%s", self.max_concurrency)
+
+    async def close(self):
+        logger.info("Closing AgentRunner")
+        await startup.shutdown()
+    
+    async def __aenter__(self) -> "AgentRunner":
+        await self.init()
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.close()
 
     @asynccontextmanager
     async def _limit(self):

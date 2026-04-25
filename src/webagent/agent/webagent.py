@@ -101,11 +101,12 @@ class WebAgent(Agent):
         self.history = []
         self.training = training
         self.raise_repeat_tool_call = raise_repeat_tool_call
-        self.previous_tool_queries = {}
+        self.previous_tool_queries = set()
         
     def reset(self):
         self.history = []
         self.context_token_size = 0
+        self.previous_tool_queries = set()
         
     @property
     def turn(self):
@@ -177,9 +178,12 @@ class WebAgent(Agent):
                 tool_call_coros.append(return_error(tc.name))
 
                 continue
-            if self.previous_tool_queries.get(tc.name, {}) == dict(tc.arguments):
-                if self.training and self.raise_repeat_tool_call:
-                    raise LLMOutputError(f"Query {tc.name} has repeated arguments {dict(tc.arguments)}")
+            argument_str = json.dumps((tc.arguments))
+            if (tc.name, argument_str) in self.previous_tool_queries:
+                if self.raise_repeat_tool_call:
+                    raise LLMOutputError(f"Query {tc.name} has repeated arguments {argument_str}")
+            else:
+                self.previous_tool_queries.add((tc.name, argument_str))
             
             if self.tool_retry_policy is None:
                 tool_call_coros.append(self.tool_dict[tc.name].run(**dict(tc.arguments)))
@@ -193,9 +197,6 @@ class WebAgent(Agent):
                         **dict(tc.arguments),
                     )
                 )
-        self.previous_tool_queries = {}
-        for tc in tool_call_list:
-            self.previous_tool_queries[tc.name] = dict(tc.arguments)
             
         gathered = await asyncio.gather(*tool_call_coros, return_exceptions=True)
         first_exception: Exception | None = None

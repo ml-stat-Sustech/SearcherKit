@@ -16,9 +16,8 @@ from webagent.runtime.evaluate import evaluate_main
 logger = get_logger(__name__)
 
 async def _run(cfg: DictConfig) -> None:
-    agent_cfg = cfg.get("agent")
-    runner = AgentRunner(agent_config=agent_cfg, max_concurrency=cfg.get("max_concurrency"))
-    await runner.run(cfg=cfg)
+    async with AgentRunner(config=cfg) as runner:
+        await runner.run(cfg=cfg)
 
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)

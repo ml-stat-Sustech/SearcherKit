@@ -2,6 +2,7 @@
 
 import abc
 import collections
+import asyncio
 from elasticsearch import Elasticsearch, ConnectionError
 from typing import List, Dict, Any, Optional, Protocol, Union
 from abc import abstractmethod
@@ -34,16 +35,27 @@ class BaseRetriever(abc.ABC):
         pass
 
     # --- 改动点: 恢复为更好、更明确的版本 ---
-    def _format_results(self, hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _format_results(self, hits: List[Dict[str, Any]], with_highlighted_snippet=False) -> List[Dict[str, Any]]:
         """一个辅助函数，用于将 Elasticsearch 的原始命中结果格式化为更简洁的列表。"""
         formatted_results = []
         for hit in hits:
-            source = hit.get("_source", {})
+            source = hit["_source"]
+            if with_highlighted_snippet:
+                if "highlight" in hit:
+                    highlights = hit["highlight"].get("text", [])
+                    highlights = "\n...\n".join(highlights)
+                    text = highlights or source.get("text")
+                    
+                    text = text.replace("<em>","").replace("</em>","")
+                else:
+                    text = source.get("text")[:128*5] # chars, not tokens
+            else:
+                text = source.get("text")
             result = {
                 "id": hit["_id"],
                 "score": hit["_score"],
                 "title": source.get("title"),
-                "text": source.get("text"),
+                "text": text,
                 "url": source.get("url"),
                 "links": source.get("links", []) # 保证 links 字段总是存在
             }
@@ -273,26 +285,48 @@ class ApiRetriever(BaseRetriever):
         super().__init__(es_client, index_name)
         self.encoder = encoder
 
-    async def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, top_k: int = 5, with_highlighted_snippet=False) -> List[Dict[str, Any]]:
         vector = (await self.encoder.encode(query)).tolist()
-        es_query = {"size": top_k, "knn": {"field": "text_vector", "query_vector": vector, "k": top_k, "num_candidates": 100}}
+        es_query = {
+            "size": top_k, 
+            "knn": {
+                "field": "text_vector", 
+                "query_vector": vector, 
+                "k": top_k, 
+                "num_candidates": 100
+                }
+            }
+        if with_highlighted_snippet:
+            es_query["query"] =  {
+                "multi_match": { 
+                    "query":  query,
+                    "fields": ["text", "title"]
+                }
+            }
+            es_query["highlight"] = {
+                "fields": {
+                    "text": {"fragment_size": 128},
+                }
+            }
         try:
             response = self.es.search(index=self.index_name, body=es_query)
-            return self._format_results(response['hits']['hits'])
+            return self._format_results(response['hits']['hits'], with_highlighted_snippet)
         except Exception as e:
-            return []
+            raise
+            # return []
 
-    async def batch_search(self, queries: List[str], top_k: int = 5) -> List[List[Dict[str, Any]]]:
-        vectors = (await self.encoder.encode(queries)).tolist()
-        body = []
-        for vector in vectors:
-            body.append({"index": self.index_name})
-            body.append({"size": top_k, "knn": {"field": "text_vector", "query_vector": vector, "k": top_k, "num_candidates": 100}})
-        try:
-            response = self.es.msearch(body=body)
-            return [self._format_results(res['hits']['hits']) if 'error' not in res else [] for res in response['responses']]
-        except Exception as e:
-            return [[] for _ in queries]
+    async def batch_search(self, queries: List[str], top_k: int = 5, with_highlighted_snippet=False) -> List[List[Dict[str, Any]]]:
+        return await asyncio.gather(*[self.search(q, top_k=top_k, with_highlighted_snippet=with_highlighted_snippet) for q in queries])
+    #     vectors = (await self.encoder.encode(queries)).tolist()
+    #     body = []
+    #     for vector in vectors:
+    #         body.append({"index": self.index_name})
+    #         body.append({"query": {"match": { "content": query }},"size": top_k, "knn": {"field": "text_vector", "query_vector": vector, "k": top_k, "num_candidates": 100}})
+    #     try:
+    #         response = self.es.msearch(body=body)
+    #         return [self._format_results(res['hits']['hits']) if 'error' not in res else [] for res in response['responses']]
+    #     except Exception as e:
+    #         return [[] for _ in queries]
 
 def build_retriever(
     retriever_type: str,

@@ -4,8 +4,8 @@ defaults:
   - agent@agent: WebAgent
   - llm@agent.llm_client: OpenAIClient
   - llm@agent.parser: QwenParser
-  - utils@retry_policy: RetryPolicy
-  - dataloader@dataloader: GenericDataLoader
+  - commons@retry_policy: RetryPolicy
+  - commons@dataloader: GenericDataLoader
   - _self_
 
 retry_policy:
@@ -41,7 +41,7 @@ agent:
   max_tokens_prompt: null
   max_tokens_prompt_margin: 128
   llm_retry_policy:
-    target: pkg://webagent.utils.retry:RetryPolicy
+    target: pkg://webagent.commons.retry:RetryPolicy
     max_tries: 3
     max_time: 30
     exceptions:
@@ -51,7 +51,7 @@ agent:
     factor: 1.0
     base: 2.0
   tool_retry_policy:
-    target: pkg://webagent.utils.retry:RetryPolicy
+    target: pkg://webagent.commons.retry:RetryPolicy
     max_tries: 3
     max_time: 30
     exceptions:
@@ -63,6 +63,37 @@ agent:
 
 dataloader:
   source: /path/to/data.jsonl
+
+auto_startup:
+  enabled: false
+  elasticsearch:
+    enabled: false
+    corpus_type: wiki  # wiki | bcp
+    host: "http://192.168.77.12:9200"
+    index_name: "wiki20251001_qwen3-embedding-0.6b"
+    include_vector: true
+    embedding_dim: 1024
+    model_name: "Qwen3-Embedding-0.6B"
+    prompt_strategy: "none"
+    wiki_dump_path: null
+    bcp_dataset_path: "Tevatron/browsecomp-plus-corpus"
+    cpu_batch_size: 200
+    gpu_batch_size: 20
+    startup_timeout_s: 6000.0
+    options: {}
+    env: {}
+  mcp_server:
+    enabled: false
+    host: "0.0.0.0"
+    port: 8100
+    workers: 8
+    env:
+      VLLM_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-Embedding-0.6B"
+      VLLM_ENDPOINT: "http://192.168.77.15:8200/v1"
+      SUMMARY_MODEL: "/mnt/sharedata/ssd_large/common/LLMs/Qwen3-8B-FP8"
+      SUMMARY_BASE_URL: "http://192.168.77.17:8300/v1"
+      SUMMARY_API_KEY: "EMPTY"
+    startup_timeout_s: 30.0
 
 output_path: outputs/agent_history
 overwrite_output: false
