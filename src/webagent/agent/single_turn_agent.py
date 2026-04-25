@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 
 from webagent.commons.messages import ChatMessage, system, user
 from webagent.agent import BaseAgent
-from webagent.log import get_logger, log_context
+from webagent.commons.log import get_logger, log_context
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client

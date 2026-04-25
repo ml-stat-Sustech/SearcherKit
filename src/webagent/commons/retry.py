@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable, ParamSpec, TypeVar, overload
 
 import backoff
 
-from webagent.log import get_logger
+from webagent.commons.log import get_logger
 from webagent.commons.utils import get_or_default
 from webagent.commons.config import import_from_path
 

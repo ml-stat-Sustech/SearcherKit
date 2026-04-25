@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from webagent.agent import BaseAgent
 from webagent.agent.webagent import WebAgent, WebAgentConfig
-from webagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
+from webagent.commons.log import configure_run_logging, get_logger, log_context, update_trace_metadata
 from omegaconf import OmegaConf
 from webagent.commons.config import instantiate
 from webagent.runtime import startup

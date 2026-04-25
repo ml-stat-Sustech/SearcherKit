@@ -8,7 +8,7 @@ from typing import Any, overload
 
 from jsonschema import validate, ValidationError
 
-from webagent.log import get_logger
+from webagent.commons.log import get_logger
 
 logger = get_logger(__name__)
 

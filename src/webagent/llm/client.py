@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from openai import AsyncOpenAI
 
-from webagent.log import get_logger
+from webagent.commons.log import get_logger
 from webagent.commons.retry import wrap_async, RetryPolicy
 
 if TYPE_CHECKING:

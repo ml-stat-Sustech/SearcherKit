@@ -10,7 +10,7 @@ from omegaconf import DictConfig, OmegaConf
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-from webagent.log import get_logger, setup_logger
+from webagent.commons.log import get_logger, setup_logger
 from webagent.runtime.agent_runner import AgentRunner, RunConfig
 from webagent.runtime.evaluate import evaluate_main
 from webagent.agent.webagent import WebAgentConfig

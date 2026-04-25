@@ -10,7 +10,7 @@ from typing import Iterable, Any, TYPE_CHECKING
 from webagent.commons.messages import tool, system, user, ChatMessage, ToolCall
 from webagent.commons.messages import Tool as ToolMsgType
 from webagent.agent import BaseAgent
-from webagent.log import get_logger
+from webagent.commons.log import get_logger
 
 if TYPE_CHECKING:
     from webagent.llm.client import Client

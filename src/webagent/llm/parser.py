@@ -19,7 +19,7 @@ import json_repair
 from webagent.commons.messages import ChatMessage, ToolCall, assistant, system, user
 from webagent.commons.messages import Tool as ToolType
 from webagent.tools import to_openai_tool
-from webagent.log import get_logger
+from webagent.commons.log import get_logger
 from webagent.commons.utils import get_first_or_default, get_or_default
 
 logger = get_logger(__name__)

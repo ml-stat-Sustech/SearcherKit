@@ -8,7 +8,7 @@ import sys
 
 from omegaconf import DictConfig
 
-from webagent.log import get_logger
+from webagent.commons.log import get_logger
 
 logger = get_logger(__name__)
 

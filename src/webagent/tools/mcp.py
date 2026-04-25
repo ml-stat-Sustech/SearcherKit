@@ -55,7 +55,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 
 from webagent.tools.base import BaseTool, ToolConfig
-from webagent.log import get_logger, get_trace_id, setup_logger
+from webagent.commons.log import get_logger, get_trace_id, setup_logger
 
 if TYPE_CHECKING:
     from fastmcp.client.client import CallToolResult

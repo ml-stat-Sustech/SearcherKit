@@ -19,7 +19,7 @@ from webagent.tools import BaseTool, ToolConfig, build_tool
 from webagent.llm.parser import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
 from webagent.llm.client import Client, ClientConfig, get_client, OpenAIConfig
 from webagent.agent import BaseAgent
-from webagent.log import append_trace_interaction, get_logger, log_context
+from webagent.commons.log import append_trace_interaction, get_logger, log_context
 from webagent.commons.retry import retry_async, RetryPolicy, RetryConfig
 
 # TODO
