@@ -8,16 +8,15 @@ from datetime import datetime
 from pathlib import Path
 import time
 from dataclasses import dataclass
-from typing import Any, Iterable, Sequence, TYPE_CHECKING, overload
+from typing import Any, Iterable, Sequence, TYPE_CHECKING
 from uuid import uuid4
 
-from webagent.agent import BaseAgent
 from webagent.agent.webagent import WebAgent, WebAgentConfig
 from webagent.commons.log import configure_run_logging, get_logger, log_context, update_trace_metadata
-from omegaconf import OmegaConf
-from webagent.commons.config import instantiate
+from webagent.commons.dataloader import DataConfig, GenericDataLoader
 from webagent.runtime import startup
-from webagent.commons.retry import retry_async, RetryPolicy
+from webagent.runtime.startup import AutoStartupConfig
+from webagent.commons.retry import retry_async, RetryConfig, RetryPolicy
 
 if TYPE_CHECKING:
     from webagent.commons.messages import ChatMessage
@@ -80,11 +79,12 @@ def _make_trace_id() -> str:
 class RunConfig:
     agent: WebAgentConfig = field(default_factory=WebAgentConfig)
     max_concurrency: int | None = None
-    dataloader: Any | None = None
+    dataloader: DataConfig | None = None
     output_path: str | None = None
-    retry_policy: RetryPolicy | None = None
+    retry_policy: RetryConfig | None = None
     overwrite_output: bool = False
     logging: dict[str, Any] | None = None
+    auto_startup: AutoStartupConfig | None = None
 
 class AgentRunner:
     """
@@ -97,20 +97,21 @@ class AgentRunner:
     def __init__(
         self,
         *,
-        config: Any = None,
+        config: RunConfig | None = None,
     ):
         if config is None:
             raise ValueError("config must be provided")
         if config.max_concurrency is not None and config.max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1 or None")
 
+        self.config = config
         self.build_agent = lambda: WebAgent(config=config.agent)
         self.max_concurrency = config.max_concurrency
         self._semaphore = asyncio.Semaphore(config.max_concurrency) if config.max_concurrency else None
         self.run_id = 0
 
     async def init(self):
-        await startup.check_and_start(self.cfg)
+        await startup.check_and_start(self.config.auto_startup)
         logger.info("AgentRunner initialized max_concurrency=%s", self.max_concurrency)
 
     async def close(self):
@@ -193,139 +194,67 @@ class AgentRunner:
     async def run(
         self,
         *,
-        cfg: Any = None,
         dataloader: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
         output_path: str | Path | None = None,
         retry_policy: RetryPolicy | None = None,
-        overwrite_output: bool = False,
+        overwrite_output: bool | None = None,
     ) -> dict[str, Any]:
         """
         Run a batch of agent tasks and persist per-sample trajectories plus summary stats.
 
-        Inputs can be provided either through `cfg` or through explicit parameters.
-        The effective runtime values are resolved from the union of both sources:
-        `dataloader` and `output_path` are required after merging, while
-        `retry_policy` and `overwrite_output` are optional. When both `cfg` and
-        explicit parameters provide the same field, `cfg` takes precedence. This
-        matches the intended usage where `cfg` defines the active experiment setup
-        and explicit parameters are mainly for secondary integrations or custom
-        wrappers.
+        Runtime values are resolved from `self.config` (a RunConfig already
+        converted via OmegaConf.to_object), with explicit parameters serving as
+        overrides when supplied.
 
         Args:
-            cfg: Optional config object. If present, `cfg.dataloader`,
-                `cfg.output_path`, `cfg.retry_policy`, and
-                `cfg.overwrite_output` are used to fill runtime values, with
-                `dataloader` and `output_path` treated as required.
             dataloader: Optional iterable yielding `(prompt, extra, answer)` tuples.
-                Used directly unless `cfg.dataloader` is provided.
+                If not provided, a GenericDataLoader is created from
+                `self.config.dataloader`.
             output_path: Optional output directory for trajectory files and
-                `summary.json`. Used unless `cfg.output_path` is provided.
-            retry_policy: Optional retry policy for each agent execution. Used
-                unless `cfg.retry_policy` is provided, in which case the policy is
-                instantiated from config.
+                `summary.json`. Defaults to `self.config.output_path`.
+            retry_policy: Optional retry policy for each agent execution.
+                Defaults to a RetryPolicy built from `self.config.retry_policy`.
             overwrite_output: Whether to overwrite existing per-sample output
-                files.
+                files. Defaults to `self.config.overwrite_output`.
 
         Returns:
-            A summary dictionary containing counts and aggregate statistics such as
-            completed samples, failed samples, total turns, total tool calls, and
-            their averages.
+            A summary dictionary containing counts and aggregate statistics.
 
         Raises:
-            ValueError: If merged inputs still do not provide required values.
+            ValueError: If required values (dataloader, output_path) are missing
+                after merging config and explicit parameters.
         """
 
-        # Process cfg / params
+        # Resolve values: explicit params override self.config
+        resolved_dataloader: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = dataloader
+        if resolved_dataloader is None and self.config.dataloader is not None:
+            resolved_dataloader = GenericDataLoader(config=self.config.dataloader)
 
-        cfg_values: dict[str, Any] = {}
-        if cfg is not None:
-            cfg_dataloader = cfg.get("dataloader")
-            if cfg_dataloader is not None:
-                cfg_values["dataloader"] = instantiate(
-                    cfg=cfg_dataloader,
-                    recursive=True,
-                    resolve_imports=True,
-                )
+        resolved_output_path = output_path
+        if resolved_output_path is None:
+            resolved_output_path = self.config.output_path
 
-            cfg_output_path = cfg.get("output_path")
-            if cfg_output_path is not None:
-                cfg_values["output_path"] = cfg_output_path
+        resolved_retry_policy = retry_policy
+        if resolved_retry_policy is None and self.config.retry_policy is not None:
+            resolved_retry_policy = RetryPolicy(config=self.config.retry_policy)
 
-            cfg_retry_policy = cfg.get("retry_policy")
-            if cfg_retry_policy is not None:
-                from webagent.commons.retry import RetryPolicy, RetryConfig
-                if isinstance(cfg_retry_policy, RetryPolicy):
-                    cfg_values["retry_policy"] = cfg_retry_policy
-                elif isinstance(cfg_retry_policy, RetryConfig):
-                    cfg_values["retry_policy"] = RetryPolicy(config=cfg_retry_policy)
-                elif isinstance(cfg_retry_policy, dict):
-                    cfg_values["retry_policy"] = RetryPolicy(
-                        config=RetryConfig(**cfg_retry_policy)
-                    )
-                else:
-                    # Convert DictConfig (or other OmegaConf config) to object
-                    retry_cfg = OmegaConf.to_object(cfg_retry_policy)
-                    if isinstance(retry_cfg, RetryPolicy):
-                        cfg_values["retry_policy"] = retry_cfg
-                    elif isinstance(retry_cfg, RetryConfig):
-                        cfg_values["retry_policy"] = RetryPolicy(config=retry_cfg)
-                    elif isinstance(retry_cfg, dict):
-                        cfg_values["retry_policy"] = RetryPolicy(
-                            config=RetryConfig(**retry_cfg)
-                        )
-                    else:
-                        cfg_values["retry_policy"] = instantiate(
-                            cfg=cfg_retry_policy,
-                            recursive=True,
-                            resolve_imports=True,
-                        )
+        resolved_overwrite_output = overwrite_output
+        if resolved_overwrite_output is None:
+            resolved_overwrite_output = self.config.overwrite_output
 
-            cfg_overwrite_output = cfg.get("overwrite_output")
-            if cfg_overwrite_output is not None:
-                cfg_values["overwrite_output"] = bool(cfg_overwrite_output)
-            cfg_logging = cfg.get("logging")
-            if cfg_logging is not None:
-                cfg_values["logging"] = cfg_logging
-
-        explicit_values = {
-            "dataloader": dataloader,
-            "output_path": output_path,
-            "retry_policy": retry_policy,
-            "overwrite_output": overwrite_output,
-            "logging": None,
-        }
-
-        overlap_fields = [
-            field
-            for field, explicit_value in explicit_values.items()
-            if field in cfg_values and explicit_value is not None and explicit_value != cfg_values[field]
-        ]
-        if overlap_fields:
-            # cfg usually represents the intended experiment setup, while explicit
-            # parameters are secondary overrides used by downstream integrations.
-            logger.warning(
-                "Both cfg and explicit parameters were provided for %s; cfg values take precedence",
-                overlap_fields,
-            )
-
-        resolved_values = dict(explicit_values)
-        resolved_values.update(cfg_values)
+        logging_cfg = self.config.logging
 
         missing_fields: list[str] = []
-        if resolved_values["dataloader"] is None:
+        if resolved_dataloader is None:
             missing_fields.append("dataloader")
-        if resolved_values["output_path"] is None:
+        if resolved_output_path is None:
             missing_fields.append("output_path")
         if missing_fields:
             raise ValueError(
-                f"run missing required values after merging cfg and explicit parameters: {', '.join(missing_fields)}"
+                f"run missing required values: {', '.join(missing_fields)}"
             )
 
-        dataloader = resolved_values["dataloader"]
-        resolved_retry_policy = resolved_values["retry_policy"]
-        resolved_overwrite_output = bool(resolved_values["overwrite_output"])
-        output_dir = Path(resolved_values["output_path"])
-        logging_cfg = resolved_values["logging"]
+        output_dir = Path(resolved_output_path)
 
         # Begin agent run
 
@@ -457,7 +386,7 @@ class AgentRunner:
             start_time = time.time()
 
             scheduled_tasks: list[tuple[asyncio.Task[dict[str, Any]], int, str]] = []
-            for index, (prompt, extra, answer) in enumerate(dataloader):
+            for index, (prompt, extra, answer) in enumerate(resolved_dataloader):
                 summary["total"] += 1
                 record_path = output_dir / f"{index:06d}.json"
                 if record_path.exists() and not resolved_overwrite_output:

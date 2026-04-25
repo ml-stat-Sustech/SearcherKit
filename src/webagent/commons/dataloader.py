@@ -14,8 +14,17 @@ class BaseLoader(abc.ABC):
     """Base data source interface yielding (input, extra, answer) tuples."""
     max_items: int | None = None
 
-    def __init__(self, *, max_items: int | None = None, **kwargs) -> None:
-        self.max_items = max_items
+    @overload
+    def __init__(self, *, max_items: int | None = None, **kwargs: Any) -> None: ...
+
+    @overload
+    def __init__(self, *, config: "DataConfig") -> None: ...
+
+    def __init__(self, *, max_items: int | None = None, config: "DataConfig | None" = None, **kwargs: Any) -> None:
+        if config is not None:
+            self.max_items = config.max_items
+        else:
+            self.max_items = max_items
 
     @abc.abstractmethod
     def yield_inputs(self) -> Iterator[DataItem]:
@@ -54,35 +63,17 @@ class GenericDataLoader(BaseLoader):
                  *,
                  config: DataConfig | None = None, ) -> None:
         if config is not None:
-            return self.__init__(
-                source = config.source,
-                fmt = config.fmt,
-                input_key = config.input_key,
-                answer_key = config.answer_key,
-                max_items = config.max_items
-            )
+            super().__init__(config=config)
+            self.source = config.source
+            self.fmt = config.fmt
+            self.input_key = config.input_key
+            self.answer_key = config.answer_key
+            return
+        super().__init__(max_items=max_items)
         self.source = source
         self.fmt = fmt
         self.input_key = input_key
         self.answer_key = answer_key
-        self.max_items = max_items
-
-    @classmethod
-    def from_omegaconf(cls, cfg: Any = None, **kwargs: Any) -> "GenericDataLoader":
-        """Construct from OmegaConf/dict config."""
-        if cfg is not None:
-            if hasattr(cfg, "source"):
-                config = DataConfig(
-                    source=cfg.source,
-                    fmt=getattr(cfg, "fmt", "jsonl"),
-                    input_key=getattr(cfg, "input_key", "prompt"),
-                    answer_key=getattr(cfg, "answer_key", "answer"),
-                    max_items=getattr(cfg, "max_items", None),
-                )
-            else:
-                config = DataConfig(**cfg)
-            return cls(config=config)
-        return cls(**kwargs)
 
     def yield_inputs(self) -> Iterator[DataItem]:
         if self.fmt == "jsonl":

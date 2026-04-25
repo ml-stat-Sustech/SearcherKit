@@ -93,7 +93,6 @@ agent:
     base: 2.0
 
 dataloader:
-  target: pkg://webagent.commons.dataloader:GenericDataLoader
   source: /path/to/data.jsonl
   fmt: jsonl
 

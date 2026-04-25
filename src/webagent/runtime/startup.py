@@ -5,8 +5,7 @@ import atexit
 import shutil
 import subprocess
 import sys
-
-from omegaconf import DictConfig
+from dataclasses import dataclass, field
 
 from webagent.commons.log import get_logger
 
@@ -16,18 +15,54 @@ _es_started_by_us: bool = False
 _mcp_proc: subprocess.Popen[bytes] | None = None
 
 
-async def check_and_start(cfg: DictConfig) -> None:
-    if not cfg.get("auto_startup", {}).get("enabled", False):
+@dataclass
+class ElasticsearchConfig:
+    host: str = ""
+    index_name: str | None = None
+    corpus_type: str = "wiki"
+    wiki_dump_path: str | None = None
+    bcp_dataset_path: str = "Tevatron/browsecomp-plus-corpus"
+    include_vector: bool = False
+    embedding_dim: int = 1024
+    model_name: str = "Qwen3-Embedding-0.6B"
+    prompt_strategy: str = "none"
+    cpu_batch_size: int = 200
+    gpu_batch_size: int = 20
+    startup_timeout_s: float = 60.0
+    options: dict[str, str] = field(default_factory=dict)
+    env: dict[str, str] = field(default_factory=dict)
+    enabled: bool = False
+
+
+@dataclass
+class MCPServerConfig:
+    host: str = "0.0.0.0"
+    port: int = 8100
+    workers: int = 8
+    startup_timeout_s: float = 30.0
+    env: dict[str, str] = field(default_factory=dict)
+    enabled: bool = False
+
+
+@dataclass
+class AutoStartupConfig:
+    enabled: bool = False
+    elasticsearch: ElasticsearchConfig = field(default_factory=ElasticsearchConfig)
+    mcp_server: MCPServerConfig = field(default_factory=MCPServerConfig)
+
+
+async def check_and_start(auto_startup_cfg: AutoStartupConfig | None = None) -> None:
+    if auto_startup_cfg is None:
+        return
+    if not auto_startup_cfg.enabled:
         return
 
-    auto_cfg = cfg.auto_startup
+    if auto_startup_cfg.elasticsearch.enabled:
+        await _start_and_check_elasticsearch(auto_startup_cfg.elasticsearch)
 
-    if auto_cfg.get("elasticsearch", {}).get("enabled", False):
-        await _start_and_check_elasticsearch(auto_cfg.elasticsearch)
-
-    if auto_cfg.get("mcp_server", {}).get("enabled", False):
+    if auto_startup_cfg.mcp_server.enabled:
         global _mcp_proc
-        _mcp_proc = await _check_and_start_mcp_server(auto_cfg.mcp_server)
+        _mcp_proc = await _check_and_start_mcp_server(auto_startup_cfg.mcp_server)
 
     # atexit.register(shutdown)
 
@@ -67,12 +102,14 @@ async def shutdown() -> None:
 
     await asyncio.to_thread(_shutdown)
 
-async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
+
+async def _start_and_check_elasticsearch(es_cfg: ElasticsearchConfig) -> None:
     global _es_started_by_us
     host: str = es_cfg.host
-    index_name: str | None = es_cfg.get("index_name", None)
+    index_name: str | None = es_cfg.index_name
 
-    from elasticsearch import Elasticsearch, ConnectionError as ESConnectionError
+    from elasticsearch import Elasticsearch
+    from elasticsearch.exceptions import ConnectionError as ESConnectionError
 
     try:
         es = Elasticsearch(host, request_timeout=10)
@@ -91,9 +128,8 @@ async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
         logger.error("elasticsearch binary not found in PATH")
         sys.exit(1)
 
-    es_opts: dict[str, str] = dict(es_cfg.get("options", {}))
     cmd = [es_bin, "-d"]
-    for k, v in es_opts.items():
+    for k, v in es_cfg.options.items():
         cmd.extend([f"-E{k}={v}"])
 
     proc = subprocess.Popen(cmd)
@@ -102,7 +138,7 @@ async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
         logger.error("elasticsearch -d exited with code %d", proc.returncode)
         sys.exit(1)
 
-    startup_timeout_s: float = es_cfg.get("startup_timeout_s", 60.0)
+    startup_timeout_s: float = es_cfg.startup_timeout_s
     host_parsed = host.replace("http://", "").replace("https://", "")
     es_host, _, es_port_str = host_parsed.partition(":")
     es_port = int(es_port_str) if es_port_str else 9200
@@ -120,7 +156,7 @@ async def _start_and_check_elasticsearch(es_cfg: DictConfig) -> None:
     await _check_es_index(es, index_name, es_cfg)
 
 
-async def _check_es_index(es, index_name: str | None, es_cfg: DictConfig) -> None:
+async def _check_es_index(es, index_name: str | None, es_cfg: ElasticsearchConfig) -> None:
     if index_name is None:
         logger.info("No index_name configured, skipping index check")
         return
@@ -130,10 +166,10 @@ async def _check_es_index(es, index_name: str | None, es_cfg: DictConfig) -> Non
         logger.info("Elasticsearch index '%s' exists with %d documents", index_name, count)
         return
 
-    corpus_type: str = es_cfg.get("corpus_type", "wiki")
+    corpus_type: str = es_cfg.corpus_type
+    wiki_dump_path: str | None = es_cfg.wiki_dump_path
 
     if corpus_type == "wiki":
-        wiki_dump_path: str | None = es_cfg.get("wiki_dump_path", None)
         if wiki_dump_path is None:
             logger.error(
                 "Elasticsearch index '%s' does not exist and wiki_dump_path is not configured. "
@@ -143,25 +179,27 @@ async def _check_es_index(es, index_name: str | None, es_cfg: DictConfig) -> Non
             sys.exit(1)
         source_desc = wiki_dump_path
     elif corpus_type == "bcp":
-        dataset_path: str = es_cfg.get("bcp_dataset_path", "Tevatron/browsecomp-plus-corpus")
+        dataset_path: str = es_cfg.bcp_dataset_path
         source_desc = dataset_path
     else:
         logger.error("Unknown corpus_type '%s', expected 'wiki' or 'bcp'", corpus_type)
         sys.exit(1)
 
     logger.warning("Elasticsearch index '%s' does not exist", index_name)
-    answer = input(f"Build index '{index_name}' from '{source_desc}' (corpus_type={corpus_type})? [Y/n] ").strip().lower()
+    answer = input(
+        f"Build index '{index_name}' from '{source_desc}' (corpus_type={corpus_type})? [Y/n] "
+    ).strip().lower()
     if answer not in ("", "y", "yes"):
         logger.error("Index '%s' not created, exiting", index_name)
         sys.exit(1)
 
     host: str = es_cfg.host
-    include_vector: bool = es_cfg.get("include_vector", False)
-    embedding_dim: int = es_cfg.get("embedding_dim", 1024)
-    model_name: str = es_cfg.get("model_name", "")
-    prompt_strategy: str = es_cfg.get("prompt_strategy", "none")
-    cpu_batch_size: int = es_cfg.get("cpu_batch_size", 200)
-    gpu_batch_size: int = es_cfg.get("gpu_batch_size", 20)
+    include_vector: bool = es_cfg.include_vector
+    embedding_dim: int = es_cfg.embedding_dim
+    model_name: str = es_cfg.model_name
+    prompt_strategy: str = es_cfg.prompt_strategy
+    cpu_batch_size: int = es_cfg.cpu_batch_size
+    gpu_batch_size: int = es_cfg.gpu_batch_size
 
     from pathlib import Path
     base = Path(__file__).resolve().parent.parent / "local_wiki"
@@ -199,8 +237,7 @@ async def _check_es_index(es, index_name: str | None, es_cfg: DictConfig) -> Non
 
     import os
     env = os.environ.copy()
-    env_overrides: dict[str, str] = dict(es_cfg.get("env", {}))
-    env.update(env_overrides)
+    env.update(es_cfg.env)
 
     logger.info("Building index (%s): %s", corpus_type, " ".join(cmd))
     proc = await asyncio.create_subprocess_exec(*cmd, env=env)
@@ -211,12 +248,11 @@ async def _check_es_index(es, index_name: str | None, es_cfg: DictConfig) -> Non
     logger.info("Index '%s' built successfully", index_name)
 
 
-async def _check_and_start_mcp_server(mcp_cfg: DictConfig) -> subprocess.Popen[bytes] | None:
+async def _check_and_start_mcp_server(mcp_cfg: MCPServerConfig) -> subprocess.Popen[bytes] | None:
     host: str = mcp_cfg.host
     port: int = mcp_cfg.port
-    workers: int = mcp_cfg.get("workers", 8)
-    timeout_s: float = mcp_cfg.get("startup_timeout_s", 30.0)
-    env_overrides: dict[str, str] = dict(mcp_cfg.get("env", {}))
+    workers: int = mcp_cfg.workers
+    timeout_s: float = mcp_cfg.startup_timeout_s
 
     if await _port_open(host, port):
         logger.info("MCP server already running on %s:%s", host, port)
@@ -236,7 +272,7 @@ async def _check_and_start_mcp_server(mcp_cfg: DictConfig) -> subprocess.Popen[b
 
     import os
     env = os.environ.copy()
-    env.update(env_overrides)
+    env.update(mcp_cfg.env)
 
     logger.info("Starting MCP server: %s", " ".join(cmd))
     proc = subprocess.Popen(cmd, env=env)
