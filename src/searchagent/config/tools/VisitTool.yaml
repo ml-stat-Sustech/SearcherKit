@@ -1,0 +1,18 @@
+# Native VisitTool configuration
+# Class: searchagent.tools.search.VisitTool
+
+type: visit
+name: visit
+description: Fetch a document from the configured data source.
+inputSchema:
+  type: object
+  properties:
+    document_id:
+      type: string
+  required:
+    - document_id
+  additionalProperties: false
+source: memory
+source_config: null
+response_char_limit: null
+raise_argument_validation_error: false

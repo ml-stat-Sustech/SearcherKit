@@ -34,41 +34,50 @@ agent:
       drop_thinking: true
 
   # Sources define how SearchAgent connects to searchable data backends.
-  # Tools can reference a named source through `source: <name>`.
-  sources: []
-    # - name: memory
-    #   target: pkg://searchagent.sources:MemorySource
-    #   documents:
-    #     - id: doc-1
-    #       title: Example
-    #       text: Example document body
-    # - name: bcp
-    #   target: pkg://searchagent.sources:ElasticsearchSource
-    #   hosts: http://127.0.0.1:9200
-    #   index: browsecomp_hybrid
-    #   search_fields: [title^2, text]
-    #   document_id_field: url
-    #   fetch_field: url
-    #   highlight_fragment_size: 128
-    #   snippet_chars: 512
-    #   metadata_fields: [links]
+  # Native tools reference a named source through `source: <name>`.
+  sources:
+    - name: memory
+      target: pkg://searchagent.sources:MemorySource
+      documents:
+        - id: doc-1
+          title: SearchAgent native tools
+          text: SearchAgent can expose any configured DataSource through native search and visit tools.
+        - id: doc-2
+          title: BrowseComp Plus indexes
+          text: BrowseComp Plus corpora are commonly queried through ElasticsearchSource with url-based visit ids.
 
   # Tools expose agent-callable actions. `type` chooses the implementation;
   # `name` is the function name visible to the model.
-  tools: []
-    # - type: search
-    #   name: search
-    #   source: bcp
-    # - type: visit
-    #   name: visit
-    #   source: bcp
+  tools:
+    - type: search
+      name: search
+      description: Search the configured data source.
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+          top_k:
+            type: integer
+            minimum: 1
+        required:
+          - query
+        additionalProperties: false
+      source: memory
+    - type: visit
+      name: visit
+      description: Fetch a document from the configured data source.
+      inputSchema:
+        type: object
+        properties:
+          document_id:
+            type: string
+        required:
+          - document_id
+        additionalProperties: false
+      source: memory
 
-    # - type: mcp
-    #   name: web_search
-    #   mcp_tool_name: search
-    #   endpoint: http://127.0.0.1:8100/mcp
-
-  system_prompt: ""
+  system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."
   max_turn: 10
   max_turn_prompt: null
   max_tokens: 1024
@@ -100,8 +109,11 @@ agent:
 
 dataloader:
   target: pkg://searchagent.common.dataloader:GenericDataLoader
-  source: /path/to/data.jsonl
+  source: src/searchagent/config/examples/data/memory_questions.jsonl
   fmt: jsonl
+  input_key: question
+  answer_key: answer
+  max_items: null
 
 auto_startup:
   enabled: false

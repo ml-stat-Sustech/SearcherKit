@@ -29,6 +29,7 @@ DataFormat = Literal["jsonl", "parquet"]
 
 @dataclass
 class DataConfig:
+    target: str | None = "pkg://searchagent.common.dataloader:GenericDataLoader"
     source: str = ""
     fmt: str = "jsonl"
     input_key: str = "prompt"

@@ -1,0 +1,21 @@
+# Native SearchTool configuration
+# Class: searchagent.tools.search.SearchTool
+
+type: search
+name: search
+description: Search the configured data source.
+inputSchema:
+  type: object
+  properties:
+    query:
+      type: string
+    top_k:
+      type: integer
+      minimum: 1
+  required:
+    - query
+  additionalProperties: false
+source: memory
+source_config: null
+response_char_limit: null
+raise_argument_validation_error: false

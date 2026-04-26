@@ -5,7 +5,7 @@ target: pkg://searchagent.tools:MCPTool
 type: mcp
 name: web_search
 mcp_tool_name: search
-transport: "sse"
+transport: "streamable-http"
 endpoint: http://127.0.0.1:8100/mcp
 auth_header: ""
 max_concurrency: null

@@ -1,20 +1,21 @@
 # ElasticsearchSource configuration
 # Class: searchagent.sources.ElasticsearchSource
+name: bcp
 target: pkg://searchagent.sources:ElasticsearchSource
 hosts: http://127.0.0.1:9200
-index: ""
+index: browsecomp_hybrid
 search_fields:
   - title^2
   - text
 title_field: title
 text_field: text
 url_field: url
-document_id_field: null
-fetch_field: null
+document_id_field: url
+fetch_field: url
 metadata_fields:
   - links
 highlight: true
-highlight_fragment_size: 256
+highlight_fragment_size: 128
 snippet_chars: 512
 request_timeout: null
 client_kwargs: {}
