@@ -11,11 +11,10 @@ from typing import Any, Iterable, Sequence, TYPE_CHECKING
 
 from searchagent.agent.search_agent import SearchAgent, SearchAgentConfig
 from searchagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
-from omegaconf import OmegaConf
-from searchagent.common.config import instantiate
+from searchagent.common.dataloader import DataConfig, DataItem, GenericDataLoader
 from searchagent.errors import SearchAgentError
 from searchagent.runtime import startup
-from searchagent.common.retry import retry_async, RetryPolicy
+from searchagent.common.retry import retry_async, RetryConfig, RetryPolicy
 from searchagent.runtime.batch import BatchItem, BatchSummary
 from searchagent.runtime.checkpoint import CheckpointConfig, CheckpointStore
 from searchagent.runtime.errors import CheckpointError
@@ -38,9 +37,9 @@ logger = get_logger(__name__)
 class RunConfig:
     agent: SearchAgentConfig = field(default_factory=SearchAgentConfig)
     max_concurrency: int | None = None
-    dataloader: Any | None = None
+    dataloader: DataConfig | None = None
     output_path: str | None = None
-    retry_policy: RetryPolicy | None = None
+    retry_policy: RetryConfig | None = None
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
     overwrite_output: bool = False
     logging: dict[str, Any] | None = None
@@ -57,8 +56,8 @@ class AgentRunner:
     def __init__(
         self,
         *,
-        config: Any = None,
-    ):
+        config: RunConfig | None = None,
+    ) -> None:
         if config is None:
             raise ValueError("config must be provided")
         if config.max_concurrency is not None and config.max_concurrency < 1:
@@ -150,12 +149,12 @@ class AgentRunner:
     async def run(
         self,
         *,
-        cfg: Any = None,
+        cfg: RunConfig | None = None,
         dataloader: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
         output_path: str | Path | None = None,
         retry_policy: RetryPolicy | None = None,
         checkpoint: CheckpointConfig | dict[str, Any] | None = None,
-        overwrite_output: bool = False,
+        overwrite_output: bool | None = None,
     ) -> dict[str, Any]:
         """
         Run a batch of agent tasks and persist per-sample trajectories plus summary stats.
@@ -199,57 +198,26 @@ class AgentRunner:
 
         cfg_values: dict[str, Any] = {}
         if cfg is not None:
-            cfg_dataloader = cfg.get("dataloader")
+            cfg_dataloader = cfg.dataloader
             if cfg_dataloader is not None:
-                cfg_values["dataloader"] = instantiate(
-                    cfg=cfg_dataloader,
-                    recursive=True,
-                    resolve_imports=True,
-                )
+                cfg_values["dataloader"] = GenericDataLoader(config=cfg_dataloader)
 
-            cfg_output_path = cfg.get("output_path")
+            cfg_output_path = cfg.output_path
             if cfg_output_path is not None:
                 cfg_values["output_path"] = cfg_output_path
 
-            cfg_retry_policy = cfg.get("retry_policy")
+            cfg_retry_policy = cfg.retry_policy
             if cfg_retry_policy is not None:
-                from searchagent.common.retry import RetryPolicy, RetryConfig
-                if isinstance(cfg_retry_policy, RetryPolicy):
-                    cfg_values["retry_policy"] = cfg_retry_policy
-                elif isinstance(cfg_retry_policy, RetryConfig):
-                    cfg_values["retry_policy"] = RetryPolicy(config=cfg_retry_policy)
-                elif isinstance(cfg_retry_policy, dict):
-                    cfg_values["retry_policy"] = RetryPolicy(
-                        config=RetryConfig(**cfg_retry_policy)
-                    )
-                else:
-                    # Convert DictConfig (or other OmegaConf config) to object
-                    retry_cfg = OmegaConf.to_object(cfg_retry_policy)
-                    if isinstance(retry_cfg, RetryPolicy):
-                        cfg_values["retry_policy"] = retry_cfg
-                    elif isinstance(retry_cfg, RetryConfig):
-                        cfg_values["retry_policy"] = RetryPolicy(config=retry_cfg)
-                    elif isinstance(retry_cfg, dict):
-                        cfg_values["retry_policy"] = RetryPolicy(
-                            config=RetryConfig(**retry_cfg)
-                        )
-                    else:
-                        cfg_values["retry_policy"] = instantiate(
-                            cfg=cfg_retry_policy,
-                            recursive=True,
-                            resolve_imports=True,
-                        )
+                cfg_values["retry_policy"] = RetryPolicy(config=cfg_retry_policy)
+                
 
-            cfg_overwrite_output = cfg.get("overwrite_output")
+            cfg_overwrite_output = cfg.overwrite_output
             if cfg_overwrite_output is not None:
-                cfg_values["overwrite_output"] = bool(cfg_overwrite_output)
-            cfg_checkpoint = cfg.get("checkpoint")
+                cfg_values["overwrite_output"] = cfg_overwrite_output
+            cfg_checkpoint = cfg.checkpoint
             if cfg_checkpoint is not None:
-                if isinstance(cfg_checkpoint, (CheckpointConfig, dict)):
-                    cfg_values["checkpoint"] = cfg_checkpoint
-                else:
-                    cfg_values["checkpoint"] = OmegaConf.to_object(cfg_checkpoint)
-            cfg_logging = cfg.get("logging")
+                cfg_values["checkpoint"] = cfg_checkpoint
+            cfg_logging = cfg.logging
             if cfg_logging is not None:
                 cfg_values["logging"] = cfg_logging
 

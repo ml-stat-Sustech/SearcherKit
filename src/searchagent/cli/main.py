@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 from typing import Sequence
 
+import uvloop
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -18,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     argv = list(argv or [])
     if not argv or argv[0] in {"-h", "--help"}:
         build_parser().parse_args(argv)

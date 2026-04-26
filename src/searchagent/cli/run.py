@@ -12,9 +12,11 @@ from searchagent.runtime.runner import AgentRunner, RunConfig
 
 
 async def _run_config(cfg) -> None:
-    config: RunConfig = OmegaConf.to_object(cfg)
+    config = OmegaConf.to_object(cfg)
+    if not isinstance(config, RunConfig):
+        raise ValueError("Invalid config. Please check for extra or missing fields")
     async with AgentRunner(config=config) as runner:
-        await runner.run(cfg=cfg)
+        await runner.run(cfg=config)
 
 
 def build_parser() -> argparse.ArgumentParser:

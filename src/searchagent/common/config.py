@@ -8,6 +8,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import re
 from typing import Any, Callable, Optional, TypeVar
+import warnings
 
 from omegaconf import DictConfig, OmegaConf
 
@@ -122,7 +123,10 @@ def instantiate(
     resolve_imports: bool = False,
     **kwargs: Any,
 ) -> T:
-    """Instantiate an object from a factory and/or OmegaConf config.
+    """Deprecated: instantiate an object from a factory and/or OmegaConf config.
+
+    Prefer explicit config dataclass constructors, e.g. `Cls(config=cfg)`, in new
+    code. This helper remains for older plugin/source factory paths.
 
     Args:
         factory: Callable/class to instantiate. If None, config must provide `target`.
@@ -132,6 +136,12 @@ def instantiate(
         resolve_imports: If True, attempt to import pkg:// strings in config.
         **kwargs: Overrides for cfg values.
     """
+    warnings.warn(
+        "searchagent.common.config.instantiate is deprecated; use explicit "
+        "config dataclass constructors instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     data = _to_container(cfg)
     if resolve_imports:
