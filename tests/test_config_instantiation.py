@@ -69,8 +69,22 @@ def test_parser_target_config_instantiates_custom_parser() -> None:
 
 def test_openai_compatible_provider_configs_instantiate_clients() -> None:
     providers = [
-        (ClientConfig(type="dashscope", model="qwen", dashscope=DashScopeConfig()), DashScopeClient),
-        (ClientConfig(type="vllm", model="qwen", vllm=VllmConfig()), VllmClient),
+        (
+            ClientConfig(
+                type="dashscope",
+                model="qwen",
+                dashscope=DashScopeConfig(api_key="test"),
+            ),
+            DashScopeClient,
+        ),
+        (
+            ClientConfig(
+                type="vllm",
+                model="qwen",
+                vllm=VllmConfig(api_key="test"),
+            ),
+            VllmClient,
+        ),
         (ClientConfig(type="ollama", model="qwen", ollama=OllamaConfig()), OllamaClient),
     ]
 
