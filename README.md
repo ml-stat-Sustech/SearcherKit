@@ -10,7 +10,6 @@ servers, and evaluation recipes.
 git clone https://github.com/your-org/searchagent.git
 cd searchagent
 uv sync
-uv pip install -e .
 ```
 
 Optional backend dependencies are split by plugin:
@@ -21,12 +20,73 @@ uv sync --extra vllm
 uv sync --extra local-wiki
 ```
 
-## Quick Start
-
-Edit `src/searchagent/config/config.yaml` or create a new Hydra config:
+After installing the package or activating the environment, use the short
+`searchagent ...` command through the console script. If the environment is not
+activated, prefix commands with `uv run`, for example
+`uv run searchagent --help`. The module form works too:
 
 ```bash
-python -m searchagent --config-name=config
+python -m searchagent --help
+```
+
+## Quick Start
+
+First verify that the CLI is installed and can see the top-level commands:
+
+```bash
+searchagent --help
+```
+
+Inspect the packaged default config before running it:
+
+```bash
+searchagent inspect config --config-name config
+```
+
+Run the packaged default config:
+
+```bash
+searchagent run --config-name config
+```
+
+This default config uses the in-memory example source under
+`src/searchagent/config/examples/data/` and writes outputs to
+`outputs/agent_history`. It still needs a reachable LLM endpoint and API key.
+Edit `src/searchagent/config/config.yaml` or pass Hydra-style overrides to point
+the run at your own model endpoint, data file, or output directory:
+
+```bash
+searchagent run --config-name config \
+  agent.llm_client.model=Qwen3-8B \
+  agent.llm_client.openai.base_url=http://127.0.0.1:8001/v1 \
+  agent.llm_client.openai.api_key=EMPTY \
+  output_path=outputs/demo
+```
+
+Run a benchmark recipe:
+
+```bash
+searchagent run --config-path recipe/webexplorer --config-name webexplorer
+searchagent run --config-path recipe/websailor --config-name websailor
+```
+
+On Windows PowerShell, the same recipe commands can be written with backslashes:
+
+```powershell
+searchagent run --config-path recipe\webexplorer --config-name webexplorer
+searchagent inspect config --config-path recipe\websailor --config-name websailor
+```
+
+Evaluate saved run outputs with the LLM judge:
+
+```bash
+searchagent evaluate outputs/WebExplorer outputs/WebExplorer_eval --max-concurrency 32
+```
+
+List bundled plugins:
+
+```bash
+searchagent plugins list
 ```
 
 ## Project Layout
@@ -114,7 +174,7 @@ entry points for benchmark backends.
 Wiki dump to Elasticsearch:
 
 ```bash
-python -m searchagent.plugins.local_wiki.deploy_elasticsearch \
+searchagent plugins deploy local-wiki \
   --wiki_dump_path /data/enwiki-pages-articles.xml.bz2 \
   --es_host http://127.0.0.1:9200 \
   --index_name wiki_qwen3 \
@@ -128,7 +188,7 @@ python -m searchagent.plugins.local_wiki.deploy_elasticsearch \
 BrowseComp Plus to Elasticsearch:
 
 ```bash
-python -m searchagent.plugins.browsecomp_plus.deploy_elasticsearch \
+searchagent plugins deploy browsecomp-plus \
   --dataset_path Tevatron/browsecomp-plus-corpus \
   --es_host http://127.0.0.1:9200 \
   --index_name browsecomp_plus_qwen3 \
@@ -137,6 +197,14 @@ python -m searchagent.plugins.browsecomp_plus.deploy_elasticsearch \
   --embedding_dim 4096 \
   --prompt_strategy qwen3 \
   --overwrite
+```
+
+The direct module entry points are still available when you want to bypass the
+top-level CLI dispatcher:
+
+```bash
+python -m searchagent.plugins.local_wiki.deploy_elasticsearch --help
+python -m searchagent.plugins.browsecomp_plus.deploy_elasticsearch --help
 ```
 
 ## Logging
