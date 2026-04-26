@@ -31,14 +31,27 @@ agent:
   parser:
     type: websailor
     target: pkg://searchagent.llm.parsers.websailor:WebSailorParser
+  sources:
+    - name: bcp
+      target: pkg://searchagent.sources:ElasticsearchSource
+      hosts: http://127.0.0.1:9200
+      index: browsecomp_hybrid
+      search_fields:
+        - title^2
+        - text
+      document_id_field: url
+      fetch_field: url
+      highlight_fragment_size: 128
+      snippet_chars: 512
+      metadata_fields:
+        - links
   tools:
-    - type: mcp
+    - type: search
       name: search
-      endpoint: http://127.0.0.1:8300/mcp/
-      transport: "streamable-http"
-      max_concurrency: 512
-      enable_trace_logging: true
-      raise_on_fatal: true
+      source: bcp
+    - type: visit
+      name: visit
+      source: bcp
   system_prompt: |
     You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up until you find the corresponding information.
 

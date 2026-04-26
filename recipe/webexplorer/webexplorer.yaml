@@ -2,9 +2,7 @@
 #
 # This recipe keeps the project's default SearchAgent + WebExplorerParser runtime and
 # aligns the model sampling settings with the official WebExplorer inference
-# code. It assumes the MCP server exposes `search` and `browse` tools.
-# If your MCP server uses `visit` instead of `browse`, rename `mcp_tool_name`
-# accordingly.
+# code. It uses SearchAgent's native source-backed `search` and `visit` tools.
 
 defaults:
   - agent@agent: SearchAgent
@@ -36,17 +34,32 @@ agent:
   parser:
     type: webexplorer
     target: pkg://searchagent.llm.parsers.webexplorer:WebExplorerParser
+  sources:
+    - name: bcp
+      target: pkg://searchagent.sources:ElasticsearchSource
+      hosts: http://127.0.0.1:9200
+      index: browsecomp_hybrid
+      search_fields:
+        - title^2
+        - text
+      document_id_field: url
+      fetch_field: url
+      highlight_fragment_size: 128
+      snippet_chars: 512
+      metadata_fields:
+        - links
   tools:
-    - type: mcp
+    - type: search
       name: search
-      endpoint: http://127.0.0.1:8300/mcp/
-      max_concurrency: 512
-      raise_on_fatal: true
+      source: bcp
+    - type: visit
+      name: visit
+      source: bcp
   system_prompt: |
     You are a helpful assistant.
 
     Solve the user's question by iteratively using the available tools. Search
-    for promising sources first, then browse the most relevant URLs to answer
+    for promising sources first, then visit the most relevant URLs to answer
     specific sub-questions. Do not rely on unsupported prior knowledge when the
     tools can verify the answer.
 
