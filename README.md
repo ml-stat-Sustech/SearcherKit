@@ -15,9 +15,9 @@ uv sync
 Optional backend dependencies are split by plugin:
 
 ```bash
-uv sync --extra elasticsearch
+uv sync --extra elasticsearch-source
 uv sync --extra vllm
-uv sync --extra local-wiki
+uv sync --extra indexing
 ```
 
 After installing the package or activating the environment, use the short

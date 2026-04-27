@@ -25,7 +25,7 @@ vllm = [
     "ray>=2.9.0",
     "vllm>=0.6.0",
 ]
-elasticsearch = [
+elasticsearch-source = [
     "elasticsearch<9.0.0",
 ]
 faiss = [
@@ -37,7 +37,7 @@ chroma = [
 ollama = [
     "ollama>=0.4.0",
 ]
-local-wiki = [
+indexing = [
     "accelerate>=1.13.0",
     "elasticsearch<9.0.0",
     "mwparserfromhell>=0.6",

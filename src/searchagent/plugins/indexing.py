@@ -59,7 +59,7 @@ def build_elasticsearch_client(hosts: str, *, request_timeout: float = 100.0) ->
     except ImportError as exc:
         raise ImportError(
             "Elasticsearch deployment requires the 'elasticsearch' package. "
-            "Install with `uv sync --extra elasticsearch` or `uv sync --extra local-wiki`."
+            "Install with `uv sync --extra elasticsearch-source` or `uv sync --extra indexing`."
         ) from exc
     return Elasticsearch(hosts, request_timeout=request_timeout)
 
@@ -123,7 +123,7 @@ def load_sentence_transformer(model_name: str) -> Any:
     except ImportError as exc:
         raise ImportError(
             "Vector indexing requires the 'sentence-transformers' package. "
-            "Install with `uv sync --extra local-wiki`."
+            "Install with `uv sync --extra indexing`."
         ) from exc
     return SentenceTransformer(model_name, trust_remote_code=True)
 
@@ -168,7 +168,7 @@ def index_documents(
     except ImportError as exc:
         raise ImportError(
             "Bulk indexing requires the 'elasticsearch' package. "
-            "Install with `uv sync --extra elasticsearch` or `uv sync --extra local-wiki`."
+            "Install with `uv sync --extra elasticsearch-source` or `uv sync --extra indexing`."
         ) from exc
 
     total = 0
