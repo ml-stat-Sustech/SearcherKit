@@ -38,25 +38,23 @@ def test_preprocess_browsecomp_plus_record_normalizes_fields() -> None:
     document = preprocess_browsecomp_plus_record(
         {
             "docid": "doc-1",
-            "title": "BrowseComp Plus",
-            "contents": "A benchmark corpus.",
+            "text": "---\ntitle: BrowseComp Plus\n---\nA benchmark corpus.",
             "url": "https://example.test/doc-1",
-            "extra": "kept",
         }
     )
 
     assert document is not None
     assert document.id == "doc-1"
     assert document.text == "A benchmark corpus."
+    assert document.title == "BrowseComp Plus"
     assert document.metadata["source"] == "browsecomp_plus"
-    assert document.metadata["extra"] == "kept"
 
 
 def test_browsecomp_plus_source_reads_jsonl() -> None:
     documents = list(BrowseCompPlusSource(FIXTURES / "bcp.jsonl").iter_documents())
 
     assert len(documents) == 1
-    assert documents[0].url == "browsecomp-plus://1"
+    assert documents[0].url == "https://example.test/1"
 
 
 def test_apply_embedding_prompt_supports_qwen3() -> None:

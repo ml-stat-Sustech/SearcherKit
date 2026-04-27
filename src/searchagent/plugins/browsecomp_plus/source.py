@@ -2,52 +2,58 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Iterable, Iterator, Mapping
+import logging
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
 from searchagent.plugins.indexing import IndexDocument
 
-
-TITLE_FIELDS = ("title", "page_title", "name")
-TEXT_FIELDS = ("text", "contents", "content", "body", "page_content", "document")
-ID_FIELDS = ("id", "_id", "docid", "doc_id", "document_id", "url")
-URL_FIELDS = ("url", "source_url", "link")
-
-
-def _first_str(record: Mapping[str, Any], fields: Iterable[str]) -> str | None:
-    for field in fields:
-        value = record.get(field)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+logger = logging.getLogger(__name__)
 
 
 def preprocess_browsecomp_plus_record(record: Mapping[str, Any]) -> IndexDocument | None:
-    text = _first_str(record, TEXT_FIELDS)
-    if not text:
+    text = record.get("text")
+    if not isinstance(text, str) or not text.strip():
         return None
-    title = _first_str(record, TITLE_FIELDS) or text.splitlines()[0][:120] or "BrowseComp Plus document"
-    document_id = _first_str(record, ID_FIELDS) or title
-    url = _first_str(record, URL_FIELDS) or f"browsecomp-plus://{document_id}"
 
-    metadata = {
-        key: value
-        for key, value in record.items()
-        if key not in {*TITLE_FIELDS, *TEXT_FIELDS, *ID_FIELDS, *URL_FIELDS, "links"}
-    }
-    links = record.get("links", [])
-    if not isinstance(links, list):
-        links = []
+    title = ""
+    extra_metadata: dict[str, str] = {}
+    clean_text = text
+
+    if text.startswith("---"):
+        parts = text.split("---", 2)
+        if len(parts) >= 3:
+            for line in parts[1].strip().splitlines():
+                if ":" in line:
+                    key, _, val = line.partition(":")
+                    key, val = key.strip(), val.strip()
+                    if key == "title":
+                        title = val
+                    else:
+                        extra_metadata[key] = val
+            clean_text = parts[2].strip()
+
+    docid = record.get("docid")
+    if not isinstance(docid, str) or not docid.strip():
+        raise ValueError("docid missing or empty in record")
+    docid = str(docid)
+
+    url = record.get("url", "")
+    if not isinstance(url, str) or not url.strip():
+        raise ValueError("url missing or empty in record")
+
+    if not title:
+        title = clean_text.splitlines()[0][:120]
+        logger.warning("Title not found in frontmatter, using text fallback for docid=%s", docid)
 
     return IndexDocument(
-        id=str(document_id),
+        id=docid,
         title=title,
-        text=text,
+        text=clean_text,
         url=url,
-        links=[link for link in links if isinstance(link, Mapping)],
-        metadata={"source": "browsecomp_plus", **metadata},
+        links=[],
+        metadata={"source": "browsecomp_plus", **extra_metadata},
     )
 
 
@@ -72,55 +78,17 @@ class BrowseCompPlusSource:
                 return
 
     def _iter_records(self) -> Iterator[Mapping[str, Any]]:
+        from datasets import load_dataset
+
         path = Path(self.dataset_path)
         if path.exists():
-            yield from self._iter_local_records(path)
-            return
+            if path.suffix in (".jsonl", ".json"):
+                dataset = load_dataset("json", data_files=str(path), split=self.split, streaming=True)
+            else:
+                dataset = load_dataset("parquet", data_files=str(path), split=self.split, streaming=True)
+        else:
+            dataset = load_dataset(self.dataset_path, split=self.split, streaming=True)
 
-        try:
-            from datasets import load_dataset
-        except ImportError as exc:
-            raise ImportError(
-                "Loading BrowseComp Plus from Hugging Face requires the 'datasets' package."
-            ) from exc
-        dataset = load_dataset(self.dataset_path, split=self.split)
-        for row in dataset:
-            if isinstance(row, Mapping):
-                yield row
-
-    def _iter_local_records(self, path: Path) -> Iterator[Mapping[str, Any]]:
-        if path.suffix == ".jsonl":
-            with path.open("r", encoding="utf-8") as handle:
-                for line in handle:
-                    if not line.strip():
-                        continue
-                    record = json.loads(line)
-                    if isinstance(record, Mapping):
-                        yield record
-            return
-
-        if path.suffix == ".json":
-            with path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-            if isinstance(payload, list):
-                for record in payload:
-                    if isinstance(record, Mapping):
-                        yield record
-            elif isinstance(payload, Mapping):
-                data = payload.get("data", payload.get("documents", []))
-                if isinstance(data, list):
-                    for record in data:
-                        if isinstance(record, Mapping):
-                            yield record
-            return
-
-        try:
-            from datasets import load_dataset
-        except ImportError as exc:
-            raise ImportError(
-                "Loading local BrowseComp Plus parquet/arrow files requires the 'datasets' package."
-            ) from exc
-        dataset = load_dataset("parquet", data_files=str(path), split=self.split)
         for row in dataset:
             if isinstance(row, Mapping):
                 yield row
