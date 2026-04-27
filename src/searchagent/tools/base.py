@@ -106,6 +106,9 @@ class BaseTool(abc.ABC):
     async def init(self, *args: Any, **kwargs: Any) -> None:
         """Initialize tool resources."""
 
+    async def close(self) -> None:
+        """Release tool resources."""
+
     async def run(self, **kwargs: Any) -> str:
         """Execute the tool with the provided arguments."""
         if self.inputSchema is None:
