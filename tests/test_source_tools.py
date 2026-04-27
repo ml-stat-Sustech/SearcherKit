@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from searchagent.sources import build_source
+from searchagent.sources import build_source, SourceConfig
+from searchagent.sources.base import Document
 from searchagent.sources.memory import MemorySource
 from searchagent.tools import ToolConfig, build_tool
 
@@ -11,21 +12,21 @@ from searchagent.tools import ToolConfig, build_tool
 def test_source_backed_search_and_visit_tools_share_named_source() -> None:
     async def run_tools() -> None:
         source = build_source(
-            {
-                "type": "memory",
-                "documents": [
-                    {
-                        "id": "doc-1",
-                        "title": "SearchAgent",
-                        "text": "SearchAgent wires tools to data sources.",
-                    },
-                    {
-                        "id": "doc-2",
-                        "title": "Other",
-                        "text": "Unrelated content.",
-                    },
+            SourceConfig(
+                type="memory",
+                documents=[
+                    Document(
+                        id="doc-1",
+                        title="SearchAgent",
+                        text="SearchAgent wires tools to data sources.",
+                    ),
+                    Document(
+                        id="doc-2",
+                        title="Other",
+                        text="Unrelated content.",
+                    ),
                 ],
-            }
+            )
         )
 
         sources = {"memory": source}
@@ -52,16 +53,16 @@ def test_source_backed_search_and_visit_tools_share_named_source() -> None:
 
 def test_build_source_accepts_mapping() -> None:
     source = build_source(
-        {
-            "type": "memory",
-            "documents": [
-                {
-                    "id": "doc-1",
-                    "title": "Configured object",
-                    "text": "Existing source instances can be reused.",
-                }
+        SourceConfig(
+            type="memory",
+            documents=[
+                Document(
+                    id="doc-1",
+                    title="Configured object",
+                    text="Existing source instances can be reused.",
+                )
             ],
-        }
+        )
     )
 
     assert source is not None
