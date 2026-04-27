@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from .base import DataSource, Document, SearchResult
+from .base import DataSource, Document, SearchResult, SourceConfig
 from .elasticsearch import ElasticsearchSource
-from .factory import SourceConfig, build_source, build_sources
+from .factory import build_source
 from .memory import MemorySource
 
 __all__ = [
@@ -15,5 +15,4 @@ __all__ = [
     "SearchResult",
     "SourceConfig",
     "build_source",
-    "build_sources",
 ]

@@ -36,8 +36,8 @@ agent:
   # Sources define how SearchAgent connects to searchable data backends.
   # Native tools reference a named source through `source: <name>`.
   sources:
-    - name: memory
-      target: pkg://searchagent.sources:MemorySource
+    - type: memory
+      name: memory
       documents:
         - id: doc-1
           title: SearchAgent native tools

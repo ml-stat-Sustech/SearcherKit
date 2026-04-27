@@ -107,8 +107,8 @@ src/searchagent/
 
 - `searchagent.sources.DataSource`: implement this to support a new data source
   such as Elasticsearch, FAISS, Chroma, SQLite, local wiki, or a custom corpus.
-- `searchagent.sources.build_sources`: build a name-to-source map from Hydra or
-  plain Python configs.
+- `searchagent.sources.build_source`: build a data source from a Hydra or
+  plain Python config.
 - `searchagent.tools.SearchTool` and `searchagent.tools.VisitTool`: expose a
   configured source to the agent as `search` and `visit`.
 - `searchagent.llm`: add provider adapters for OpenAI-compatible servers, vLLM,
@@ -121,8 +121,8 @@ Native source-backed tools are wired by source name:
 ```yaml
 agent:
   sources:
-    - name: memory
-      target: pkg://searchagent.sources:MemorySource
+    - type: memory
+      name: memory
       documents:
         - id: doc-1
           title: Example
@@ -145,8 +145,8 @@ Elasticsearch-backed corpora use the same tool path:
 ```yaml
 agent:
   sources:
-    - name: bcp
-      target: pkg://searchagent.sources:ElasticsearchSource
+    - type: elasticsearch
+      name: bcp
       hosts: http://127.0.0.1:9200
       index: browsecomp_hybrid
       search_fields: [title^2, text]

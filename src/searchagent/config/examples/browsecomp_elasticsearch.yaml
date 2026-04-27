@@ -40,8 +40,8 @@ agent:
       upstream_parsed: false
       drop_thinking: false
   sources:
-    - name: bcp
-      target: pkg://searchagent.sources:ElasticsearchSource
+    - type: elasticsearch
+      name: bcp
       hosts: http://127.0.0.1:9200
       index: browsecomp_hybrid
       search_fields:

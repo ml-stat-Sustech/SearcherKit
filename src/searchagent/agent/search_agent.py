@@ -6,7 +6,6 @@ import asyncio
 import json
 import traceback
 import copy
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Iterable, Any, TYPE_CHECKING, overload
 
@@ -15,7 +14,7 @@ from openai import BadRequestError, InternalServerError
 from searchagent.common.messages import ChatMessage, ToolCall, tool, system, user
 from searchagent.common.messages import Tool as ToolMsgType
 from searchagent.tools import BaseTool, ToolConfig, build_tool
-from searchagent.sources import DataSource, build_sources
+from searchagent.sources import DataSource, SourceConfig, build_source
 from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
 from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
@@ -55,7 +54,7 @@ class SearchAgentConfig:
         type="qwen",
         qwen=QwenParserConfig(),
     ))
-    sources: list[Any] = field(default_factory=list)
+    sources: list[SourceConfig] = field(default_factory=list)
     tools: list[ToolConfig] = field(default_factory=list)
     system_prompt: str | None = None
     max_turn: int = 10
@@ -95,7 +94,6 @@ class SearchAgent(BaseAgent):
                  max_tokens_prompt_margin: int = 128,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
-                 sources: Mapping[str, DataSource] | None = None,
                  raise_repeat_tool_call: bool = False,
                  training: bool = False):
         """
@@ -131,7 +129,6 @@ class SearchAgent(BaseAgent):
                  max_tokens_prompt_margin: int = 128,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
-                 sources: Mapping[str, DataSource] | None = None,
                  raise_repeat_tool_call: bool = False,
                  training: bool = False,
                  *,
@@ -139,7 +136,10 @@ class SearchAgent(BaseAgent):
         if config:
             client = get_client(config.llm_client)
             parser = get_parser(config.parser)
-            source_map = build_sources(config.sources)
+            source_map: dict[str, DataSource] = {}
+            for source_cfg in config.sources:
+                source = build_source(source_cfg)
+                source_map[source_cfg.name] = source
             tools = [
                 build_tool(tool_cfg, sources=source_map)
                 for tool_cfg in config.tools
@@ -160,13 +160,11 @@ class SearchAgent(BaseAgent):
                 max_tokens_prompt_margin=config.max_tokens_prompt_margin,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
-                sources=source_map,
                 raise_repeat_tool_call=config.raise_repeat_tool_call,
                 training=config.training,
             )
             return
 
-        source_map = build_sources(sources)
         assert llm_client
         assert parser
             
@@ -174,18 +172,7 @@ class SearchAgent(BaseAgent):
         self.parser = parser
         self.tool_dict: dict[str, BaseTool] = {}
         for t in tools:
-            if isinstance(t, BaseTool):
-                self._add_tool(t)
-            elif isinstance(t, ToolConfig):
-                tool = build_tool(t, sources=source_map)
-                self._add_tool(tool)
-            elif isinstance(t, dict):
-                tool = build_tool(ToolConfig(**t), sources=source_map)
-                self._add_tool(tool)
-            else:
-                raise TypeError(
-                    f"tools items must be BaseTool, ToolConfig or dict, got {type(t)}"
-                )
+            self._add_tool(t)
         self.system_prompt = system_prompt or ""
         self.max_turn = max_turn
         self.max_turn_prompt = max_turn_prompt

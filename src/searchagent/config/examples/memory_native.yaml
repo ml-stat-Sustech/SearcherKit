@@ -36,8 +36,8 @@ agent:
       upstream_parsed: false
       drop_thinking: true
   sources:
-    - name: memory
-      target: pkg://searchagent.sources:MemorySource
+    - type: memory
+      name: memory
       documents:
         - id: native-tools
           title: Native source-backed tools

@@ -2,19 +2,32 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from typing import overload
 
-from .base import Document, SearchResult
+from .base import Document, SearchResult, SourceConfig, DataSource
 
 
-@dataclass(slots=True)
-class MemorySource:
-    documents: list[Document] = field(default_factory=list)
+class MemorySource(DataSource):
+    """In-memory data source for testing and simple workloads."""
 
-    def __post_init__(self) -> None:
+    @overload
+    def __init__(self, *, config: SourceConfig) -> None: ...
+
+    @overload
+    def __init__(self, *, documents: list[Document] | None = None) -> None: ...
+
+    def __init__(
+        self,
+        *,
+        documents: list[Document] | None = None,
+        config: SourceConfig | None = None,
+    ) -> None:
+        if config is not None:
+            documents = config.documents or []
+
         self.documents = [
-            document if isinstance(document, Document) else Document(**document)
-            for document in self.documents
+            doc if isinstance(doc, Document) else Document(**doc)
+            for doc in (documents or [])
         ]
 
     async def search(self, query: str, *, top_k: int = 10) -> list[SearchResult]:

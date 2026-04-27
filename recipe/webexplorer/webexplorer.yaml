@@ -35,8 +35,8 @@ agent:
     type: webexplorer
     target: pkg://searchagent.llm.parsers.webexplorer:WebExplorerParser
   sources:
-    - name: bcp
-      target: pkg://searchagent.sources:ElasticsearchSource
+    - type: elasticsearch
+      name: bcp
       hosts: http://127.0.0.1:9200
       index: browsecomp_hybrid
       search_fields:

@@ -53,8 +53,8 @@ function name. This keeps MCP-backed tools from colliding with built-in
 ```yaml
 agent:
   sources:
-    - name: memory
-      target: pkg://searchagent.sources:MemorySource
+    - type: memory
+      name: memory
       documents:
         - id: doc-1
           title: Example
@@ -77,8 +77,8 @@ BrowseComp Plus through Elasticsearch:
 ```yaml
 agent:
   sources:
-    - name: bcp
-      target: pkg://searchagent.sources:ElasticsearchSource
+    - type: elasticsearch
+      name: bcp
       hosts: http://127.0.0.1:9200
       index: browsecomp_hybrid
       search_fields: [title^2, text]

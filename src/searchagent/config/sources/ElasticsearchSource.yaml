@@ -1,7 +1,7 @@
 # ElasticsearchSource configuration
 # Class: searchagent.sources.ElasticsearchSource
 name: bcp
-target: pkg://searchagent.sources:ElasticsearchSource
+type: elasticsearch
 hosts: http://127.0.0.1:9200
 index: browsecomp_hybrid
 search_fields:

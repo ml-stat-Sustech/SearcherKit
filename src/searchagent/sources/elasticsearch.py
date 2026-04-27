@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, overload
 
 from searchagent.errors import SourceError
 
-from .base import Document, SearchResult
+from .base import Document, SearchResult, SourceConfig, DataSource
 
 try:
     from elasticsearch import Elasticsearch
@@ -39,13 +39,42 @@ _ELASTICSEARCH_ERRORS = tuple(
 )
 
 
-class ElasticsearchSource:
+class ElasticsearchSource(DataSource):
     """Search and fetch documents from an Elasticsearch index.
 
     This source expects documents to use common web-corpus fields by default:
     ``title``, ``text``, ``url``, and optional ``links``. Field names can be
     overridden for other indexes.
     """
+
+    @overload
+    def __init__(
+        self,
+        *,
+        config: SourceConfig,
+        client: Any | None = None,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        hosts: str | Sequence[str] | None = None,
+        index: str = "",
+        *,
+        client: Any | None = None,
+        search_fields: Sequence[str] | None = None,
+        title_field: str = "title",
+        text_field: str = "text",
+        url_field: str = "url",
+        document_id_field: str | None = None,
+        fetch_field: str | None = None,
+        metadata_fields: Sequence[str] | None = None,
+        highlight: bool = True,
+        highlight_fragment_size: int = 256,
+        snippet_chars: int = 512,
+        request_timeout: float | None = None,
+        client_kwargs: Mapping[str, Any] | None = None,
+    ) -> None: ...
 
     def __init__(
         self,
@@ -65,7 +94,24 @@ class ElasticsearchSource:
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
+        config: SourceConfig | None = None,
     ) -> None:
+        if config is not None:
+            hosts = hosts or config.hosts
+            index = index or (config.index or "")
+            search_fields = search_fields or config.search_fields
+            title_field = config.title_field
+            text_field = config.text_field
+            url_field = config.url_field
+            document_id_field = document_id_field or config.document_id_field
+            fetch_field = fetch_field or config.fetch_field
+            metadata_fields = metadata_fields or config.metadata_fields
+            highlight = config.highlight
+            highlight_fragment_size = config.highlight_fragment_size
+            snippet_chars = config.snippet_chars
+            request_timeout = request_timeout or config.request_timeout
+            client_kwargs = client_kwargs or config.client_kwargs
+
         if not index:
             raise ValueError("ElasticsearchSource requires index")
         if client is None and not hosts:
