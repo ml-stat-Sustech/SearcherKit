@@ -118,7 +118,7 @@ class AgentRunner:
                 retry_async(
                     _run,
                     policy=retry_policy,
-                    op_name="agent_runner.submit",
+                    op_name="runner.submit",
                     log=logger,
                 )
             )

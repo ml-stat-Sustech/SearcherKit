@@ -12,7 +12,7 @@ from searchagent.llm.ollama import OllamaClient
 from searchagent.llm.openai import OpenAIClient
 from searchagent.llm.parsers import ParserConfig, get_parser
 from searchagent.llm.vllm import VllmClient
-from searchagent.runtime.agent_runner import AgentRunner
+from searchagent.runtime.runner import AgentRunner
 from searchagent.tools import BaseTool
 from searchagent.common.retry import RetryPolicy
 
