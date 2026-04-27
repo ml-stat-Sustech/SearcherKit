@@ -454,80 +454,122 @@ class AgentRunner:
 
             start_time = time.time()
 
-            scheduled_tasks: list[tuple[asyncio.Task[dict[str, Any]], BatchItem]] = []
-            for index, (prompt, extra, answer) in enumerate(dataloader):
-                summary.total += 1
-                sample_id = f"{index:06d}"
-                record_path = output_dir / f"{index:06d}.json"
-                if (
-                    checkpoint_store is not None
-                    and not resolved_overwrite_output
-                    and checkpoint_store.is_completed(sample_id, record_path)
-                ):
-                    logger.info(
-                        "Skipping checkpoint-completed output index=%s path=%s",
-                        index,
-                        record_path,
-                    )
-                    summary.mark_skip("checkpoint_completed")
-                    continue
-                if record_path.exists() and not resolved_overwrite_output:
-                    logger.info("Skipping existing output index=%s path=%s", index, record_path)
-                    summary.mark_skip("existing_output")
-                    continue
+            dataloader_iter = enumerate(dataloader)
+            dataloader_exhausted = False
+            max_in_flight = self.max_concurrency or 32
+            scheduled_count = 0
+            in_flight: dict[asyncio.Task[dict[str, Any]], BatchItem] = {}
+            failure_types = (
+                SearchAgentError,
+                OSError,
+                TimeoutError,
+                ValueError,
+                RuntimeError,
+                TypeError,
+                KeyError,
+            )
 
-                checkpoint_sample = (
-                    checkpoint_store.sample_state(sample_id)
-                    if checkpoint_store is not None
-                    else None
-                )
-                trace_id = (
-                    str(checkpoint_sample.get("trace_id"))
-                    if checkpoint_sample and checkpoint_sample.get("trace_id")
-                    else _make_trace_id()
-                )
-                if checkpoint_store is not None:
-                    if checkpoint_store.is_resume_candidate(sample_id):
-                        summary.resumed += 1
-                    await checkpoint_store.mark_pending(
-                        sample_id=sample_id,
+            async def _schedule_next() -> bool:
+                nonlocal dataloader_exhausted, scheduled_count
+                while not dataloader_exhausted:
+                    try:
+                        index, (prompt, extra, answer) = next(dataloader_iter)
+                    except StopIteration:
+                        dataloader_exhausted = True
+                        return False
+
+                    summary.total += 1
+                    sample_id = f"{index:06d}"
+                    record_path = output_dir / f"{index:06d}.json"
+                    if (
+                        checkpoint_store is not None
+                        and not resolved_overwrite_output
+                        and checkpoint_store.is_completed(sample_id, record_path)
+                    ):
+                        logger.info(
+                            "Skipping checkpoint-completed output index=%s path=%s",
+                            index,
+                            record_path,
+                        )
+                        summary.mark_skip("checkpoint_completed")
+                        continue
+                    if record_path.exists() and not resolved_overwrite_output:
+                        logger.info("Skipping existing output index=%s path=%s", index, record_path)
+                        summary.mark_skip("existing_output")
+                        continue
+
+                    checkpoint_sample = (
+                        checkpoint_store.sample_state(sample_id)
+                        if checkpoint_store is not None
+                        else None
+                    )
+                    trace_id = (
+                        str(checkpoint_sample.get("trace_id"))
+                        if checkpoint_sample and checkpoint_sample.get("trace_id")
+                        else _make_trace_id()
+                    )
+                    if checkpoint_store is not None:
+                        if checkpoint_store.is_resume_candidate(sample_id):
+                            summary.resumed += 1
+                        await checkpoint_store.mark_pending(
+                            sample_id=sample_id,
+                            index=index,
+                            trace_id=trace_id,
+                            record_path=record_path,
+                            prompt=prompt,
+                        )
+                    item = BatchItem(
                         index=index,
-                        trace_id=trace_id,
-                        record_path=record_path,
+                        sample_id=sample_id,
                         prompt=prompt,
+                        extra=extra,
+                        answer=answer,
+                        record_path=record_path,
+                        trace_id=trace_id,
                     )
-                item = BatchItem(
-                    index=index,
-                    sample_id=sample_id,
-                    prompt=prompt,
-                    extra=extra,
-                    answer=answer,
-                    record_path=record_path,
-                    trace_id=trace_id,
-                )
-                task = asyncio.create_task(
-                    _run_one(index, prompt, extra, answer, record_path, trace_id),
-                    name=f"sample-{index:06d}",
-                )
-                scheduled_tasks.append((task, item))
+                    task = asyncio.create_task(
+                        _run_one(index, prompt, extra, answer, record_path, trace_id),
+                        name=f"sample-{index:06d}",
+                    )
+                    in_flight[task] = item
+                    scheduled_count += 1
+                    return True
+                return False
 
-            logger.info("Scheduled batch requests count=%s", len(scheduled_tasks))
+            while len(in_flight) < max_in_flight and await _schedule_next():
+                pass
 
-            if scheduled_tasks:
-                task_list = [task for task, _ in scheduled_tasks]
-                results = await asyncio.gather(*task_list, return_exceptions=True)
-                for (task, item), result in zip(scheduled_tasks, results):
-                    if isinstance(result, (SearchAgentError, OSError, TimeoutError, ValueError, RuntimeError, TypeError, KeyError)):
+            logger.info(
+                "Scheduled initial batch requests count=%s max_in_flight=%s",
+                len(in_flight),
+                max_in_flight,
+            )
+
+            while in_flight:
+                done, _ = await asyncio.wait(
+                    in_flight.keys(),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in done:
+                    item = in_flight.pop(task)
+                    try:
+                        result = task.result()
+                    except failure_types as exc:
                         summary.failed += 1
                         logger.error(
                             "Agent batch item failed index=%s trace_id=%s task=%s error=%r",
                             item.index,
                             item.trace_id,
                             task.get_name(),
-                            result,
+                            exc,
                         )
                         continue
                     summary.add_completed(result)
+
+                while len(in_flight) < max_in_flight and await _schedule_next():
+                    pass
+
+            logger.info("Scheduled batch requests count=%s", scheduled_count)
 
             summary_payload = summary.finalize(time.time() - start_time)
 
