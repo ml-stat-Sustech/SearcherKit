@@ -6,13 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, overload
 
-try:
-    from jsonschema import validate, ValidationError
-except ImportError:
-    validate = None
-
-    class ValidationError(ValueError):
-        """Fallback validation error when jsonschema is not installed."""
+from jsonschema import validate, ValidationError
 
 from searchagent.log import get_logger
 
@@ -113,22 +107,21 @@ class BaseTool(abc.ABC):
         """Execute the tool with the provided arguments."""
         if self.inputSchema is None:
             return await self._run(**kwargs)
-        if validate is not None:
-            try:
-                validate(instance=kwargs, schema=self.inputSchema)
-            except ValidationError as exc:
-                logger.warning(
-                    "Tool %s arguments validation failed: %s",
-                    self.name,
-                    exc,
-                )
-                if self.raise_argument_validation_error:
-                    raise
-                return (
-                    f"[Tool] invalid type for tool call argument.\n"
-                    f"Problem:{exc!r}\n\n"
-                    f"Argument type should be:\n{json.dumps(self.inputSchema)}"
-                )
+        try:
+            validate(instance=kwargs, schema=self.inputSchema)
+        except ValidationError as exc:
+            logger.warning(
+                "Tool %s arguments validation failed: %s",
+                self.name,
+                exc,
+            )
+            if self.raise_argument_validation_error:
+                raise
+            return (
+                f"[Tool] invalid type for tool call argument.\n"
+                f"Problem:{exc!r}\n\n"
+                f"Argument type should be:\n{json.dumps(self.inputSchema)}"
+            )
         return await self._run(**kwargs)
 
     @abc.abstractmethod

@@ -26,11 +26,7 @@ vllm = [
     "vllm>=0.6.0",
 ]
 elasticsearch = [
-    "accelerate>=1.13.0",
     "elasticsearch<9.0.0",
-    "mwparserfromhell>=0.6",
-    "sentence-transformers>=2.0.0",
-    "torch>=2.0.0",
 ]
 faiss = [
     "faiss-cpu>=1.8.0",

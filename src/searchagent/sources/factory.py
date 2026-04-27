@@ -5,8 +5,8 @@ from __future__ import annotations
 from searchagent.common.config import import_from_path
 
 from .base import DataSource, SourceConfig
-from .elasticsearch import ElasticsearchSource
-from .memory import MemorySource
+
+
 def build_source(config: SourceConfig) -> DataSource:
     """Build a single data source from *config*.
 
@@ -20,8 +20,12 @@ def build_source(config: SourceConfig) -> DataSource:
             "source config must have a non-empty 'type' field"
         )
     if source_type == "elasticsearch":
+        from .elasticsearch import ElasticsearchSource
+
         return ElasticsearchSource(config=config)
     if source_type == "memory":
+        from .memory import MemorySource
+
         return MemorySource(config=config)
     if source_type == "custom":
         if not config.target:

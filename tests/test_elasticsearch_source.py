@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Any
 
-from searchagent.sources import ElasticsearchSource
+from searchagent.sources.elasticsearch import ElasticsearchSource
 from searchagent.tools import ToolConfig, build_tool
 
 

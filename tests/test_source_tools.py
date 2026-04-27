@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from searchagent.sources import MemorySource, build_source
+from searchagent.sources import build_source
+from searchagent.sources.memory import MemorySource
 from searchagent.tools import ToolConfig, build_tool
 
 

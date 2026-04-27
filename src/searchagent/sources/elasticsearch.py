@@ -144,11 +144,6 @@ class ElasticsearchSource(DataSource):
         hosts: str | Sequence[str] | None,
         client_kwargs: Mapping[str, Any],
     ) -> Any:
-        if Elasticsearch is None:
-            raise ImportError(
-                "ElasticsearchSource requires the 'elasticsearch' package. "
-                "Install with the elasticsearch or local-wiki extra."
-            )
         kwargs = dict(client_kwargs)
         if self.request_timeout is not None:
             kwargs.setdefault("request_timeout", self.request_timeout)
