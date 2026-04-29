@@ -138,6 +138,7 @@ Common commands:
 python -m searchagent --help
 python -m searchagent run --config-path recipe\webexplorer --config-name webexplorer
 python -m searchagent inspect config --config-path recipe\websailor --config-name websailor
+python -m searchagent validate --config-path recipe\webexplorer --config-name webexplorer
 python -m searchagent evaluate outputs\webexplorer outputs\webexplorer_eval --max-concurrency 32
 python -m searchagent plugins list
 python -m searchagent plugins deploy local-wiki --help
@@ -175,6 +176,8 @@ python -m compileall -q src\searchagent recipe tests\test_config_instantiation.p
 python -m searchagent --help
 python -m searchagent inspect config --config-path recipe\webexplorer --config-name webexplorer
 python -m searchagent inspect config --config-path recipe\websailor --config-name websailor
+python -m searchagent validate --config-path recipe\webexplorer --config-name webexplorer
+python -m searchagent validate --config-path recipe\websailor --config-name websailor
 python -m pytest tests\test_config_instantiation.py tests\test_source_tools.py tests\test_plugins_sources.py tests\test_elasticsearch_source.py
 ```
 

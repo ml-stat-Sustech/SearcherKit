@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("evaluate", help="Evaluate saved run records")
     subparsers.add_parser("plugins", help="List or run plugin utilities")
     subparsers.add_parser("inspect", help="Inspect config and environment")
+    subparsers.add_parser("validate", help="Validate config fields against structured types")
     return parser
 
 
@@ -48,6 +49,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from searchagent.cli.inspect import main as inspect_main
 
         return inspect_main(remaining)
+    if command == "validate":
+        from searchagent.cli.validate import main as validate_main
+
+        return validate_main(remaining)
     parser = build_parser()
     parser.error(f"unknown command: {command}")
     return 2

@@ -43,6 +43,26 @@ Inspect the packaged default config before running it:
 searchagent inspect config --config-name config
 ```
 
+Validate config fields against structured types before running:
+
+```bash
+searchagent validate --config-path recipe/webexplorer --config-name webexplorer
+searchagent validate --config-path recipe/websailor --config-name websailor
+```
+
+The validator recursively compares every key in the composed config against the
+corresponding dataclass fields (`RunConfig`, `SearchAgentConfig`, `ClientConfig`,
+`SourceConfig`, `ToolConfig`, etc.) and reports:
+
+- **WARNING** — unexpected field in config (not in target dataclass)
+- **ERROR** — required field missing (no default value in target dataclass)
+
+Hydra-style overrides are supported:
+
+```bash
+searchagent validate --config-path recipe/webexplorer --config-name webexplorer agent.max_turn=50
+```
+
 Run the packaged default config:
 
 ```bash
