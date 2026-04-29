@@ -1,48 +1,41 @@
-"""Native search and visit tools backed by configured data sources."""
-
 from __future__ import annotations
 
+from typing import Any, Mapping, overload
 import json
-from collections.abc import Mapping
-from typing import Any, overload
 
-from searchagent.sources import DataSource, SearchResult, build_source
+from searchagent.sources import DataSource, Document, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
 
-SEARCH_DESCRIPTION = """
-Search the configured data source.
+VISIT_DESCRIPTION = """
+Get the content of a document.
 """
 
-SEARCH_INPUT_SCHEMA: dict[str, Any] = {
+VISIT_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "query": {"type": "string"},
-        "top_k": {"type": "integer", "minimum": 1},
+        "document_id": {"type": "string"},
     },
-    "required": ["query"],
+    "required": ["document_id"],
     "additionalProperties": False,
 }
 
-def _format_results(results: list[SearchResult]) -> str:
-    text = ""
-    for i, result in enumerate(results, start=1):
-        text += f"{i}. [{result.document.title}]({result.document.url})\n"
-        text += f"{result.snippet}\n"
-        text += f"Score: {result.score:.2f}\n"
-        if result.document.metadata:
-            text += f"Metadata: {json.dumps(result.document.metadata, ensure_ascii=False, indent=None)}\n"
-        text += "\n"
-
-    return text
 
 def _limit_response(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}\n\n[Truncated] Response exceeded configured content limit."
 
+def _format_document(document: Document) -> str:
+    text = ""
+    text += f"[{document.title}]({document.url})\n"
+    text += f"{document.text}\n"
+    if document.metadata:
+        text += f"Metadata: {json.dumps(document.metadata, ensure_ascii=False, indent=None)}\n"
 
-class SearchTool(BaseTool):
-    """Search a configured data source."""
+    return text
+
+class VisitTool(BaseTool):
+    """Fetch one document from a configured data source."""
 
     @overload
     def __init__(self, *, config: ToolConfig) -> None: ...
@@ -52,7 +45,7 @@ class SearchTool(BaseTool):
         self,
         source: DataSource,
         *,
-        name: str = "search",
+        name: str = "visit",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         response_char_limit: int | None = None,
@@ -62,7 +55,7 @@ class SearchTool(BaseTool):
         self,
         source: DataSource | None = None,
         *,
-        name: str = "search",
+        name: str = "visit",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         response_char_limit: int | None = None,
@@ -70,7 +63,7 @@ class SearchTool(BaseTool):
     ) -> None:
         if config:
             if not config.source_config:
-                raise ValueError("SearchTool requires a source_config to be created from a tool config")
+                raise ValueError("VisitTool requires a source_config to be created from a tool config")
             self.__init__(
                 build_source(config.source_config),
                 name = config.name,
@@ -80,11 +73,11 @@ class SearchTool(BaseTool):
             )
             return
         if source is None:
-            raise ValueError("SearchTool requires a source")
+            raise ValueError("VisitTool requires a source")
         super().__init__(
             name=name,
-            description=description or SEARCH_DESCRIPTION,
-            inputSchema=inputSchema or SEARCH_INPUT_SCHEMA,
+            description=description or VISIT_DESCRIPTION,
+            inputSchema=inputSchema or VISIT_INPUT_SCHEMA,
         )
         self.source = source
         self.response_char_limit = (
@@ -94,10 +87,9 @@ class SearchTool(BaseTool):
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
     async def _run(self, **kwargs: Any) -> str:
-        query = str(kwargs["query"])
-        top_k = int(kwargs.get("top_k", 10))
-        results = await self.source.search(query, top_k=top_k)
-        text = _format_results(results)
-        if self.response_char_limit is not None:
-            text = _limit_response(text, self.response_char_limit)
+        document_id = str(kwargs["document_id"])
+        document = await self.source.fetch(document_id)
+        text = _format_document(document)
+        if self.response_char_limit:
+            return _limit_response(text, self.response_char_limit)
         return text

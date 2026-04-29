@@ -22,7 +22,6 @@ class ToolConfig:
 
     # Common fields
     type: str | None = None
-    kind: str | None = None
     target: str | None = None
     name: str = ""
     description: str | None = None

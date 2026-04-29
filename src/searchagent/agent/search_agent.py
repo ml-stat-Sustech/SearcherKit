@@ -136,12 +136,8 @@ class SearchAgent(BaseAgent):
         if config:
             client = get_client(config.llm_client)
             parser = get_parser(config.parser)
-            source_map: dict[str, DataSource] = {}
-            for source_cfg in config.sources:
-                source = build_source(source_cfg)
-                source_map[source_cfg.name] = source
             tools = [
-                build_tool(tool_cfg, sources=source_map)
+                build_tool(tool_cfg)
                 for tool_cfg in config.tools
             ]
             if config.llm_retry_config:
