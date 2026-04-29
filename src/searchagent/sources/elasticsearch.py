@@ -147,6 +147,8 @@ class ElasticsearchSource(DataSource):
         kwargs = dict(client_kwargs)
         if self.request_timeout is not None:
             kwargs.setdefault("request_timeout", self.request_timeout)
+        if not Elasticsearch:
+            raise ImportError("Elasticsearch client not available, use uv sync --extra elasticsearch-source to install dependency for Elasticsearch source")
         return Elasticsearch(hosts, **kwargs)
 
     async def search(self, query: str, *, top_k: int = 10) -> list[SearchResult]:
