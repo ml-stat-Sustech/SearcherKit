@@ -12,6 +12,7 @@ from searchagent.runtime.runner import AgentRunner, RunConfig
 
 
 async def _run_config(cfg) -> None:
+    cfg = OmegaConf.merge(OmegaConf.structured(RunConfig), cfg)
     config = OmegaConf.to_object(cfg)
     if not isinstance(config, RunConfig):
         raise ValueError("Invalid config. Please check for extra or missing fields")
