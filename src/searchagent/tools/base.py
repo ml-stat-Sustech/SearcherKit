@@ -42,7 +42,6 @@ class ToolConfig:
 
     # Source-backed tools
     source: str | None = None
-    source_config: Any | None = None
 
     # Factory extension
     extra: dict[str, Any] = field(default_factory=dict)

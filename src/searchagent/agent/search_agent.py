@@ -14,7 +14,7 @@ from openai import BadRequestError, InternalServerError
 from searchagent.common.messages import ChatMessage, ToolCall, tool, system, user
 from searchagent.common.messages import Tool as ToolMsgType
 from searchagent.tools import BaseTool, ToolConfig, build_tool
-from searchagent.sources import DataSource, SourceConfig, build_source
+from searchagent.sources import DataSource, SourceConfig, add_source_cfg
 from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
 from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
@@ -136,6 +136,8 @@ class SearchAgent(BaseAgent):
         if config:
             client = get_client(config.llm_client)
             parser = get_parser(config.parser)
+            for source_cfg in config.sources:
+                add_source_cfg(source_cfg.name, source_cfg)
             tools = [
                 build_tool(tool_cfg)
                 for tool_cfg in config.tools

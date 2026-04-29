@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Callable
 
-from searchagent.tools import BaseTool, ToolConfig, MCPTool, SearchTool, VisitTool
+from .base import BaseTool, ToolConfig
+from .mcp import MCPTool
+from .search import SearchTool
+from .visit import VisitTool
 
 
 # ---------------------------------------------------------------------------

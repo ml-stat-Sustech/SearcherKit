@@ -69,10 +69,10 @@ class SearchTool(BaseTool):
         config: ToolConfig | None = None,
     ) -> None:
         if config:
-            if not config.source_config:
-                raise ValueError("SearchTool requires a source_config to be created from a tool config")
+            if not getattr(config, "source", None):
+                raise ValueError("SearchTool requires a source to be created from a tool config")
             self.__init__(
-                build_source(config.source_config),
+                build_source(config.source),
                 name = config.name,
                 description=config.description,
                 inputSchema=inputSchema,

@@ -53,7 +53,7 @@ class SourceConfig:
     target: str | None = None
 
     # -- Elasticsearch -------------------------------------------------------
-    hosts: str | Sequence[str] | None = None
+    hosts: Any = None
     index: str | None = None
     search_fields: list[str] | None = None
     title_field: str = "title"
