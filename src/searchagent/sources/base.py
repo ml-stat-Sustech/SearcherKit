@@ -14,7 +14,7 @@ class Document:
     text: str
     title: str | None = None
     url: str | None = None
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -22,7 +22,7 @@ class SearchResult:
     document: Document
     score: float | None = None
     snippet: str | None = None
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 class DataSource(ABC):
     """Minimal contract every searchable data source adapter should implement."""

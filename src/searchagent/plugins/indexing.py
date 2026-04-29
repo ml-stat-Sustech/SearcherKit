@@ -15,8 +15,8 @@ class IndexDocument:
     title: str
     text: str
     url: str
-    links: list[Mapping[str, Any]] = field(default_factory=list)
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    links: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_source(self) -> dict[str, Any]:
         source = {
