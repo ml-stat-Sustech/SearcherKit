@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import sys
 from typing import Sequence
 
 import uvloop
@@ -21,7 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    argv = list(argv or [])
+    if argv is None:
+        argv = sys.argv[1:]
+    argv = list(argv)
     if not argv or argv[0] in {"-h", "--help"}:
         build_parser().parse_args(argv)
         return 0
