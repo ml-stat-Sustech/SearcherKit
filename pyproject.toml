@@ -37,6 +37,9 @@ chroma = [
 ollama = [
     "ollama>=0.4.0",
 ]
+anthropic = [
+    "anthropic>=0.84.0",
+]
 indexing = [
     "accelerate>=1.13.0",
     "elasticsearch<9.0.0",
