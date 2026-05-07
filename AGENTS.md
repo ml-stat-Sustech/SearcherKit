@@ -42,7 +42,7 @@ src/searchagent/
 |   |-- run.py               # run config/recipe
 |   |-- evaluate.py          # evaluate saved outputs
 |   |-- plugins.py           # plugin discovery/deploy entry
-|   |-- inspect.py           # config inspection
+|   |-- inspect.py           # config validation
 |   `-- config.py            # Hydra compose and ConfigStore registration
 |-- common/
 |   |-- config.py            # import/instantiate helpers
@@ -137,8 +137,8 @@ Common commands:
 ```powershell
 python -m searchagent --help
 python -m searchagent run --config-path recipe\webexplorer --config-name webexplorer
-python -m searchagent inspect config --config-path recipe\websailor --config-name websailor
-python -m searchagent validate --config-path recipe\webexplorer --config-name webexplorer
+python -m searchagent inspect --config-path recipe\webexplorer --config-name webexplorer
+python -m searchagent inspect --config-path recipe\websailor --config-name websailor
 python -m searchagent evaluate outputs\webexplorer outputs\webexplorer_eval --max-concurrency 32
 python -m searchagent plugins list
 python -m searchagent plugins deploy local-wiki --help
@@ -147,7 +147,7 @@ python -m searchagent plugins deploy browsecomp-plus --help
 
 Hydra-style overrides are supported:
 ```powershell
-python -m searchagent inspect config --config-path recipe\websailor --config-name websailor agent.llm_client.model=demo
+python -m searchagent inspect --config-path recipe\websailor --config-name websailor agent.llm_client.model=demo
 ```
 
 ## Design Rules
@@ -174,10 +174,8 @@ Use targeted checks:
 ```powershell
 python -m compileall -q src\searchagent recipe tests\test_config_instantiation.py
 python -m searchagent --help
-python -m searchagent inspect config --config-path recipe\webexplorer --config-name webexplorer
-python -m searchagent inspect config --config-path recipe\websailor --config-name websailor
-python -m searchagent validate --config-path recipe\webexplorer --config-name webexplorer
-python -m searchagent validate --config-path recipe\websailor --config-name websailor
+python -m searchagent inspect --config-path recipe\webexplorer --config-name webexplorer
+python -m searchagent inspect --config-path recipe\websailor --config-name websailor
 python -m pytest tests\test_config_instantiation.py tests\test_source_tools.py tests\test_plugins_sources.py tests\test_elasticsearch_source.py
 ```
 

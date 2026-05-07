@@ -29,16 +29,16 @@ searchagent run --config-path recipe/webexplorer --config-name webexplorer \
 
 ## Inspect Config
 
-Print the final composed config without running anything:
+Validate config fields against structured types without running anything:
 
 ```bash
-searchagent inspect config --config-path recipe/webexplorer --config-name webexplorer
+searchagent inspect --config-path recipe/webexplorer --config-name webexplorer
 ```
 
 Overrides work here too:
 
 ```bash
-searchagent inspect config --config-path recipe/websailor --config-name websailor \
+searchagent inspect --config-path recipe/websailor --config-name websailor \
   agent.llm_client.model=WebSailor-7B
 ```
 

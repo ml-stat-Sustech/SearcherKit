@@ -37,17 +37,11 @@ First verify that the CLI is installed and can see the top-level commands:
 searchagent --help
 ```
 
-Inspect the packaged default config before running it:
-
-```bash
-searchagent inspect config --config-name config
-```
-
 Validate config fields against structured types before running:
 
 ```bash
-searchagent validate --config-path recipe/webexplorer --config-name webexplorer
-searchagent validate --config-path recipe/websailor --config-name websailor
+searchagent inspect --config-path recipe/webexplorer --config-name webexplorer
+searchagent inspect --config-path recipe/websailor --config-name websailor
 ```
 
 The validator recursively compares every key in the composed config against the
@@ -60,7 +54,7 @@ corresponding dataclass fields (`RunConfig`, `SearchAgentConfig`, `ClientConfig`
 Hydra-style overrides are supported:
 
 ```bash
-searchagent validate --config-path recipe/webexplorer --config-name webexplorer agent.max_turn=50
+searchagent inspect --config-path recipe/webexplorer --config-name webexplorer agent.max_turn=50
 ```
 
 Run the packaged default config:
@@ -94,7 +88,7 @@ On Windows PowerShell, the same recipe commands can be written with backslashes:
 
 ```powershell
 searchagent run --config-path recipe\webexplorer --config-name webexplorer
-searchagent inspect config --config-path recipe\websailor --config-name websailor
+searchagent inspect --config-path recipe\websailor --config-name websailor
 ```
 
 Evaluate saved run outputs with the LLM judge:
