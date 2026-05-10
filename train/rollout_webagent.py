@@ -4,6 +4,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+import json
 from collections import Counter
 from typing import Any, Awaitable, Callable, Dict, Iterable, TYPE_CHECKING
 import re
@@ -64,11 +65,29 @@ def f1_score(prediction, ground_truth):
 logger = get_logger(__name__)
 
 class SearchAgentTraining(SearchAgent):
+    def __init__(self, raise_repeat_tool_call: bool = False, **kwargs):
+        super().__init__(**kwargs)
+        self.raise_repeat_tool_call = raise_repeat_tool_call
+        self.previous_tool_queries: set[tuple[str, str]] = set()
+
+    def reset(self):
+        super().reset()
+        self.previous_tool_queries = set()
+
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
-        tool_calls = list(tool_calls)
-        if self.training and len(tool_calls) > 1:
+        tool_calls_list = list(tool_calls)
+        if len(tool_calls_list) > 1:
             raise LLMOutputError("Too many parallel tool calls")
-        return await super().call_tools(tool_calls)
+        for tc in tool_calls_list:
+            if tc.name not in self.tool_dict:
+                raise LLMOutputError(f"Tool {tc.name} not found")
+            argument_str = json.dumps(tc.arguments)
+            if (tc.name, argument_str) in self.previous_tool_queries:
+                if self.raise_repeat_tool_call:
+                    raise LLMOutputError(f"Query {tc.name} has repeated arguments {argument_str}")
+            else:
+                self.previous_tool_queries.add((tc.name, argument_str))
+        return await super().call_tools(tool_calls_list)
 
 class ARealClient(Client):
     """Wrapper around the AReal LLM Client."""
@@ -233,7 +252,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             max_tokens_prompt_margin=agent_config.max_tokens_prompt_margin,
             llm_retry_policy=None,
             tool_retry_policy=tool_retry_policy,
-            training=self.training,
             raise_repeat_tool_call=agent_config.raise_repeat_tool_call
         )
 

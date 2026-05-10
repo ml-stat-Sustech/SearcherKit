@@ -64,8 +64,6 @@ class SearchAgentConfig:
     max_tokens_prompt_margin: int = 128
     llm_retry_config: RetryConfig | None = None
     tool_retry_config: RetryConfig | None = None
-    raise_repeat_tool_call: bool = False
-    training: bool = False
 
 class SearchAgent(BaseAgent):
     """
@@ -93,9 +91,7 @@ class SearchAgent(BaseAgent):
                  max_tokens_prompt: str | None = None,
                  max_tokens_prompt_margin: int = 128,
                  llm_retry_policy: RetryPolicy | None = None,
-                 tool_retry_policy: RetryPolicy | None = None,
-                 raise_repeat_tool_call: bool = False,
-                 training: bool = False):
+                 tool_retry_policy: RetryPolicy | None = None):
         """
         Initialize a SearchAgent instance.
 
@@ -129,8 +125,6 @@ class SearchAgent(BaseAgent):
                  max_tokens_prompt_margin: int = 128,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
-                 raise_repeat_tool_call: bool = False,
-                 training: bool = False,
                  *,
                  config: SearchAgentConfig | None = None):
         if config:
@@ -158,8 +152,6 @@ class SearchAgent(BaseAgent):
                 max_tokens_prompt_margin=config.max_tokens_prompt_margin,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
-                raise_repeat_tool_call=config.raise_repeat_tool_call,
-                training=config.training,
             )
             return
 
@@ -182,9 +174,6 @@ class SearchAgent(BaseAgent):
         self.tool_retry_policy = tool_retry_policy
         self.context_max_token_exceeded = False
         self.history = []
-        self.training = training
-        self.raise_repeat_tool_call = raise_repeat_tool_call
-        self.previous_tool_queries = set()
 
     def _add_tool(self, tool: BaseTool) -> None:
         if tool.name in self.tool_dict:
@@ -194,7 +183,6 @@ class SearchAgent(BaseAgent):
     def reset(self):
         self.history = []
         self.context_token_size = 0
-        self.previous_tool_queries = set()
         
     @property
     def turn(self):
@@ -269,17 +257,8 @@ class SearchAgent(BaseAgent):
             async def return_error(name):
                 return f"Error: Tool {name} not found"
             if tc.name not in self.tool_dict:
-                if self.training:
-                    raise LLMOutputError(f"Tool {tc.name} not found")
                 tool_call_coros.append(return_error(tc.name))
-
                 continue
-            argument_str = json.dumps((tc.arguments))
-            if (tc.name, argument_str) in self.previous_tool_queries:
-                if self.raise_repeat_tool_call:
-                    raise LLMOutputError(f"Query {tc.name} has repeated arguments {argument_str}")
-            else:
-                self.previous_tool_queries.add((tc.name, argument_str))
             
             if self.tool_retry_policy is None:
                 tool_call_coros.append(self.tool_dict[tc.name].run(**dict(tc.arguments)))

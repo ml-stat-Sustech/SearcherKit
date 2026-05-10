@@ -11,5 +11,3 @@ max_tokens_prompt: null
 max_tokens_prompt_margin: 128
 llm_retry_config: null
 tool_retry_config: null
-raise_repeat_tool_call: false
-training: false
