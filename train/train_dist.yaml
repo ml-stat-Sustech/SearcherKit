@@ -55,6 +55,14 @@ workflow:
       temperature: 1.0
       top_p: 1.0
       # top_k: 20
+    source:
+      type: elasticsearch
+      hosts: ["http://elasticsearch:9200"]
+      index: your_index
+      search_fields: ["title^2", "text"]
+      title_field: title
+      text_field: text
+      url_field: url
 
 eval_workflow:
   training: false

@@ -25,7 +25,8 @@ from searchagent.agent.search_agent import LLMOutputError, LLMContextError
 from searchagent.llm.parsers import QwenParser, ParsingError
 from searchagent.common.messages import ToolCall
 from searchagent.errors import RecoverableError
-from searchagent.tools import MCPTool
+from searchagent.sources.factory import build_source
+from searchagent.tools.search import SearchTool
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm import Client
 from searchagent.log import get_logger
@@ -197,25 +198,13 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             )
 
         if self.training:
-            tools = [
-                MCPTool(
-                    "search",
-                    "http://10.32.64.11:8102/mcp/",
-                    max_concurrency=512,
-                    raise_argument_validation_error=True,
-                    transport="streamable-http",
-                    raise_on_fatal=True
-                ),
-                # MCPTool(
-                #     "visit",
-                #     "http://10.32.64.11:8102/mcp/",
-                #     max_concurrency=512,
-                #     raise_argument_validation_error=True,
-                #     transport="streamable-http",
-                #     raise_on_fatal=True
-                # ),
-            ]
+            if agent_config.source is not None:
+                source = build_source(config=agent_config.source)
+                tools = [SearchTool(source=source)]
+            else:
+                tools = []
         else:
+            from searchagent.tools.mcp import MCPTool
             tools = [
                 MCPTool(
                     "search",

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from areal.api.cli_args import GenerationHyperparameters, GRPOConfig
+from searchagent.sources.base import SourceConfig
 
 @dataclass
 class AgentConfig():
@@ -50,6 +51,7 @@ Your response should be in the following format:
     max_turn_prompt: str = field(
         default="You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
     )
+    source: SourceConfig | None = field(default=None)
 
 
 @dataclass
