@@ -186,7 +186,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         assert config.reward == "f1", "LLM as Judge temporarily unavaliable"
 
     async def arun_episode(self, engine: InferenceEngine, data: Dict[str, Any]) -> Dict[str, Any] | None | Dict[str, InteractionWithTokenLogpReward]:
-        # rollout enging wrapper
+        # rollout engin wrapper
         areal_client = ArealOpenAI(
             engine=engine, 
             tokenizer=self.tokenizer,
@@ -212,7 +212,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
                         "enable_thinking": agent_config.thinking
                     }
                 },
-                # "stop": ["<tool_response>","\n<tool_response>"] # TODO: somehow this would crash AReaL OpenAIProxyEngine
             })
 
         if self.training:
@@ -225,13 +224,11 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             )
 
         if self.training:
-            if agent_config.source is not None:
-                source = build_source(config=agent_config.source)
-                tools = [SearchTool(source=source)]
-            else:
-                tools = []
+            source = build_source(config=agent_config.source)
+            tools = [SearchTool(source=source)]
         else:
             from searchagent.tools.mcp import MCPTool
+            # use offical BrowseComp-Plus MCP for testing
             tools = [
                 MCPTool(
                     "search",
@@ -251,12 +248,9 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             tools=tools,
             system_prompt=agent_config.system_prompt,
             max_turn=agent_config.max_turn,
-            # max_turn_prompt = None,
             max_turn_prompt=agent_config.max_turn_prompt,
-            # max_tokens=131072,
             max_tokens=agent_config.max_tokens,
             max_tokens_prompt=agent_config.max_tokens_prompt,
-            # max_tokens_prompt = None,
             max_tokens_prompt_margin=agent_config.max_tokens_prompt_margin,
             llm_retry_policy=None,
             tool_retry_policy=tool_retry_policy,
@@ -306,9 +300,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             context_tokens=agent.context_token_size,
             context_limit_prompted=agent.max_token_reminder_prompted)
         
-        
-        # ======================  Reward Assignment  =======================
-        # extract valid answer and determine format error
         visit_cnt = 0
         for msg in history:
             if msg.role == "assistant" and msg.thinking and "<tool_call>" in msg.thinking: # for qwen3-thinking, this happens
@@ -319,12 +310,13 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
                         visit_cnt += 1
                     
         stats_tracker.get(workflow_context.stat_scope()).scalar(visit_cnt = visit_cnt)
+        
+        # ======================  Reward Assignment  =======================
 
         last_msg = history[-1]
         if last_msg.role != "assistant" or not last_msg.content:
             format_error = True
             last_content = ""
-            # return 0.0
         else:
             last_content = last_msg.content
         _ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
@@ -347,7 +339,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             outcome_score=outcome_score)
 
         # final_reward = format_score + overlong_penalty + outcome_score
-        final_reward = outcome_score + overlong_penalty
+        final_reward = outcome_score + overlong_penalty # remove format score
         stats_tracker.get(workflow_context.stat_scope()).scalar(reward=final_reward)
         
         # ===================== Submit Trajectory =======================
