@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping, overload
 import json
 
+from searchagent.errors import RecoverableError, SourceError
 from searchagent.sources import DataSource, Document, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
 
@@ -88,7 +89,12 @@ class VisitTool(BaseTool):
 
     async def _run(self, **kwargs: Any) -> str:
         document_id = str(kwargs["document_id"])
-        document = await self.source.fetch(document_id)
+        try:
+            document = await self.source.fetch(document_id)
+        except SourceError as e:
+            raise RecoverableError(str(e)) from e
+        except KeyError as e:
+            raise RecoverableError(f"Document not found: {document_id}") from e
         text = _format_document(document)
         if self.response_char_limit:
             return _limit_response(text, self.response_char_limit)

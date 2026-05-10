@@ -75,7 +75,7 @@ agent:
     max_tries: 5
     max_time: null
     exceptions:
-      - pkg://searchagent.tools:ToolRecoverableError
+      - pkg://searchagent.errors:RecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0

@@ -31,5 +31,4 @@ class SourceError(SearchAgentError):
     """Data source or document retrieval failure."""
 
 
-class ToolExecutionError(SearchAgentError):
-    """Tool invocation failed."""
+

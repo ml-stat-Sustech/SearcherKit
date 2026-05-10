@@ -84,7 +84,7 @@ agent:
   tool_retry_config:
     max_tries: 5
     exceptions:
-      - pkg://searchagent.tools:ToolRecoverableError
+      - pkg://searchagent.errors:RecoverableError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0

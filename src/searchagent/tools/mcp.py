@@ -17,7 +17,7 @@ from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 
 from searchagent.log import get_logger, get_trace_id, setup_logger
-from searchagent.errors import ToolExecutionError
+from searchagent.errors import FatalError, RecoverableError
 from searchagent.tools.base import BaseTool, ToolConfig
 
 if TYPE_CHECKING:
@@ -25,13 +25,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-
-class ToolRecoverableError(ToolExecutionError):
-    """A tool error that may succeed if retried."""
-
-
-class ToolFatalError(ToolExecutionError):
-    """A tool error caused by bad configuration or unavailable infrastructure."""
 
 
 class _PooledClient:
@@ -195,7 +188,7 @@ class BaseMCPTool(BaseTool):
             try:
                 await client.__aenter__()
             except (OSError, TimeoutError, ToolError) as exc:
-                raise ToolFatalError(
+                raise FatalError(
                     f"Failed to connect MCP endpoint {self.endpoint}: {exc}"
                 ) from exc
 
@@ -219,7 +212,7 @@ class BaseMCPTool(BaseTool):
         elif self.transport == "sse":
             transport_cls = SSETransport
         else:
-            raise ToolFatalError(
+            raise FatalError(
                 f"Unsupported MCP transport '{self.transport}'. "
                 'Use "streamable-http" or "sse".'
             )
@@ -227,17 +220,17 @@ class BaseMCPTool(BaseTool):
 
     async def _ensure_tool_exists_and_apply_metadata(self) -> None:
         if self._client is None:
-            raise ToolFatalError("MCP client is not initialized")
+            raise FatalError("MCP client is not initialized")
         try:
             tools = await self._client.list_tools()
         except (OSError, TimeoutError, ToolError) as exc:
-            raise ToolFatalError(f"Failed to list MCP tools: {exc}") from exc
+            raise FatalError(f"Failed to list MCP tools: {exc}") from exc
 
         for info in tools:
             if getattr(info, "name", None) == self.mcp_tool_name:
                 self._apply_tool_metadata(info)
                 return
-        raise ToolFatalError(
+        raise FatalError(
             f"MCP tool '{self.mcp_tool_name}' not found at endpoint {self.endpoint}"
         )
 
@@ -273,7 +266,7 @@ class BaseMCPTool(BaseTool):
         if not self._connected or self._client is None:
             await self.init()
         if self._client is None:
-            raise ToolFatalError("MCP client is not initialized")
+            raise FatalError("MCP client is not initialized")
 
         async with self._semaphore:
             self._trace_log(
@@ -287,9 +280,9 @@ class BaseMCPTool(BaseTool):
             except ToolError as exc:
                 await self._handle_tool_error(exc)
             except (OSError, TimeoutError) as exc:
-                raise ToolRecoverableError(str(exc)) from exc
+                raise RecoverableError(str(exc)) from exc
 
-        raise ToolRecoverableError("MCP call did not return a response")
+        raise RecoverableError("MCP call did not return a response")
 
     async def _handle_tool_error(self, exc: ToolError) -> None:
         message = str(exc)
@@ -305,10 +298,10 @@ class BaseMCPTool(BaseTool):
             "429",
         )
         if any(marker in lowered for marker in recoverable_markers):
-            raise ToolRecoverableError(message) from exc
+            raise RecoverableError(message) from exc
         if self.raise_on_fatal:
-            raise ToolFatalError(message) from exc
-        raise ToolRecoverableError(message) from exc
+            raise FatalError(message) from exc
+        raise RecoverableError(message) from exc
 
     @staticmethod
     def _normalize_auth(auth: str | None) -> str:
@@ -484,7 +477,7 @@ def main() -> None:
             arguments=arguments,
             auth_header=args.auth,
         )
-    except (ToolFatalError, ToolRecoverableError) as exc:
+    except (FatalError, RecoverableError) as exc:
         logger.error("Tool execution failed: %s", exc)
         sys.exit(1)
     print(result)

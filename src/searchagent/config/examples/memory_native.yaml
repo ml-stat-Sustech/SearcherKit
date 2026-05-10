@@ -71,7 +71,7 @@ agent:
   tool_retry_config:
     max_tries: 3
     exceptions:
-      - pkg://searchagent.tools:ToolRecoverableError
+      - pkg://searchagent.errors:RecoverableError
 
 dataloader:
   source: src/searchagent/config/examples/data/memory_questions.jsonl

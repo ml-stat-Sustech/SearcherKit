@@ -9,7 +9,6 @@ from .errors import (
     RecoverableError,
     SearchAgentError,
     SourceError,
-    ToolExecutionError,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "RecoverableError",
     "SearchAgentError",
     "SourceError",
-    "ToolExecutionError",
 ]

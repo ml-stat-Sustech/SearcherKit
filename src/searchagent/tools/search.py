@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import Any, overload
 
+from searchagent.errors import RecoverableError, SourceError
 from searchagent.sources import DataSource, SearchResult, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
 
@@ -96,7 +97,10 @@ class SearchTool(BaseTool):
     async def _run(self, **kwargs: Any) -> str:
         query = str(kwargs["query"])
         top_k = int(kwargs.get("top_k", 10))
-        results = await self.source.search(query, top_k=top_k)
+        try:
+            results = await self.source.search(query, top_k=top_k)
+        except SourceError as e:
+            raise RecoverableError(str(e)) from e
         text = _format_results(results)
         if self.response_char_limit is not None:
             text = _limit_response(text, self.response_char_limit)

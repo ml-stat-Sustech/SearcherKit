@@ -24,7 +24,8 @@ from searchagent.agent import SearchAgent
 from searchagent.agent.search_agent import LLMOutputError, LLMContextError
 from searchagent.llm.parsers import QwenParser, ParsingError
 from searchagent.common.messages import ToolCall
-from searchagent.tools import MCPTool, ToolRecoverableError
+from searchagent.errors import RecoverableError
+from searchagent.tools import MCPTool
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm import Client
 from searchagent.log import get_logger
@@ -188,11 +189,11 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
 
         if self.training:
             tool_retry_policy = RetryPolicy(
-                exceptions = (ToolRecoverableError, )
+                exceptions = (RecoverableError, )
             )
         else:
             tool_retry_policy = RetryPolicy(
-                exceptions= (ToolRecoverableError, ValidationError)
+                exceptions= (RecoverableError, ValidationError)
             )
 
         if self.training:
