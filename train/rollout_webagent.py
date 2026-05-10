@@ -64,6 +64,14 @@ def f1_score(prediction, ground_truth):
 
 logger = get_logger(__name__)
 
+class TooManyToolCallsError(LLMOutputError):
+    """Raised when the model issues too many parallel tool calls."""
+    pass
+
+class RepeatedToolCallError(LLMOutputError):
+    """Raised when the model repeats a tool call with identical arguments."""
+    pass
+
 class SearchAgentTraining(SearchAgent):
     def __init__(self, raise_repeat_tool_call: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -77,14 +85,14 @@ class SearchAgentTraining(SearchAgent):
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
         tool_calls_list = list(tool_calls)
         if len(tool_calls_list) > 1:
-            raise LLMOutputError("Too many parallel tool calls")
+            raise TooManyToolCallsError("Too many parallel tool calls")
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:
                 raise LLMOutputError(f"Tool {tc.name} not found")
             argument_str = json.dumps(tc.arguments)
             if (tc.name, argument_str) in self.previous_tool_queries:
                 if self.raise_repeat_tool_call:
-                    raise LLMOutputError(f"Query {tc.name} has repeated arguments {argument_str}")
+                    raise RepeatedToolCallError(f"Query {tc.name} has repeated arguments {argument_str}")
             else:
                 self.previous_tool_queries.add((tc.name, argument_str))
         return await super().call_tools(tool_calls_list)
@@ -259,33 +267,37 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         final_reward = None
 
         format_error = False
+        context_error = False
+        repeated_query = False
+        too_many_tool_call = False
         try:
             await agent.run(agent_config.question_prompt.format(Question = data["question"]))
-            
-            stats_tracker.get(workflow_context.stat_scope()).scalar(context_error=0.0)
-            stats_tracker.get(workflow_context.stat_scope()).scalar(repeated_query=0.0)
-            stats_tracker.get(workflow_context.stat_scope()).scalar(too_many_tool_call=0.0)
+        except RepeatedToolCallError as e:
+            # raised when the model repeats a tool call with identical arguments
+            format_error = True
+            repeated_query = True
+            logger.warning(repr(e))
+        except TooManyToolCallsError as e:
+            # raised when the model issues too many parallel tool calls
+            format_error = True
+            too_many_tool_call = True
+            logger.warning(repr(e))
         except (LLMOutputError, ValidationError, ParsingError) as e:
-            # `LLMOutputError` from errornous tool name or repeated tool call (if raise_repeat_tool_call=True)
+            # `LLMOutputError` from unknown tool name
             # `ValidationError` from errornous tool argument schema
             # `ParsingError` from errornous tool call json string
             format_error = True
-            stats_tracker.get(workflow_context.stat_scope()).scalar(context_error=0.0)
-            if "repeated" in repr(e):
-                logger.warning(repr(e))
-                stats_tracker.get(workflow_context.stat_scope()).scalar(repeated_query=1.0)
-            if "tool calls" in repr(e):
-                logger.warning(repr(e))
-                stats_tracker.get(workflow_context.stat_scope()).scalar(too_many_tool_call=1.0)
-            else:
-                stats_tracker.get(workflow_context.stat_scope()).scalar(repeated_query=0.0)
+            logger.warning(repr(e))
         except LLMContextError:
-            # raise when the last request to client exceeds openai server side context limit
-            stats_tracker.get(workflow_context.stat_scope()).scalar(repeated_query=0.0)
-            stats_tracker.get(workflow_context.stat_scope()).scalar(too_many_tool_call=0.0)
-            stats_tracker.get(workflow_context.stat_scope()).scalar(context_error=1.0)
+            # raised when the last request exceeds server side context limit
+            context_error = True
             raise
             # final_reward = -1.0 # max context
+        finally:
+            stats_tracker.get(workflow_context.stat_scope()).scalar(context_error=float(context_error))
+            stats_tracker.get(workflow_context.stat_scope()).scalar(repeated_query=float(repeated_query))
+            stats_tracker.get(workflow_context.stat_scope()).scalar(too_many_tool_call=float(too_many_tool_call))
+            
 
         history = agent.history
         
