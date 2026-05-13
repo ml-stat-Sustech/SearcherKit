@@ -152,15 +152,17 @@ class BaseMCPTool(BaseTool):
             return
 
         client = self._client
+        await client.__aexit__(None, None, None)
+        
         async with cls._pool_lock:
             entry = cls._client_pool.get(key)
             if entry is not None:
                 entry.ref_count -= 1
                 if entry.ref_count <= 0:
                     cls._client_pool.pop(key, None)
-                    await client.__aexit__(None, None, None)
-            self._client = None
-            self._connected = False
+                    
+        self._client = None
+        self._connected = False
 
     async def _connect(self) -> None:
         cls = BaseMCPTool
@@ -170,7 +172,13 @@ class BaseMCPTool(BaseTool):
             entry = cls._client_pool.get(key)
             if entry is not None and entry.client is not None:
                 entry.ref_count += 1
-                self._client = entry.client
+                self._client = entry.client.new()
+                try:
+                    await self._client.__aenter__()
+                except (OSError, TimeoutError, ToolError) as exc:
+                    raise FatalError(
+                        f"Failed to connect MCP endpoint {self.endpoint}: {exc}"
+                    ) from exc
                 self._connected = True
                 self._trace_log(
                     logging.INFO,
@@ -184,20 +192,22 @@ class BaseMCPTool(BaseTool):
             headers = {"Authorization": self.auth_header} if self.auth_header else {}
             transport = self._build_transport(headers=headers)
             client = Client(transport)
-
-            try:
-                await client.__aenter__()
-            except (OSError, TimeoutError, ToolError) as exc:
-                raise FatalError(
-                    f"Failed to connect MCP endpoint {self.endpoint}: {exc}"
-                ) from exc
-
+            
             cls._client_pool[key] = _PooledClient(
                 client=client,
                 ref_count=1,
                 auth_header=self.auth_header,
             )
-            self._client = client
+            
+            self._client = client.new()
+            try:
+                await self._client.__aenter__()
+            except (OSError, TimeoutError, ToolError) as exc:
+                raise FatalError(
+                    f"Failed to connect MCP endpoint {self.endpoint}: {exc}"
+                ) from exc
+
+            
             self._connected = True
             self._trace_log(
                 logging.INFO,
@@ -276,7 +286,7 @@ class BaseMCPTool(BaseTool):
                 args_preview=self._preview(arguments),
             )
             try:
-                return await self._client.call_tool(self.mcp_tool_name, arguments)
+                return await self._client.call_tool(self.mcp_tool_name, arguments, timeout=1800)
             except ToolError as exc:
                 await self._handle_tool_error(exc)
             except (OSError, TimeoutError) as exc:
