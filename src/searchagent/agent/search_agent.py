@@ -57,6 +57,7 @@ class SearchAgentConfig:
     sources: list[SourceConfig] = field(default_factory=list)
     tools: list[ToolConfig] = field(default_factory=list)
     system_prompt: str | None = None
+    query_prompt: str | None = None
     max_turn: int = 10
     max_turn_prompt: str | None = None
     max_tokens: int = 1024
@@ -85,6 +86,7 @@ class SearchAgent(BaseAgent):
                  parser: Parser, 
                  tools: Iterable[BaseTool], 
                  system_prompt: str | None = None, 
+                 query_prompt: str | None = None,
                  max_turn: int = 10,
                  max_turn_prompt: str | None = None,
                  max_tokens: int = 1024,
@@ -118,6 +120,7 @@ class SearchAgent(BaseAgent):
                  parser: Parser | None = None, 
                  tools: Iterable[BaseTool] = [], 
                  system_prompt: str | None = None, 
+                 query_prompt: str | None = None,
                  max_turn: int = 10,
                  max_turn_prompt: str | None = None,
                  max_tokens: int = 1024,
@@ -145,6 +148,7 @@ class SearchAgent(BaseAgent):
                 parser=parser,
                 tools=tools,
                 system_prompt=config.system_prompt,
+                query_prompt=config.query_prompt,
                 max_turn=config.max_turn,
                 max_turn_prompt=config.max_turn_prompt,
                 max_tokens=config.max_tokens,
@@ -164,6 +168,7 @@ class SearchAgent(BaseAgent):
         for t in tools:
             self._add_tool(t)
         self.system_prompt = system_prompt or ""
+        self.query_prompt = query_prompt or "{query}"
         self.max_turn = max_turn
         self.max_turn_prompt = max_turn_prompt
         self.context_token_size = 0
@@ -388,7 +393,7 @@ class SearchAgent(BaseAgent):
                     tools=[ToolMsgType(tool.name, tool.description, tool.inputSchema)
                            for tool in self.tool_dict.values()],
                 ),
-                user(query),
+                user(self.query_prompt.format(query=query)),
             ]
             logger.info("Starting agent loop query=%r", query[:120])
 
