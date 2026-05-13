@@ -1,8 +1,8 @@
-export WEBAGENT_LOG_LEVEL=WARN
+export SearchAgent_LOG_LEVEL=WARN
 export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
 
-python3 train/train_dist.py \
-    --config train/train_dist.yaml \
+python3 train_dist.py \
+    --config train_dist.yaml \
     scheduler.type=ray \
     cluster.n_nodes=2 \
     actor.backend=fsdp:d4c2 \

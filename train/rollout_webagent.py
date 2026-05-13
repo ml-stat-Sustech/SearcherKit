@@ -32,7 +32,7 @@ from searchagent.common.retry import RetryPolicy
 from searchagent.llm import Client
 from searchagent.log import get_logger
 
-from .config_type import WorkFlowConfig
+from config_type import WorkFlowConfig
 
 def should_accept(x):
     # for DAPO dynamic filtering
@@ -247,6 +247,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             ),
             tools=tools,
             system_prompt=agent_config.system_prompt,
+            query_prompt=agent_config.query_prompt,
             max_turn=agent_config.max_turn,
             max_turn_prompt=agent_config.max_turn_prompt,
             max_tokens=agent_config.max_tokens,
@@ -265,7 +266,8 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         repeated_query = False
         too_many_tool_call = False
         try:
-            await agent.run(agent_config.question_prompt.format(Question = data["question"]))
+            agent.reset()
+            await agent.run(data["question"])
         except RepeatedToolCallError as e:
             # raised when the model repeats a tool call with identical arguments
             format_error = True

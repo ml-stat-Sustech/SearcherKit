@@ -26,7 +26,7 @@ As you proceed, adhere to the following principles:
 3. **Attention to Detail**: You will carefully analyze each information source to ensure that all data is current, relevant, and from credible origins.\n\nProvide your succinct final answer or state that you cannot find answer in a few words in <answer></answer> tags.
 """
     )
-    question_prompt: str = field(
+    query_prompt: str = field(
         default="""
 You are a deep research agent. You need to answer the given question by interacting with a search engine, using the search tool provided. Please perform brief reasoning and use the tool step by step, in an interleaved manner. You may call search multiple rounds
 For example:
@@ -38,7 +38,7 @@ For example:
 <tool_response> response from tool </tool_response>
 ...
 
-Question: {Question}
+Question: {query}
 
 Your response should be in the following format:
 <think>{{your final thought on what should be the final answer}}</think>

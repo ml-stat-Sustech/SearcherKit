@@ -27,7 +27,7 @@ workflow:
     max_tokens: 65536
     # system_prompt: "You are a helpfule assistant, answer the question with tools.\n\nWhile calling the tools, avoid making identical tool calls that had been called before.\nAvoid making more than 5 tool calls in a single response, but always make more tool calls in the next turn if more information is needed.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>\n\n"
     # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
-    question_prompt: |
+    query_prompt: |
       You are a deep research agent. You need to answer the given question by interacting with a search engine, using the search tool provided. Please perform brief reasoning and use the tool step by step, in an interleaved manner. You may call search multiple rounds
       For example:
       <think> your think </think>
@@ -70,7 +70,7 @@ eval_workflow:
     model: ${actor.path}
     max_tokens: ${workflow.agent.max_tokens}
     system_prompt: ${workflow.agent.system_prompt}
-    question_prompt: ${workflow.agent.question_prompt}
+    query_prompt: ${workflow.agent.query_prompt}
     max_tokens_prompt_margin: 11000
     max_turn: 1000
     raise_repeat_tool_call: false
@@ -173,7 +173,7 @@ actor:
       gpu: 1
       mem: 32
       cmd: python3 -m areal.infra.rpc.rpc_server
-      env_vars: {WEBAGENT_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}
+      env_vars: {SearchAgent_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}
 
 ref:
   experiment_name: ${experiment_name}
