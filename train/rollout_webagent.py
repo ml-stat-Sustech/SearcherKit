@@ -348,4 +348,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         areal_client.set_last_reward(final_reward)
         areal_client.apply_reward_discount(self.reward_discount)
 
-        return areal_client.export_interactions(style=self.export_style)
+        traj = areal_client.export_interactions(style=self.export_style)
+        traj["ground_truth"] = data.get("answer", "")
+        return traj

@@ -1,10 +1,11 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datasets import load_dataset
 
-from areal import PPOTrainer
+from igpo.igpo_trainer import IGPOTrainer
 from areal.api.cli_args import load_expr_config
 
 from config_type import SearchAgentTrainingConfig
@@ -22,7 +23,7 @@ def main(args):
     workflow_config = config.workflow
     eval_workflow_config = config.eval_workflow
 
-    with PPOTrainer(
+    with IGPOTrainer(
         config,
         train_dataset=train_dataset,
         valid_dataset=valid_dataset
