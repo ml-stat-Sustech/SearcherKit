@@ -4,6 +4,7 @@
 sources: []
 tools: []
 system_prompt: ""
+query_prompt: null
 max_turn: 10
 max_turn_prompt: null
 max_tokens: 1024

@@ -55,6 +55,7 @@ agent:
   system_prompt: |
     Use search to find relevant documents and visit to read a selected document.
     Put the final answer inside <answer></answer> tags.
+  query_prompt: null
   max_turn: 6
   max_turn_prompt: |
     Stop calling tools and answer now in the format:

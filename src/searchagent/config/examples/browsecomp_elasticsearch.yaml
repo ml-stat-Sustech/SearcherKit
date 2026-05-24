@@ -63,6 +63,7 @@ agent:
   system_prompt: |
     Solve the user's question by using search for candidate sources and visit for full documents.
     Put the final answer inside <answer></answer> tags.
+  query_prompt: null
   max_turn: 100
   max_turn_prompt: |
     You have reached the final step. Do not call tools. Answer now in the format:

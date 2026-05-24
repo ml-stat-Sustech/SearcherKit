@@ -78,6 +78,7 @@ agent:
       source: memory
 
   system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."
+  query_prompt: null
   max_turn: 10
   max_turn_prompt: null
   max_tokens: 1024
