@@ -1,8 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 export SearchAgent_LOG_LEVEL=WARN
 export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
 
-python3 train_dist.py \
-    --config train_dist.yaml \
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+cd "${REPO_ROOT}"
+export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+
+python3 -m searchagent.training.train_dist \
+    --config "${SCRIPT_DIR}/train_dist.yaml" \
     scheduler.type=ray \
     cluster.n_nodes=2 \
     actor.backend=fsdp:d4c2 \

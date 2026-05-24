@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
-from areal.api.cli_args import GenerationHyperparameters, GRPOConfig
+from areal.api.cli_args import GRPOConfig, GenerationHyperparameters
+
 from searchagent.sources.base import SourceConfig
+from searchagent.tools.base import ToolConfig
+
 
 @dataclass
-class AgentConfig():
+class AgentConfig:
     model: str = field(default="default")
     generation: GenerationHyperparameters = field(default_factory=GenerationHyperparameters)
     thinking: bool = field(default=True)
@@ -13,10 +18,10 @@ class AgentConfig():
     max_turn: int = field(default=100000)
     raise_repeat_tool_call: bool = field(default=True)
     system_prompt: str = field(
-        default="""You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up on using more tools until you find the corresponding information. 
+        default="""You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up on using more tools until you find the corresponding information.
 To get more information, make more tool calls with different arguments.
 You should avoid producing repeated tool calls with identical arguments.
-           
+
 As you proceed, adhere to the following principles:
 
 1. **Persistent Actions for Answers**: You will engage in many interactions of brief thinking and clear tool calls, delving deeply into the topic to explore all possible aspects until a satisfactory answer is found.
@@ -52,24 +57,21 @@ Your response should be in the following format:
         default="You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
     )
     source: SourceConfig = field(default_factory=SourceConfig)
+    tools: list[ToolConfig] = field(default_factory=list)
 
 
 @dataclass
-class WorkFlowConfig():
+class WorkFlowConfig:
     training: bool = field(default=True)
     agent: AgentConfig = field(default_factory=AgentConfig)
-    reward: str = field(
-        default="f1",
-        metadata={
-            "choices": ["f1", "llm_as_judge"]
-        }
-    )
+    reward: str = field(default="f1", metadata={"choices": ["f1", "llm_as_judge"]})
     overlong_penalty_margin: int = field(default=5000)
+
 
 @dataclass
 class SearchAgentTrainingConfig(GRPOConfig):
     workflow: WorkFlowConfig = field(default_factory=WorkFlowConfig)
     eval_workflow: WorkFlowConfig = field(default_factory=WorkFlowConfig)
     dynamic_filter_fn: str | None = field(
-        default="rollout_webagent.should_accept"
+        default="searchagent.training.rewards.should_accept"
     )

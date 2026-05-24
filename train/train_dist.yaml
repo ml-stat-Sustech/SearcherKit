@@ -1,6 +1,6 @@
 # from math/gsm8k dapo dynamic_bs.yaml and agent_workflow/config.yaml
 
-experiment_name: webagent
+experiment_name: searchagent
 trial_name: trial0
 
 seed: 1
@@ -38,7 +38,7 @@ workflow:
       <tool_response> response from tool </tool_response>
       ...
 
-      <question>{Question}<\question>
+      <question>{query}</question>
 
       Your response should be in the following format:
       <think>{{your final thought on what should be the final answer}}</think>
@@ -54,7 +54,7 @@ workflow:
       greedy: false
       temperature: 1.0
       top_p: 1.0
-      # top_k: 20
+      top_k: 20
     source:
       type: elasticsearch
       hosts: ["http://elasticsearch:9200"]
@@ -69,7 +69,6 @@ eval_workflow:
   agent:
     model: ${actor.path}
     max_tokens: ${workflow.agent.max_tokens}
-    system_prompt: ${workflow.agent.system_prompt}
     query_prompt: ${workflow.agent.query_prompt}
     max_tokens_prompt_margin: 11000
     max_turn: 1000
@@ -82,7 +81,16 @@ eval_workflow:
       greedy: false
       temperature: 0.6
       top_p: 0.95
-      # top_k: 20
+      top_k: 20
+    tools:
+      - type: mcp
+        name: search
+        mcp_tool_name: search
+        endpoint: http://10.32.64.11:8300/mcp/
+        max_concurrency: 512
+        raise_argument_validation_error: false
+        transport: streamable-http
+        raise_on_fatal: true
 
 rollout:
   experiment_name: ${experiment_name}
