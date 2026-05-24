@@ -6,6 +6,9 @@ import asyncio
 from collections.abc import Mapping, Sequence
 from typing import Any, overload
 
+import json_repair
+
+from searchagent.common.retry import RetryConfig, RetryPolicy, retry_async
 from searchagent.errors import SourceError
 
 from .base import Document, SearchResult, SourceConfig, DataSource
@@ -37,6 +40,49 @@ _ELASTICSEARCH_ERRORS = tuple(
     )
     if isinstance(exc, type)
 )
+
+_OPENAI_ERRORS: tuple[type[Exception], ...] = ()
+
+
+def _lazy_import_openai_errors() -> tuple[type[Exception], ...]:
+    global _OPENAI_ERRORS
+    if _OPENAI_ERRORS:
+        return _OPENAI_ERRORS
+    from openai import APIError, APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
+
+    _OPENAI_ERRORS = (
+        OpenAIError,
+        APIError,
+        APIConnectionError,
+        APITimeoutError,
+        RateLimitError,
+    )
+    return _OPENAI_ERRORS
+
+
+SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
+
+## Task Guidelines
+1. Locate the portions that directly support the goal.
+2. Extract the most relevant evidence.
+3. Provide a concise summary.
+
+Respond strictly in JSON:
+{{
+  "evidence": "...",
+  "summary": "..."
+}}
+
+## User Goal
+{goal}
+
+## Webpage Content
+{webpage_content}
+"""
+
+
+class SummaryError(SourceError):
+    """Raised when the summary model response is missing or malformed."""
 
 
 class ElasticsearchSource(DataSource):
@@ -74,6 +120,16 @@ class ElasticsearchSource(DataSource):
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
+        search_summary_enabled: bool = False,
+        fetch_summary_enabled: bool = False,
+        summary_model: str | None = None,
+        summary_api_key: str | None = None,
+        summary_base_url: str | None = None,
+        summary_max_chars: int = 400000,
+        summary_timeout: float = 3600,
+        summary_default_kwargs: Mapping[str, Any] | None = None,
+        summary_retry_config: RetryConfig | None = None,
+        summary_client: Any | None = None,
     ) -> None: ...
 
     def __init__(
@@ -94,6 +150,16 @@ class ElasticsearchSource(DataSource):
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
+        search_summary_enabled: bool = False,
+        fetch_summary_enabled: bool = False,
+        summary_model: str | None = None,
+        summary_api_key: str | None = None,
+        summary_base_url: str | None = None,
+        summary_max_chars: int = 400000,
+        summary_timeout: float = 3600,
+        summary_default_kwargs: Mapping[str, Any] | None = None,
+        summary_retry_config: RetryConfig | None = None,
+        summary_client: Any | None = None,
         config: SourceConfig | None = None,
     ) -> None:
         if config is not None:
@@ -111,6 +177,15 @@ class ElasticsearchSource(DataSource):
             snippet_chars = config.snippet_chars
             request_timeout = request_timeout or config.request_timeout
             client_kwargs = client_kwargs or config.client_kwargs
+            search_summary_enabled = config.search_summary_enabled
+            fetch_summary_enabled = config.fetch_summary_enabled
+            summary_model = summary_model or config.summary_model
+            summary_api_key = summary_api_key or config.summary_api_key
+            summary_base_url = summary_base_url or config.summary_base_url
+            summary_max_chars = config.summary_max_chars
+            summary_timeout = config.summary_timeout
+            summary_default_kwargs = summary_default_kwargs or config.summary_default_kwargs
+            summary_retry_config = summary_retry_config or config.summary_retry_config
 
         if not index:
             raise ValueError("ElasticsearchSource requires index")
@@ -120,6 +195,22 @@ class ElasticsearchSource(DataSource):
             raise ValueError("highlight_fragment_size must be positive")
         if snippet_chars <= 0:
             raise ValueError("snippet_chars must be positive")
+        if summary_max_chars <= 0:
+            raise ValueError("summary_max_chars must be positive")
+        if summary_timeout <= 0:
+            raise ValueError("summary_timeout must be positive")
+        any_summary_enabled = search_summary_enabled or fetch_summary_enabled
+        if any_summary_enabled and not summary_model:
+            raise ValueError("summary_model is required when summary is enabled")
+        if any_summary_enabled and summary_client is None and not summary_api_key:
+            raise ValueError("summary_api_key is required when summary is enabled")
+        if any_summary_enabled and summary_client is None:
+            from openai import AsyncOpenAI
+
+            summary_client_kwargs: dict[str, Any] = {"api_key": summary_api_key}
+            if summary_base_url:
+                summary_client_kwargs["base_url"] = summary_base_url
+            summary_client = AsyncOpenAI(**summary_client_kwargs)
 
         self.index = index
         self.search_fields = list(search_fields or [f"{title_field}^2", text_field])
@@ -133,6 +224,28 @@ class ElasticsearchSource(DataSource):
         self.highlight_fragment_size = highlight_fragment_size
         self.snippet_chars = snippet_chars
         self.request_timeout = request_timeout
+        self.search_summary_enabled = search_summary_enabled
+        self.fetch_summary_enabled = fetch_summary_enabled
+        self.summary_model = summary_model
+        self.summary_api_key = summary_api_key
+        self.summary_base_url = summary_base_url
+        self.summary_max_chars = summary_max_chars
+        self.summary_timeout = summary_timeout
+        self.summary_default_kwargs = dict(summary_default_kwargs or {})
+        self.summary_retry_policy = (
+            RetryPolicy(config=summary_retry_config)
+            if summary_retry_config is not None
+            else RetryPolicy(
+                exceptions=(
+                    *_lazy_import_openai_errors(),
+                    SummaryError,
+                    ValueError,
+                )
+            )
+            if any_summary_enabled
+            else None
+        )
+        self._summary_client = summary_client
         self.client = client or self._build_client(
             hosts=hosts,
             client_kwargs=client_kwargs or {},
@@ -157,9 +270,14 @@ class ElasticsearchSource(DataSource):
         body = self._search_body(query=query, top_k=top_k)
         response = await self._call_search(body)
         hits = self._hits(response)
-        return [self._search_result_from_hit(hit) for hit in hits]
+        results = [self._search_result_from_hit(hit) for hit in hits]
+        if not self.search_summary_enabled:
+            return results
+        if not results:
+            return []
+        return [await self._summary_search_result(query=query, results=results)]
 
-    async def fetch(self, document_id: str) -> Document:
+    async def fetch(self, document_id: str, *, goal: str | None = None) -> Document:
         if not document_id:
             raise ValueError("document_id must be non-empty")
 
@@ -172,7 +290,10 @@ class ElasticsearchSource(DataSource):
             hits = self._hits(response)
             if not hits:
                 raise KeyError(f"document not found: {document_id}")
-            return self._document_from_hit(hits[0])
+            document = self._document_from_hit(hits[0])
+            if not self.fetch_summary_enabled:
+                return document
+            return await self._summary_document(document, goal=goal)
 
         try:
             hit = await asyncio.to_thread(
@@ -182,7 +303,10 @@ class ElasticsearchSource(DataSource):
             )
         except _ELASTICSEARCH_ERRORS as exc:
             raise SourceError(f"failed to fetch Elasticsearch document {document_id!r}") from exc
-        return self._document_from_hit(hit)
+        document = self._document_from_hit(hit)
+        if not self.fetch_summary_enabled:
+            return document
+        return await self._summary_document(document, goal=goal)
 
     def _search_body(self, *, query: str, top_k: int) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -287,3 +411,118 @@ class ElasticsearchSource(DataSource):
         if value is None:
             return None
         return str(value)
+
+    async def _summary_document(self, document: Document, *, goal: str | None) -> Document:
+        goal_label = goal or "N/A"
+        evidence, summary = await self._summarize(
+            goal=goal or "N/A",
+            content=self._format_document_content(document),
+        )
+        formatted = self._format_visit_summary(
+            document.url or document.title or document.id,
+            goal_label,
+            evidence,
+            summary,
+        )
+        return Document(
+            id=document.id,
+            title=document.title,
+            text=formatted,
+            url=document.url,
+            metadata=document.metadata,
+        )
+
+    async def _summary_search_result(self, *, query: str, results: list[SearchResult]) -> SearchResult:
+        content = "\n\n".join(
+            self._format_document_content(result.document)
+            for result in results
+        )
+        evidence, summary = await self._summarize(
+            goal=query,
+            content=content,
+        )
+        formatted = self._format_search_summary(query, evidence, summary)
+        document = Document(
+            id=f"summary:{query}",
+            title=f"Summary for {query}",
+            text=formatted,
+            url=None,
+            metadata={"summary": True, "result_count": len(results)},
+        )
+        return SearchResult(
+            document=document,
+            score=results[0].score,
+            snippet=formatted,
+            metadata={"summary": True},
+        )
+
+    def _format_document_content(self, document: Document) -> str:
+        title = document.title or "[No Title]"
+        url = document.url or document.id
+        return f"[{title}]({url})\n{document.text}".strip()
+
+    async def _summarize(self, *, goal: str, content: str) -> tuple[str, str]:
+        try:
+            return await retry_async(
+                self._request_summary,
+                goal,
+                content[: self.summary_max_chars],
+                policy=self.summary_retry_policy or RetryPolicy(exceptions=(SummaryError,)),
+                op_name="elasticsearch.summary",
+            )
+        except (*_lazy_import_openai_errors(), SummaryError, ValueError) as exc:
+            raise SourceError("failed to generate Elasticsearch summary") from exc
+
+    async def _request_summary(self, goal: str, content: str) -> tuple[str, str]:
+        if not self.summary_model:
+            raise SummaryError("summary_model is not configured")
+        prompt = SUMMARY_PROMPT.format(goal=goal or "N/A", webpage_content=content)
+        payload: dict[str, Any] = {
+            "model": self.summary_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"},
+            "timeout": self.summary_timeout,
+            **self.summary_default_kwargs,
+        }
+        if self._summary_client is None:
+            raise SummaryError("summary client is not configured")
+        response = await self._summary_client.chat.completions.create(**payload)
+        raw = response.choices[0].message.content if response.choices else None
+        if not raw:
+            raise SummaryError("summary model returned empty content")
+        data = json_repair.loads(raw)
+        if not isinstance(data, Mapping):
+            raise SummaryError("summary model returned non-object JSON")
+        evidence = str(data.get("evidence", "")).strip()
+        summary = str(data.get("summary", "")).strip()
+        if not evidence and not summary:
+            raise SummaryError("summary model returned no evidence or summary")
+        return evidence, summary
+
+    @staticmethod
+    def _format_search_summary(goal: str, evidence: str, summary: str) -> str:
+        lines = [
+            f"The useful information for query {goal} as follows:",
+            "",
+            "Evidence in page:",
+            evidence or "No evidence extracted.",
+            "",
+            "Summary:",
+            summary or "No summary available.",
+            "",
+        ]
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _format_visit_summary(source: str, goal: str, evidence: str, summary: str) -> str:
+        lines = [
+            f"The useful information in {source or 'Elasticsearch'} for user goal {goal or 'N/A'} as follows:",
+            "",
+            "Evidence in page:",
+            evidence or "No evidence extracted.",
+            "",
+            "Summary:",
+            summary or "No summary available.",
+            "",
+        ]
+        return "\n".join(lines).strip()

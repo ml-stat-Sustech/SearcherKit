@@ -49,9 +49,11 @@ agent:
     - type: search
       name: search
       source: memory
+      response_char_limit: null
     - type: visit
       name: visit
       source: memory
+      response_char_limit: null
   system_prompt: |
     Use search to find relevant documents and visit to read a selected document.
     Put the final answer inside <answer></answer> tags.

@@ -52,9 +52,11 @@ agent:
     - type: search
       name: search
       source: bcp
+      response_char_limit: null
     - type: visit
       name: visit
       source: bcp
+      response_char_limit: null
   system_prompt: |
     You are a helpful assistant.
 

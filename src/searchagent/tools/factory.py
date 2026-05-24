@@ -43,9 +43,7 @@ def build_tool(
 ) -> BaseTool:
     """Instantiate a tool from *cfg*.
 
-    Looks up *cfg.type* / *cfg.kind* in the registry. For compatibility, configs
-    without a type still use *cfg.name* as the lookup key, and configs with an
-    endpoint default to the ``mcp`` implementation.
+    Looks up *cfg.type* in the registry.
     If the entry is a class, instantiates it with ``config=cfg``.
     If the entry is a callable, calls it with *cfg* and returns the result.
     """

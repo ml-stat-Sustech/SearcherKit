@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from searchagent.common.retry import RetryConfig
+
 
 @dataclass(slots=True)
 class Document:
@@ -33,7 +35,7 @@ class DataSource(ABC):
         """Return ranked documents for a natural-language query."""
         ...
 
-    async def fetch(self, document_id: str) -> Document:
+    async def fetch(self, document_id: str, *, goal: str | None = None) -> Document:
         """Return a full document by id."""
         ...
 
@@ -67,6 +69,15 @@ class SourceConfig:
     snippet_chars: int = 512
     request_timeout: float | None = None
     client_kwargs: dict[str, Any] | None = None
+    search_summary_enabled: bool = False
+    fetch_summary_enabled: bool = False
+    summary_model: str | None = None
+    summary_api_key: str | None = None
+    summary_base_url: str | None = None
+    summary_max_chars: int = 400000
+    summary_timeout: float = 3600
+    summary_default_kwargs: dict[str, Any] | None = None
+    summary_retry_config: RetryConfig | None = None
 
     # -- Memory --------------------------------------------------------------
     documents: list[Document] | None = None

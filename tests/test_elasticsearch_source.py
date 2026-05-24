@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import json
+from types import SimpleNamespace
 from typing import Any
 
-from searchagent.sources.elasticsearch import ElasticsearchSource
-from searchagent.tools import ToolConfig, build_tool
+import pytest
+
+from searchagent.common.retry import RetryConfig
+from searchagent.errors import RecoverableError
+from searchagent.sources.elasticsearch import ElasticsearchSource, SummaryError
+from searchagent.tools import SearchTool, VisitTool
 
 
 class FakeElasticsearchClient:
@@ -48,7 +52,71 @@ class FakeElasticsearchClient:
         raise KeyError(id)
 
 
-def test_elasticsearch_source_search_and_fetch_by_es_id() -> None:
+class FakeCompletions:
+    def __init__(self, client: "FakeSummaryClient") -> None:
+        self.client = client
+
+    async def create(self, **payload: Any) -> SimpleNamespace:
+        self.client.calls.append(payload)
+        value = self.client.responses.pop(0)
+        if isinstance(value, BaseException):
+            raise value
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content=str(value)),
+                )
+            ]
+        )
+
+
+class FakeChat:
+    def __init__(self, client: "FakeSummaryClient") -> None:
+        self.completions = FakeCompletions(client)
+
+
+class FakeSummaryClient:
+    def __init__(self, responses: list[str | BaseException]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, Any]] = []
+        self.chat = FakeChat(self)
+
+
+def _summary_retry_config(max_tries: int) -> RetryConfig:
+    return RetryConfig(
+        max_tries=max_tries,
+        exceptions=["pkg://searchagent.sources.elasticsearch:SummaryError"],
+        jitter=None,
+        factor=0,
+    )
+
+
+def _summary_source(
+    *,
+    summary_client: FakeSummaryClient,
+    client: FakeElasticsearchClient | None = None,
+    fetch_by_url: bool = False,
+    search_summary_enabled: bool = True,
+    fetch_summary_enabled: bool = True,
+    retry_config: RetryConfig | None = None,
+) -> ElasticsearchSource:
+    kwargs: dict[str, Any] = {}
+    if fetch_by_url:
+        kwargs.update(document_id_field="url", fetch_field="url")
+    return ElasticsearchSource(
+        client=client or FakeElasticsearchClient(),
+        index="browsecomp_hybrid",
+        search_summary_enabled=search_summary_enabled,
+        fetch_summary_enabled=fetch_summary_enabled,
+        summary_model="summary-model",
+        summary_api_key="key",
+        summary_client=summary_client,
+        summary_retry_config=retry_config,
+        **kwargs,
+    )
+
+
+def test_elasticsearch_source_search_and_fetch() -> None:
     async def run_source() -> None:
         client = FakeElasticsearchClient()
         source = ElasticsearchSource(client=client, index="browsecomp_hybrid")
@@ -62,13 +130,7 @@ def test_elasticsearch_source_search_and_fetch_by_es_id() -> None:
         assert document.title == "BrowseComp Plus"
         assert document.url == "https://example.test/bcp"
 
-    asyncio.run(run_source())
-
-
-def test_elasticsearch_source_can_be_configured_for_browsecomp_plus_visit_ids() -> None:
-    async def run_source() -> None:
-        client = FakeElasticsearchClient()
-        source = ElasticsearchSource(
+        url_source = ElasticsearchSource(
             client=client,
             index="browsecomp_hybrid",
             search_fields=["title^2", "text"],
@@ -79,23 +141,223 @@ def test_elasticsearch_source_can_be_configured_for_browsecomp_plus_visit_ids() 
             metadata_fields=["links"],
         )
 
-        search_tool = build_tool(
-            ToolConfig(type="search", name="search", source="bcp"),
-            sources={"bcp": source},
-        )
-        visit_tool = build_tool(
-            ToolConfig(type="visit", name="visit", source="bcp"),
-            sources={"bcp": source},
-        )
+        url_results = await url_source.search("benchmark", top_k=1)
+        assert url_results[0].document.id == "https://example.test/bcp"
+        assert url_results[0].snippet == "BrowseComp Plus benchmark corpus"
 
-        search_payload = json.loads(await search_tool.run(query="benchmark", top_k=1))
-        assert search_payload[0]["document"]["id"] == "https://example.test/bcp"
-        assert "text" not in search_payload[0]["document"]
-
-        visit_payload = json.loads(
-            await visit_tool.run(document_id="https://example.test/bcp")
-        )
-        assert visit_payload["title"] == "BrowseComp Plus"
-        assert "benchmark corpus" in visit_payload["text"]
+        url_document = await url_source.fetch("https://example.test/bcp")
+        assert url_document.title == "BrowseComp Plus"
+        assert url_document.url == "https://example.test/bcp"
+        assert url_document.metadata["links"] == [
+            {"text": "Related", "url": "https://example.test/related"}
+        ]
+        assert client.search_calls[-1]["body"]["query"]["term"]["url"]["value"] == "https://example.test/bcp"
 
     asyncio.run(run_source())
+
+
+def test_elasticsearch_search_summary_disabled_returns_normal_results() -> None:
+    async def run_source() -> None:
+        summary_client = FakeSummaryClient(
+            ['{"evidence": "unused evidence", "summary": "unused summary"}']
+        )
+        source = ElasticsearchSource(
+            client=FakeElasticsearchClient(),
+            index="browsecomp_hybrid",
+            summary_model="summary-model",
+            summary_api_key="key",
+            summary_client=summary_client,
+        )
+
+        results = await source.search("benchmark", top_k=1)
+
+        assert len(results) == 1
+        assert results[0].document.id == "1"
+        assert results[0].metadata == {"index": "browsecomp_hybrid"}
+        assert summary_client.calls == []
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_search_summary_enabled_uses_all_result_text() -> None:
+    async def run_source() -> None:
+        client = FakeElasticsearchClient()
+        client.documents.append(
+            {
+                "_id": "2",
+                "_index": "browsecomp_hybrid",
+                "_score": 2.0,
+                "_source": {
+                    "title": "Second Result",
+                    "text": "Second full document text for summary.",
+                    "url": "https://example.test/second",
+                },
+            }
+        )
+        summary_client = FakeSummaryClient(
+            ['{"evidence": "combined evidence", "summary": "combined summary"}']
+        )
+        source = _summary_source(
+            client=client,
+            summary_client=summary_client,
+            fetch_summary_enabled=False,
+        )
+
+        results = await source.search("benchmark", top_k=2)
+
+        assert len(results) == 1
+        assert results[0].metadata["summary"] is True
+        assert "combined evidence" in (results[0].snippet or "")
+        assert "combined summary" in results[0].document.text
+        prompt = summary_client.calls[0]["messages"][0]["content"]
+        assert "BrowseComp Plus is a benchmark corpus stored in Elasticsearch." in prompt
+        assert "Second full document text for summary." in prompt
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_search_summary_retries_once_then_succeeds() -> None:
+    async def run_source() -> None:
+        summary_client = FakeSummaryClient(
+            [
+                "not json at all",
+                '{"evidence": "after retry", "summary": "ok"}',
+            ]
+        )
+        source = _summary_source(
+            summary_client=summary_client,
+            fetch_summary_enabled=False,
+            retry_config=_summary_retry_config(max_tries=2),
+        )
+
+        results = await source.search("benchmark", top_k=1)
+
+        assert len(summary_client.calls) == 2
+        assert "after retry" in (results[0].snippet or "")
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_search_summary_failure_surfaces_recoverable_error() -> None:
+    async def run_source() -> None:
+        source = _summary_source(
+            summary_client=FakeSummaryClient(['{"evidence": "", "summary": ""}']),
+            fetch_summary_enabled=False,
+            retry_config=_summary_retry_config(max_tries=1),
+        )
+        search_tool = SearchTool(source)
+
+        with pytest.raises(RecoverableError):
+            await search_tool._run(query="benchmark", top_k=1)
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_visit_summary_disabled_returns_normal_document() -> None:
+    async def run_source() -> None:
+        summary_client = FakeSummaryClient(
+            ['{"evidence": "unused evidence", "summary": "unused summary"}']
+        )
+        source = ElasticsearchSource(
+            client=FakeElasticsearchClient(),
+            index="browsecomp_hybrid",
+            document_id_field="url",
+            fetch_field="url",
+            summary_model="summary-model",
+            summary_api_key="key",
+            summary_client=summary_client,
+        )
+
+        document = await source.fetch("https://example.test/bcp", goal="find benchmark details")
+
+        assert document.title == "BrowseComp Plus"
+        assert document.text == "BrowseComp Plus is a benchmark corpus stored in Elasticsearch."
+        assert summary_client.calls == []
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_visit_summary_enabled_uses_goal() -> None:
+    async def run_source() -> None:
+        summary_client = FakeSummaryClient(
+            ['{"evidence": "goal evidence", "summary": "goal summary"}']
+        )
+        source = _summary_source(
+            summary_client=summary_client,
+            fetch_by_url=True,
+            search_summary_enabled=False,
+        )
+
+        visit_tool = VisitTool(source)
+        payload = await visit_tool.run(
+            document_id="https://example.test/bcp",
+            goal="find benchmark details",
+        )
+
+        assert "goal evidence" in payload
+        assert "goal summary" in payload
+        prompt = summary_client.calls[0]["messages"][0]["content"]
+        assert "find benchmark details" in prompt
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_visit_summary_retries_once_then_succeeds() -> None:
+    async def run_source() -> None:
+        summary_client = FakeSummaryClient(
+            [
+                "not json at all",
+                '{"evidence": "visit retry evidence", "summary": "visit retry summary"}',
+            ]
+        )
+        source = _summary_source(
+            summary_client=summary_client,
+            fetch_by_url=True,
+            search_summary_enabled=False,
+            retry_config=_summary_retry_config(max_tries=2),
+        )
+
+        document = await source.fetch("https://example.test/bcp", goal="find benchmark details")
+
+        assert len(summary_client.calls) == 2
+        assert "visit retry evidence" in document.text
+        assert "visit retry summary" in document.text
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_visit_summary_failure_surfaces_recoverable_error() -> None:
+    async def run_source() -> None:
+        source = _summary_source(
+            summary_client=FakeSummaryClient(['{"evidence": "", "summary": ""}']),
+            fetch_by_url=True,
+            search_summary_enabled=False,
+            retry_config=_summary_retry_config(max_tries=1),
+        )
+        visit_tool = VisitTool(source)
+
+        with pytest.raises(RecoverableError):
+            await visit_tool._run(
+                document_id="https://example.test/bcp",
+                goal="find benchmark details",
+            )
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_source_summary_requires_model_and_key() -> None:
+    with pytest.raises(ValueError, match="summary_model"):
+        ElasticsearchSource(
+            client=FakeElasticsearchClient(),
+            index="browsecomp_hybrid",
+            search_summary_enabled=True,
+            summary_api_key="key",
+        )
+
+    with pytest.raises(ValueError, match="summary_api_key"):
+        ElasticsearchSource(
+            client=FakeElasticsearchClient(),
+            index="browsecomp_hybrid",
+            fetch_summary_enabled=True,
+            summary_model="summary-model",
+        )

@@ -28,7 +28,7 @@ def _format_results(results: list[SearchResult]) -> str:
     text = ""
     for i, result in enumerate(results, start=1):
         text += f"{i}. [{result.document.title}]({result.document.url})\n"
-        text += f"{result.snippet}\n"
+        text += f"{result.snippet or result.document.text}\n"
         text += f"Score: {result.score:.2f}\n"
         if result.document.metadata:
             text += f"Metadata: {json.dumps(result.document.metadata, ensure_ascii=False, indent=None)}\n"
