@@ -14,20 +14,32 @@ from areal.experimental.openai.types import InteractionWithTokenLogpReward
 from areal.utils import stats_tracker
 
 from searchagent.agent.search_agent import LLMContextError, LLMOutputError
-from searchagent.llm.parsers import ParsingError
+from searchagent.common.retry import RetryPolicy
+from searchagent.errors import RecoverableError
+from searchagent.llm.parsers import ParsingError, QwenParser
 from searchagent.log import get_logger
+from searchagent.sources.factory import build_source
+from searchagent.tools import BaseTool, build_tool
+from searchagent.tools.search import SearchTool
 from searchagent.training.agent import (
     RepeatedToolCallError,
     SearchAgentTraining,
     TooManyToolCallsError,
 )
 from searchagent.training.areal_client import ARealClient
-from searchagent.training.config import WorkFlowConfig
+from searchagent.training.config import AgentConfig, WorkFlowConfig
 from searchagent.training.rewards import assign_overlong_penalty, f1_score
 
 logger = get_logger(__name__)
 
 _ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
+
+
+def _build_tools(agent_config: AgentConfig) -> list[BaseTool]:
+    if agent_config.tools:
+        return [build_tool(tool_config) for tool_config in agent_config.tools]
+    source = build_source(config=agent_config.source)
+    return [SearchTool(source=source)]
 
 
 class ARealSearchAgentWorkflow(RolloutWorkflow):
@@ -38,7 +50,8 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         export_style: str = "concat",
     ) -> None:
         super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained(config.agent.llm_client.model)
+        self.tokenizer = AutoTokenizer.from_pretrained(config.agent.model)
+        self.training = config.training
         self.agent_config = config.agent
         self.reward = config.reward
         self.overlong_penalty_margin = config.overlong_penalty_margin
@@ -52,21 +65,58 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         engine: InferenceEngine,
         data: dict[str, Any],
     ) -> dict[str, Any] | None | dict[str, InteractionWithTokenLogpReward]:
-        agent_config = self.agent_config
         areal_client = ArealOpenAI(
             engine=engine,
             tokenizer=self.tokenizer,
-            engine_max_tokens=agent_config.max_tokens,
+            engine_max_tokens=self.agent_config.max_tokens,
             tool_call_parser="qwen",
             reasoning_parser="qwen3",
             chat_template_type="concat",
         )
 
+        agent_config = self.agent_config
+        if not agent_config.thinking:
+            logger.warning(
+                "AReaL does not support hard thinking switch through openai "
+                "request. Please add soft switch prompt (i.e. /no_think) to "
+                "system prompt"
+            )
         client = ARealClient(
             client=areal_client,
-            default_kwargs=agent_config.llm_client.default_kwargs,
+            default_kwargs={
+                "temperature": agent_config.generation.temperature,
+                "max_completion_tokens": agent_config.generation.max_new_tokens,
+                "top_p": agent_config.generation.top_p,
+                "extra_body": {
+                    "chat_template_kwargs": {
+                        "enable_thinking": agent_config.thinking,
+                    }
+                },
+            },
         )
-        agent = SearchAgentTraining(config=agent_config, llm_client=client)
+
+        if self.training:
+            tool_retry_policy = RetryPolicy(exceptions=(RecoverableError,))
+        else:
+            tool_retry_policy = RetryPolicy(exceptions=(RecoverableError, ValidationError))
+
+        tools = _build_tools(agent_config)
+
+        agent = SearchAgentTraining(
+            llm_client=client,
+            parser=QwenParser(upstream_parsed=True),
+            tools=tools,
+            system_prompt=agent_config.system_prompt,
+            query_prompt=agent_config.query_prompt,
+            max_turn=agent_config.max_turn,
+            max_turn_prompt=agent_config.max_turn_prompt,
+            max_tokens=agent_config.max_tokens,
+            max_tokens_prompt=agent_config.max_tokens_prompt,
+            max_tokens_prompt_margin=agent_config.max_tokens_prompt_margin,
+            llm_retry_policy=None,
+            tool_retry_policy=tool_retry_policy,
+            raise_repeat_tool_call=agent_config.raise_repeat_tool_call,
+        )
 
         format_error = False
         context_error = False

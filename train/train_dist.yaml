@@ -21,10 +21,43 @@ scheduler:
   type: ray
 
 workflow:
-  training: true
   agent:
-    model: ${actor.path}
+    llm_client:
+      type: openai
+      model: ${actor.path}
+      retry_policy: null
+      default_kwargs:
+        temperature: 1.0
+        max_completion_tokens: 9000
+        top_p: 1.0
+        extra_body:
+          chat_template_kwargs:
+            enable_thinking: true
+      openai:
+        api_key: null
+        base_url: null
+        concurrency_limit: null
+        extra_client_kwargs: null
+    parser:
+      type: qwen
+      target: null
+      qwen:
+        upstream_parsed: true
+        drop_thinking: false
+      kwargs: {}
     max_tokens: 65536
+    system_prompt: |
+      You are a helpful AI assistant that can search for information to answer questions accurately.
+      
+      When answering questions:
+      1. Use the available tools to find relevant and reliable information
+      2. Synthesize information from multiple sources when needed
+      3. Provide accurate and comprehensive answers based on your search results
+      4. Do not search the same query multiple times
+      5. Make exactly one tool call at a time
+      6. Always put your final answer in \boxed{} format
+      
+      Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
     # system_prompt: "You are a helpfule assistant, answer the question with tools.\n\nWhile calling the tools, avoid making identical tool calls that had been called before.\nAvoid making more than 5 tool calls in a single response, but always make more tool calls in the next turn if more information is needed.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>\n\n"
     # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
     query_prompt: |
@@ -38,50 +71,113 @@ workflow:
       <tool_response> response from tool </tool_response>
       ...
 
-      <question>{query}</question>
+      Question: {query}
 
-      Your response should be in the following format:
-      <think>{{your final thought on what should be the final answer}}</think>
-      <answer>{{your succinct, final answer, in a few words}}</answer>
+      After you have gathered enough information to answer the question, the final response should be in the following format:
+      <think> your final thought on what should be the final answer </think>
+      ...
+      \boxed{{your succinct, final answer, in a few words}}
+
     max_tokens_prompt_margin: 11000
     max_turn: 1000
+    max_turn_prompt: |
+      You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
+      \boxed{your final answer, in a few words}
+    max_tokens_prompt: |
+      You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
+      \boxed{your final answer, in a few words}
     raise_repeat_tool_call: true
-    generation: 
-      n_samples: 8
-      min_new_tokens: 0
-      max_new_tokens: 9000
-      # max_tokens: 131072
-      greedy: false
-      temperature: 1.0
-      top_p: 1.0
-      top_k: 20
-    source:
-      type: elasticsearch
-      hosts: ["http://elasticsearch:9200"]
-      index: your_index
-      search_fields: ["title^2", "text"]
-      title_field: title
-      text_field: text
-      url_field: url
+    llm_retry_config: null
+    tool_retry_config:
+      max_tries: 3
+      max_time: null
+      exceptions:
+        - pkg://searchagent.errors:RecoverableError
+      giveup: null
+      jitter: pkg://backoff:full_jitter
+      factor: 1.0
+      base: 1.0
+    sources:
+      - name: elasticsearch
+        type: elasticsearch
+        hosts: ["http://elasticsearch:9200"]
+        index: wiki20251101_qwen3-embedding-8b
+        search_fields: ["title", "text"]
+        title_field: title
+        text_field: text
+        url_field: url
+    tools:
+      - type: search
+        name: search
+        description: Search the configured data source.
+        inputSchema:
+          type: object
+          properties:
+            query:
+              type: string
+            top_k:
+              type: integer
+              minimum: 1
+          required:
+            - query
+          additionalProperties: false
+        source: elasticsearch
+        response_char_limit: null
+        raise_argument_validation_error: false
 
 eval_workflow:
-  training: false
   agent:
-    model: ${actor.path}
+    llm_client:
+      type: openai
+      model: ${actor.path}
+      retry_policy: null
+      default_kwargs:
+        temperature: 0.6
+        max_completion_tokens: 9000
+        top_p: 0.95
+        extra_body:
+          chat_template_kwargs:
+            enable_thinking: true
+      openai:
+        api_key: null
+        base_url: null
+        concurrency_limit: null
+        extra_client_kwargs: null
+    parser:
+      type: qwen
+      target: null
+      qwen:
+        upstream_parsed: true
+        drop_thinking: true
+      kwargs: {}
     max_tokens: ${workflow.agent.max_tokens}
+    system_prompt: ${workflow.agent.system_prompt}
     query_prompt: ${workflow.agent.query_prompt}
     max_tokens_prompt_margin: 11000
     max_turn: 1000
+    max_turn_prompt: ${workflow.agent.max_turn_prompt}
+    max_tokens_prompt: ${workflow.agent.max_tokens_prompt}
     raise_repeat_tool_call: false
-    generation: 
-      n_samples: 1
-      min_new_tokens: 0
-      max_new_tokens: 9000
-      # max_tokens: 131072
-      greedy: false
-      temperature: 0.6
-      top_p: 0.95
-      top_k: 20
+    llm_retry_config: null
+    tool_retry_config:
+      max_tries: 3
+      max_time: null
+      exceptions:
+        - pkg://searchagent.errors:RecoverableError
+        - pkg://jsonschema:ValidationError
+      giveup: null
+      jitter: pkg://backoff:full_jitter
+      factor: 1.0
+      base: 1.0
+    sources:
+      - name: elasticsearch
+        type: elasticsearch
+        hosts: ["http://elasticsearch:9200"]
+        index: browsecomp_plus_qwen3-embedding-8b
+        search_fields: ["title", "text"]
+        title_field: title
+        text_field: text
+        url_field: url
     tools:
       - type: mcp
         name: search
@@ -119,22 +215,22 @@ rollout:
 gconfig:
   n_samples: 8
   min_new_tokens: 0
-  max_new_tokens: ${workflow.agent.generation.max_new_tokens}
+  max_new_tokens: ${workflow.agent.llm_client.default_kwargs.max_completion_tokens}
   # max_tokens: 131072
   greedy: false
-  temperature: ${workflow.agent.generation.temperature}
-  top_p: ${workflow.agent.generation.top_p}
-  top_k: ${workflow.agent.generation.top_k}
+  temperature: ${workflow.agent.llm_client.default_kwargs.temperature}
+  top_p: ${workflow.agent.llm_client.default_kwargs.top_p}
+  top_k: 20
 
 eval_gconfig:
   n_samples: 1
   min_new_tokens: 0
-  max_new_tokens: ${eval_workflow.agent.generation.max_new_tokens}
+  max_new_tokens: ${eval_workflow.agent.llm_client.default_kwargs.max_completion_tokens}
   # max_tokens: 131072
   greedy: false
-  temperature: ${eval_workflow.agent.generation.temperature}
-  top_p: ${eval_workflow.agent.generation.top_p}
-  top_k: ${eval_workflow.agent.generation.top_k}
+  temperature: ${eval_workflow.agent.llm_client.default_kwargs.temperature}
+  top_p: ${eval_workflow.agent.llm_client.default_kwargs.top_p}
+  top_k: 20
 
 actor:
   # enable_tree_training: true
@@ -174,7 +270,7 @@ actor:
   adv_norm:
     mean_level: batch
     std_level: batch
-  max_new_tokens: ${workflow.agent.generation.max_new_tokens}
+  max_new_tokens: ${workflow.agent.llm_client.default_kwargs.max_completion_tokens}
   scheduling_spec:
     - task_type: worker
       port_count: 2
