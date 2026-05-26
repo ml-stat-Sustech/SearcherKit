@@ -69,6 +69,15 @@ class SourceConfig:
     snippet_chars: int = 512
     request_timeout: float | None = None
     client_kwargs: dict[str, Any] | None = None
+    vector_search_mode: str = "bm25"
+    vector_field: str = "text_vector"
+    embedding_prefix: str = ""
+    embedding_model: str | None = None
+    embedding_api_key: str | None = None
+    embedding_base_url: str | None = None
+    embedding_timeout: float = 60
+    embedding_default_kwargs: dict[str, Any] | None = None
+    embedding_retry_config: RetryConfig | None = None
     search_summary_enabled: bool = False
     fetch_summary_enabled: bool = False
     summary_model: str | None = None

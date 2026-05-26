@@ -85,6 +85,10 @@ class SummaryError(SourceError):
     """Raised when the summary model response is missing or malformed."""
 
 
+class EmbeddingError(SourceError):
+    """Raised when the embedding model response is missing or malformed."""
+
+
 class ElasticsearchSource(DataSource):
     """Search and fetch documents from an Elasticsearch index.
 
@@ -120,6 +124,16 @@ class ElasticsearchSource(DataSource):
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
+        vector_search_mode: str = "bm25",
+        vector_field: str = "text_vector",
+        embedding_prefix: str = "",
+        embedding_model: str | None = None,
+        embedding_api_key: str | None = None,
+        embedding_base_url: str | None = None,
+        embedding_timeout: float = 60,
+        embedding_default_kwargs: Mapping[str, Any] | None = None,
+        embedding_retry_config: RetryConfig | None = None,
+        embedding_client: Any | None = None,
         search_summary_enabled: bool = False,
         fetch_summary_enabled: bool = False,
         summary_model: str | None = None,
@@ -150,6 +164,16 @@ class ElasticsearchSource(DataSource):
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
+        vector_search_mode: str = "bm25",
+        vector_field: str = "text_vector",
+        embedding_prefix: str = "",
+        embedding_model: str | None = None,
+        embedding_api_key: str | None = None,
+        embedding_base_url: str | None = None,
+        embedding_timeout: float = 60,
+        embedding_default_kwargs: Mapping[str, Any] | None = None,
+        embedding_retry_config: RetryConfig | None = None,
+        embedding_client: Any | None = None,
         search_summary_enabled: bool = False,
         fetch_summary_enabled: bool = False,
         summary_model: str | None = None,
@@ -177,6 +201,15 @@ class ElasticsearchSource(DataSource):
             snippet_chars = config.snippet_chars
             request_timeout = request_timeout or config.request_timeout
             client_kwargs = client_kwargs or config.client_kwargs
+            vector_search_mode = config.vector_search_mode
+            vector_field = config.vector_field
+            embedding_prefix = config.embedding_prefix
+            embedding_model = embedding_model or config.embedding_model
+            embedding_api_key = embedding_api_key or config.embedding_api_key
+            embedding_base_url = embedding_base_url or config.embedding_base_url
+            embedding_timeout = config.embedding_timeout
+            embedding_default_kwargs = embedding_default_kwargs or config.embedding_default_kwargs
+            embedding_retry_config = embedding_retry_config or config.embedding_retry_config
             search_summary_enabled = config.search_summary_enabled
             fetch_summary_enabled = config.fetch_summary_enabled
             summary_model = summary_model or config.summary_model
@@ -199,6 +232,26 @@ class ElasticsearchSource(DataSource):
             raise ValueError("summary_max_chars must be positive")
         if summary_timeout <= 0:
             raise ValueError("summary_timeout must be positive")
+        if vector_search_mode not in {"bm25", "hybrid", "vector"}:
+            raise ValueError("vector_search_mode must be 'bm25', 'hybrid', or 'vector'")
+        uses_vector_search = vector_search_mode in {"hybrid", "vector"}
+        if highlight and vector_search_mode not in {"bm25", "hybrid"}:
+            raise ValueError("highlight requires vector_search_mode to be 'bm25' or 'hybrid'")
+        if uses_vector_search and not vector_field:
+            raise ValueError("vector_field is required when vector search is enabled")
+        if uses_vector_search and not embedding_model:
+            raise ValueError("embedding_model is required when vector search is enabled")
+        if uses_vector_search and embedding_client is None and not embedding_api_key:
+            raise ValueError("embedding_api_key is required when vector search is enabled")
+        if embedding_timeout <= 0:
+            raise ValueError("embedding_timeout must be positive")
+        if uses_vector_search and embedding_client is None:
+            from openai import AsyncOpenAI
+
+            embedding_client_kwargs: dict[str, Any] = {"api_key": embedding_api_key}
+            if embedding_base_url:
+                embedding_client_kwargs["base_url"] = embedding_base_url
+            embedding_client = AsyncOpenAI(**embedding_client_kwargs)
         any_summary_enabled = search_summary_enabled or fetch_summary_enabled
         if any_summary_enabled and not summary_model:
             raise ValueError("summary_model is required when summary is enabled")
@@ -224,6 +277,22 @@ class ElasticsearchSource(DataSource):
         self.highlight_fragment_size = highlight_fragment_size
         self.snippet_chars = snippet_chars
         self.request_timeout = request_timeout
+        self.vector_search_mode = vector_search_mode
+        self.vector_field = vector_field
+        self.embedding_prefix = embedding_prefix
+        self.embedding_model = embedding_model
+        self.embedding_api_key = embedding_api_key
+        self.embedding_base_url = embedding_base_url
+        self.embedding_timeout = embedding_timeout
+        self.embedding_default_kwargs = dict(embedding_default_kwargs or {})
+        self.embedding_retry_policy = (
+            RetryPolicy(config=embedding_retry_config)
+            if embedding_retry_config is not None
+            else RetryPolicy(exceptions=(*_lazy_import_openai_errors(), EmbeddingError, ValueError))
+            if self._uses_vector_search
+            else None
+        )
+        self._embedding_client = embedding_client
         self.search_summary_enabled = search_summary_enabled
         self.fetch_summary_enabled = fetch_summary_enabled
         self.summary_model = summary_model
@@ -267,7 +336,8 @@ class ElasticsearchSource(DataSource):
     async def search(self, query: str, *, top_k: int = 10) -> list[SearchResult]:
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
-        body = self._search_body(query=query, top_k=top_k)
+        query_vector = await self._query_vector(query) if self._uses_vector_search else None
+        body = self._search_body(query=query, top_k=top_k, query_vector=query_vector)
         response = await self._call_search(body)
         hits = self._hits(response)
         results = [self._search_result_from_hit(hit) for hit in hits]
@@ -308,7 +378,13 @@ class ElasticsearchSource(DataSource):
             return document
         return await self._summary_document(document, goal=goal)
 
-    def _search_body(self, *, query: str, top_k: int) -> dict[str, Any]:
+    def _search_body(
+        self,
+        *,
+        query: str,
+        top_k: int,
+        query_vector: Sequence[float] | None = None,
+    ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "size": top_k,
             "query": {
@@ -319,6 +395,16 @@ class ElasticsearchSource(DataSource):
                 }
             },
         }
+        if query_vector is not None:
+            knn: dict[str, Any] = {
+                "field": self.vector_field,
+                "query_vector": list(query_vector),
+                "k": top_k,
+                "num_candidates": top_k,
+            }
+            body["knn"] = knn
+            if self.vector_search_mode == "vector":
+                body.pop("query")
         if self.highlight:
             body["highlight"] = {
                 "fields": {
@@ -326,6 +412,42 @@ class ElasticsearchSource(DataSource):
                 }
             }
         return body
+
+    @property
+    def _uses_vector_search(self) -> bool:
+        return self.vector_search_mode in {"hybrid", "vector"}
+
+    async def _query_vector(self, query: str) -> Sequence[float]:
+        try:
+            return await retry_async(
+                self._request_query_vector,
+                query,
+                policy=self.embedding_retry_policy
+                or RetryPolicy(exceptions=(*_lazy_import_openai_errors(), EmbeddingError, ValueError)),
+                op_name="elasticsearch.embedding",
+            )
+        except (*_lazy_import_openai_errors(), EmbeddingError, ValueError) as exc:
+            raise SourceError("failed to generate Elasticsearch query embedding") from exc
+
+    async def _request_query_vector(self, query: str) -> Sequence[float]:
+        if not self.embedding_model:
+            raise ValueError("embedding_model is not configured")
+        if self._embedding_client is None:
+            raise ValueError("embedding client is not configured")
+        payload: dict[str, Any] = {
+            "model": self.embedding_model,
+            "input": f"{self.embedding_prefix}{query}",
+            "timeout": self.embedding_timeout,
+            **self.embedding_default_kwargs,
+        }
+        response = await self._embedding_client.embeddings.create(**payload)
+        data = response.data if hasattr(response, "data") else []
+        if not data:
+            raise EmbeddingError("embedding model returned no vectors")
+        embedding = data[0].embedding
+        if isinstance(embedding, (str, bytes)) or not isinstance(embedding, Sequence):
+            raise EmbeddingError("embedding model returned malformed vector")
+        return [float(value) for value in embedding]
 
     async def _call_search(self, body: Mapping[str, Any]) -> Mapping[str, Any]:
         try:

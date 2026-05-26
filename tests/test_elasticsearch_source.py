@@ -82,6 +82,31 @@ class FakeSummaryClient:
         self.chat = FakeChat(self)
 
 
+class FakeEmbeddings:
+    def __init__(self, client: "FakeEmbeddingClient") -> None:
+        self.client = client
+
+    async def create(self, **payload: Any) -> SimpleNamespace:
+        self.client.calls.append(payload)
+        value = self.client.responses.pop(0)
+        if isinstance(value, BaseException):
+            raise value
+        return SimpleNamespace(
+            data=[
+                SimpleNamespace(
+                    embedding=value,
+                )
+            ]
+        )
+
+
+class FakeEmbeddingClient:
+    def __init__(self, responses: list[list[float] | BaseException]) -> None:
+        self.responses = responses
+        self.calls: list[dict[str, Any]] = []
+        self.embeddings = FakeEmbeddings(self)
+
+
 def _summary_retry_config(max_tries: int) -> RetryConfig:
     return RetryConfig(
         max_tries=max_tries,
@@ -154,6 +179,78 @@ def test_elasticsearch_source_search_and_fetch() -> None:
         assert client.search_calls[-1]["body"]["query"]["term"]["url"]["value"] == "https://example.test/bcp"
 
     asyncio.run(run_source())
+
+
+def test_elasticsearch_hybrid_vector_search_uses_embedding_and_keeps_highlight() -> None:
+    async def run_source() -> None:
+        client = FakeElasticsearchClient()
+        embedding_client = FakeEmbeddingClient([[0.1, 0.2, 0.3]])
+        source = ElasticsearchSource(
+            client=client,
+            index="browsecomp_hybrid",
+            vector_search_mode="hybrid",
+            vector_field="text_vector",
+            embedding_model="embedding-model",
+            embedding_api_key="key",
+            embedding_prefix="query: ",
+            embedding_client=embedding_client,
+            embedding_default_kwargs={"encoding_format": "float"},
+        )
+
+        results = await source.search("benchmark", top_k=2)
+
+        body = client.search_calls[-1]["body"]
+        assert results[0].document.id == "1"
+        assert body["query"]["multi_match"]["query"] == "benchmark"
+        assert body["knn"] == {
+            "field": "text_vector",
+            "query_vector": [0.1, 0.2, 0.3],
+            "k": 2,
+            "num_candidates": 2,
+        }
+        assert "highlight" in body
+        assert embedding_client.calls[0]["model"] == "embedding-model"
+        assert embedding_client.calls[0]["input"] == "query: benchmark"
+        assert embedding_client.calls[0]["encoding_format"] == "float"
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_pure_vector_search_omits_text_query() -> None:
+    async def run_source() -> None:
+        client = FakeElasticsearchClient()
+        source = ElasticsearchSource(
+            client=client,
+            index="browsecomp_hybrid",
+            vector_search_mode="vector",
+            highlight=False,
+            embedding_model="embedding-model",
+            embedding_api_key="key",
+            embedding_client=FakeEmbeddingClient([[0.1, 0.2]]),
+        )
+
+        await source.search("benchmark", top_k=3)
+
+        body = client.search_calls[-1]["body"]
+        assert "query" not in body
+        assert "highlight" not in body
+        assert body["knn"]["k"] == 3
+        assert body["knn"]["num_candidates"] == 3
+
+    asyncio.run(run_source())
+
+
+def test_elasticsearch_highlight_rejects_pure_vector_search() -> None:
+    with pytest.raises(ValueError, match="highlight"):
+        ElasticsearchSource(
+            client=FakeElasticsearchClient(),
+            index="browsecomp_hybrid",
+            vector_search_mode="vector",
+            highlight=True,
+            embedding_model="embedding-model",
+            embedding_api_key="key",
+            embedding_client=FakeEmbeddingClient([[0.1, 0.2]]),
+        )
 
 
 def test_elasticsearch_search_summary_disabled_returns_normal_results() -> None:

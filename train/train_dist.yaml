@@ -106,6 +106,7 @@ workflow:
         title_field: title
         text_field: text
         url_field: url
+        embedding_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
         search_summary_enabled: true
         summary_model: Qwen3-8B
         summary_api_key: api_key
@@ -182,6 +183,7 @@ eval_workflow:
         title_field: title
         text_field: text
         url_field: url
+        embedding_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
         search_summary_enabled: true
         summary_model: Qwen3-8B
         summary_api_key: api_key

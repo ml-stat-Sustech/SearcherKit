@@ -19,6 +19,15 @@ highlight_fragment_size: 128
 snippet_chars: 512
 request_timeout: null
 client_kwargs: {}
+vector_search_mode: bm25
+vector_field: text_vector
+embedding_prefix: ""
+embedding_model: null
+embedding_api_key: null
+embedding_base_url: null
+embedding_timeout: 60
+embedding_default_kwargs: null
+embedding_retry_config: null
 search_summary_enabled: false
 fetch_summary_enabled: false
 summary_model: null
