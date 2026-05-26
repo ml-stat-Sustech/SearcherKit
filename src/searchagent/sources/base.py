@@ -68,6 +68,7 @@ class SourceConfig:
     highlight_fragment_size: int = 256
     snippet_chars: int = 512
     request_timeout: float | None = None
+    es_max_concurrency: int | None = None
     client_kwargs: dict[str, Any] | None = None
     vector_search_mode: str = "bm25"
     vector_field: str = "text_vector"
@@ -76,6 +77,7 @@ class SourceConfig:
     embedding_api_key: str | None = None
     embedding_base_url: str | None = None
     embedding_timeout: float = 60
+    embedding_max_concurrency: int | None = None
     embedding_default_kwargs: dict[str, Any] | None = None
     embedding_retry_config: RetryConfig | None = None
     search_summary_enabled: bool = False
@@ -85,6 +87,7 @@ class SourceConfig:
     summary_base_url: str | None = None
     summary_max_chars: int = 400000
     summary_timeout: float = 3600
+    summary_max_concurrency: int | None = None
     summary_default_kwargs: dict[str, Any] | None = None
     summary_retry_config: RetryConfig | None = None
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 from collections.abc import Mapping, Sequence
 from typing import Any, overload
 
@@ -89,6 +90,15 @@ class EmbeddingError(SourceError):
     """Raised when the embedding model response is missing or malformed."""
 
 
+def _validate_max_concurrency(name: str, value: int | None) -> None:
+    if value is not None and value <= 0:
+        raise ValueError(f"{name} must be positive")
+
+
+def _build_semaphore(max_concurrency: int | None) -> asyncio.Semaphore | None:
+    return asyncio.Semaphore(max_concurrency) if max_concurrency else None
+
+
 class ElasticsearchSource(DataSource):
     """Search and fetch documents from an Elasticsearch index.
 
@@ -123,6 +133,7 @@ class ElasticsearchSource(DataSource):
         highlight_fragment_size: int = 256,
         snippet_chars: int = 512,
         request_timeout: float | None = None,
+        es_max_concurrency: int | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
         vector_search_mode: str = "bm25",
         vector_field: str = "text_vector",
@@ -131,6 +142,7 @@ class ElasticsearchSource(DataSource):
         embedding_api_key: str | None = None,
         embedding_base_url: str | None = None,
         embedding_timeout: float = 60,
+        embedding_max_concurrency: int | None = None,
         embedding_default_kwargs: Mapping[str, Any] | None = None,
         embedding_retry_config: RetryConfig | None = None,
         embedding_client: Any | None = None,
@@ -141,6 +153,7 @@ class ElasticsearchSource(DataSource):
         summary_base_url: str | None = None,
         summary_max_chars: int = 400000,
         summary_timeout: float = 3600,
+        summary_max_concurrency: int | None = None,
         summary_default_kwargs: Mapping[str, Any] | None = None,
         summary_retry_config: RetryConfig | None = None,
         summary_client: Any | None = None,
@@ -163,6 +176,7 @@ class ElasticsearchSource(DataSource):
         highlight_fragment_size: int = 256,
         snippet_chars: int = 512,
         request_timeout: float | None = None,
+        es_max_concurrency: int | None = None,
         client_kwargs: Mapping[str, Any] | None = None,
         vector_search_mode: str = "bm25",
         vector_field: str = "text_vector",
@@ -171,6 +185,7 @@ class ElasticsearchSource(DataSource):
         embedding_api_key: str | None = None,
         embedding_base_url: str | None = None,
         embedding_timeout: float = 60,
+        embedding_max_concurrency: int | None = None,
         embedding_default_kwargs: Mapping[str, Any] | None = None,
         embedding_retry_config: RetryConfig | None = None,
         embedding_client: Any | None = None,
@@ -181,6 +196,7 @@ class ElasticsearchSource(DataSource):
         summary_base_url: str | None = None,
         summary_max_chars: int = 400000,
         summary_timeout: float = 3600,
+        summary_max_concurrency: int | None = None,
         summary_default_kwargs: Mapping[str, Any] | None = None,
         summary_retry_config: RetryConfig | None = None,
         summary_client: Any | None = None,
@@ -200,6 +216,8 @@ class ElasticsearchSource(DataSource):
             highlight_fragment_size = config.highlight_fragment_size
             snippet_chars = config.snippet_chars
             request_timeout = request_timeout or config.request_timeout
+            if es_max_concurrency is None:
+                es_max_concurrency = config.es_max_concurrency
             client_kwargs = client_kwargs or config.client_kwargs
             vector_search_mode = config.vector_search_mode
             vector_field = config.vector_field
@@ -208,6 +226,8 @@ class ElasticsearchSource(DataSource):
             embedding_api_key = embedding_api_key or config.embedding_api_key
             embedding_base_url = embedding_base_url or config.embedding_base_url
             embedding_timeout = config.embedding_timeout
+            if embedding_max_concurrency is None:
+                embedding_max_concurrency = config.embedding_max_concurrency
             embedding_default_kwargs = embedding_default_kwargs or config.embedding_default_kwargs
             embedding_retry_config = embedding_retry_config or config.embedding_retry_config
             search_summary_enabled = config.search_summary_enabled
@@ -217,6 +237,8 @@ class ElasticsearchSource(DataSource):
             summary_base_url = summary_base_url or config.summary_base_url
             summary_max_chars = config.summary_max_chars
             summary_timeout = config.summary_timeout
+            if summary_max_concurrency is None:
+                summary_max_concurrency = config.summary_max_concurrency
             summary_default_kwargs = summary_default_kwargs or config.summary_default_kwargs
             summary_retry_config = summary_retry_config or config.summary_retry_config
 
@@ -232,6 +254,9 @@ class ElasticsearchSource(DataSource):
             raise ValueError("summary_max_chars must be positive")
         if summary_timeout <= 0:
             raise ValueError("summary_timeout must be positive")
+        _validate_max_concurrency("es_max_concurrency", es_max_concurrency)
+        _validate_max_concurrency("embedding_max_concurrency", embedding_max_concurrency)
+        _validate_max_concurrency("summary_max_concurrency", summary_max_concurrency)
         if vector_search_mode not in {"bm25", "hybrid", "vector"}:
             raise ValueError("vector_search_mode must be 'bm25', 'hybrid', or 'vector'")
         uses_vector_search = vector_search_mode in {"hybrid", "vector"}
@@ -277,6 +302,7 @@ class ElasticsearchSource(DataSource):
         self.highlight_fragment_size = highlight_fragment_size
         self.snippet_chars = snippet_chars
         self.request_timeout = request_timeout
+        self._es_semaphore = _build_semaphore(es_max_concurrency)
         self.vector_search_mode = vector_search_mode
         self.vector_field = vector_field
         self.embedding_prefix = embedding_prefix
@@ -284,6 +310,7 @@ class ElasticsearchSource(DataSource):
         self.embedding_api_key = embedding_api_key
         self.embedding_base_url = embedding_base_url
         self.embedding_timeout = embedding_timeout
+        self._embedding_semaphore = _build_semaphore(embedding_max_concurrency)
         self.embedding_default_kwargs = dict(embedding_default_kwargs or {})
         self.embedding_retry_policy = (
             RetryPolicy(config=embedding_retry_config)
@@ -300,6 +327,7 @@ class ElasticsearchSource(DataSource):
         self.summary_base_url = summary_base_url
         self.summary_max_chars = summary_max_chars
         self.summary_timeout = summary_timeout
+        self._summary_semaphore = _build_semaphore(summary_max_concurrency)
         self.summary_default_kwargs = dict(summary_default_kwargs or {})
         self.summary_retry_policy = (
             RetryPolicy(config=summary_retry_config)
@@ -332,6 +360,21 @@ class ElasticsearchSource(DataSource):
         if not Elasticsearch:
             raise ImportError("Elasticsearch client not available, use uv sync --extra elasticsearch-source to install dependency for Elasticsearch source")
         return Elasticsearch(hosts, **kwargs)
+
+    def _limit_es_request(self) -> Any:
+        if self._es_semaphore is None:
+            return nullcontext()
+        return self._es_semaphore
+
+    def _limit_embedding_request(self) -> Any:
+        if self._embedding_semaphore is None:
+            return nullcontext()
+        return self._embedding_semaphore
+
+    def _limit_summary_request(self) -> Any:
+        if self._summary_semaphore is None:
+            return nullcontext()
+        return self._summary_semaphore
 
     async def search(self, query: str, *, top_k: int = 10) -> list[SearchResult]:
         if top_k < 1:
@@ -366,11 +409,12 @@ class ElasticsearchSource(DataSource):
             return await self._summary_document(document, goal=goal)
 
         try:
-            hit = await asyncio.to_thread(
-                self.client.get,
-                index=self.index,
-                id=document_id,
-            )
+            async with self._limit_es_request():
+                hit = await asyncio.to_thread(
+                    self.client.get,
+                    index=self.index,
+                    id=document_id,
+                )
         except _ELASTICSEARCH_ERRORS as exc:
             raise SourceError(f"failed to fetch Elasticsearch document {document_id!r}") from exc
         document = self._document_from_hit(hit)
@@ -440,7 +484,8 @@ class ElasticsearchSource(DataSource):
             "timeout": self.embedding_timeout,
             **self.embedding_default_kwargs,
         }
-        response = await self._embedding_client.embeddings.create(**payload)
+        async with self._limit_embedding_request():
+            response = await self._embedding_client.embeddings.create(**payload)
         data = response.data if hasattr(response, "data") else []
         if not data:
             raise EmbeddingError("embedding model returned no vectors")
@@ -451,11 +496,12 @@ class ElasticsearchSource(DataSource):
 
     async def _call_search(self, body: Mapping[str, Any]) -> Mapping[str, Any]:
         try:
-            return await asyncio.to_thread(
-                self.client.search,
-                index=self.index,
-                body=dict(body),
-            )
+            async with self._limit_es_request():
+                return await asyncio.to_thread(
+                    self.client.search,
+                    index=self.index,
+                    body=dict(body),
+                )
         except _ELASTICSEARCH_ERRORS as exc:
             raise SourceError(f"failed to search Elasticsearch index {self.index!r}") from exc
 
@@ -608,7 +654,8 @@ class ElasticsearchSource(DataSource):
         }
         if self._summary_client is None:
             raise SummaryError("summary client is not configured")
-        response = await self._summary_client.chat.completions.create(**payload)
+        async with self._limit_summary_request():
+            response = await self._summary_client.chat.completions.create(**payload)
         raw = response.choices[0].message.content if response.choices else None
         if not raw:
             raise SummaryError("summary model returned empty content")
