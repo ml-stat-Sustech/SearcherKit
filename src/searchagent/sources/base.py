@@ -39,6 +39,9 @@ class DataSource(ABC):
         """Return a full document by id."""
         ...
 
+    async def close(self) -> None:
+        """Release source resources."""
+
 
 @dataclass
 class SourceConfig:

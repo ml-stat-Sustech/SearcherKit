@@ -30,7 +30,7 @@ class FakeElasticsearchClient:
         ]
         self.search_calls: list[dict[str, Any]] = []
 
-    def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.search_calls.append({"index": index, "body": body})
         term = body.get("query", {}).get("term")
         if isinstance(term, dict):
@@ -45,11 +45,14 @@ class FakeElasticsearchClient:
             hits = self.documents[: body.get("size", 10)]
         return {"hits": {"hits": hits}}
 
-    def get(self, *, index: str, id: str) -> dict[str, Any]:
+    async def get(self, *, index: str, id: str) -> dict[str, Any]:
         for doc in self.documents:
             if doc["_id"] == id:
                 return doc
         raise KeyError(id)
+
+    async def close(self) -> None:
+        pass
 
 
 class FakeCompletions:

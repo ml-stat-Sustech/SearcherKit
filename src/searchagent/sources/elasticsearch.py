@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from contextlib import nullcontext
 from collections.abc import Mapping, Sequence
 from typing import Any, overload
@@ -15,7 +16,7 @@ from searchagent.errors import SourceError
 from .base import Document, SearchResult, SourceConfig, DataSource
 
 try:
-    from elasticsearch import Elasticsearch
+    from elasticsearch import AsyncElasticsearch
     from elasticsearch import (
         ApiError,
         BadRequestError,
@@ -25,7 +26,7 @@ try:
         TransportError,
     )
 except ImportError:
-    Elasticsearch = None  # type: ignore[assignment]
+    AsyncElasticsearch = None  # type: ignore[assignment]
     ApiError = BadRequestError = ConflictError = NotFoundError = SerializationError = TransportError = None  # type: ignore[assignment]
 
 
@@ -357,9 +358,19 @@ class ElasticsearchSource(DataSource):
         kwargs = dict(client_kwargs)
         if self.request_timeout is not None:
             kwargs.setdefault("request_timeout", self.request_timeout)
-        if not Elasticsearch:
-            raise ImportError("Elasticsearch client not available, use uv sync --extra elasticsearch-source to install dependency for Elasticsearch source")
-        return Elasticsearch(hosts, **kwargs)
+        if not AsyncElasticsearch:
+            raise ImportError(
+                "AsyncElasticsearch client not available, use uv sync --extra elasticsearch-source to install dependency for Elasticsearch source"
+            )
+        return AsyncElasticsearch(hosts, **kwargs)
+
+    async def close(self) -> None:
+        close = getattr(self.client, "close", None)
+        if close is None:
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
 
     def _limit_es_request(self) -> Any:
         if self._es_semaphore is None:
@@ -410,8 +421,7 @@ class ElasticsearchSource(DataSource):
 
         try:
             async with self._limit_es_request():
-                hit = await asyncio.to_thread(
-                    self.client.get,
+                hit = await self.client.get(
                     index=self.index,
                     id=document_id,
                 )
@@ -497,8 +507,7 @@ class ElasticsearchSource(DataSource):
     async def _call_search(self, body: Mapping[str, Any]) -> Mapping[str, Any]:
         try:
             async with self._limit_es_request():
-                return await asyncio.to_thread(
-                    self.client.search,
+                return await self.client.search(
                     index=self.index,
                     body=dict(body),
                 )

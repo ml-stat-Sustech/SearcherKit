@@ -102,3 +102,6 @@ class VisitTool(BaseTool):
         if self.response_char_limit:
             return _limit_response(text, self.response_char_limit)
         return text
+
+    async def close(self) -> None:
+        await self.source.close()

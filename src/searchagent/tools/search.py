@@ -105,3 +105,6 @@ class SearchTool(BaseTool):
         if self.response_char_limit is not None:
             text = _limit_response(text, self.response_char_limit)
         return text
+
+    async def close(self) -> None:
+        await self.source.close()
