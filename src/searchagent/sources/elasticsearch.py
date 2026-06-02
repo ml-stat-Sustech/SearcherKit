@@ -636,7 +636,7 @@ class ElasticsearchSource(DataSource):
     def _format_document_content(self, document: Document) -> str:
         title = document.title or "[No Title]"
         url = document.url or document.id
-        return f"[{title}]({url})\n{document.text}".strip()
+        return f"[{title}]({url})\n{document.text[:int(self.summary_max_chars / 5)]}".strip() # TODO: 当前默认top_k = 5, 按文章截断保证上下文限制，之后需要对top_k更好地处理
 
     async def _summarize(self, *, goal: str, content: str) -> tuple[str, str]:
         try:
