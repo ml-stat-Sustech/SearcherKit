@@ -14,32 +14,39 @@ retry_policy:
 agent:
   llm_client:
     type: openai
-    model: Qwen3-8B
-    retry_policy: null
+    model: /home/jovyan1/searchagent/outputs/checkpoints/jovyan/webagent/qwen3_summary_small_clip_epoch2_20260520_105548/default/epoch1epochstep45globalstep255
     default_kwargs:
-      temperature: 0.7
-      top_p: 0.8
-      presence_penalty: 1.5
-      extra_body: 
-        top_k: 20
-      stop:
-        - "<tool_response>"
-        - "\n<tool_response>"
+      temperature: 1.0
+      top_p: 1.0
+      # presence_penalty: 1.5
+      # extra_body: 
+      #   top_k: 20
+      # stop:
+      #   - "<tool_response>"
+      #   - "\n<tool_response>"
     openai:
       api_key: "a"
-      base_url: http://127.0.0.1:8001/v1
+      base_url: 
+        - http://127.0.0.1:6000/v1
+        - http://127.0.0.1:6001/v1
+        - http://127.0.0.1:6002/v1
+        - http://127.0.0.1:6003/v1
+        - http://127.0.0.1:6004/v1
+        - http://127.0.0.1:6005/v1
+        - http://127.0.0.1:6006/v1
+        - http://127.0.0.1:6007/v1
       concurrency_limit: 512
       extra_client_kwargs: null
   parser:
     type: qwen
     qwen:
-      upstream_parsed: false
-      drop_thinking: true
+      upstream_parsed: true
+      drop_thinking: false
   sources:
     - type: elasticsearch
       name: bcp
-      hosts: http://127.0.0.1:9200
-      index: browsecomp_hybrid
+      hosts: http://10.32.34.193:9200
+      index: wiki20251101_qwen3-embedding-8b
       search_fields:
         - title
         - text
@@ -50,26 +57,59 @@ agent:
       metadata_fields:
         - links
   tools:
-    - type: search
+    - type: mcp
       name: search
-      source: bcp
-      response_char_limit: null
-    - type: visit
-      name: visit
-      source: bcp
-      response_char_limit: null
-  system_prompt: "You are a deep research assistant. Your core function is to conduct thorough, multi-source investigations into any topic. You must handle both broad, open-domain inquiries and queries within specialized academic fields. For every request, synthesize information from credible, diverse sources to deliver a comprehensive, accurate, and objective response. When you have gathered sufficient information and are ready to provide the definitive response, you must enclose the entire final answer within <answer></answer> tags."
-  query_prompt: null
+      # endpoint: http://10.32.64.11:8300/mcp/
+      endpoint: http://10.32.64.11:8300/mcp/
+    # - type: mcp
+    #   name: visit
+    #   endpoint: http://127.0.0.1:8305/mcp/
+  system_prompt: |
+   You are a helpful AI assistant that can search for information to answer questions accurately.
+    
+    When answering questions:
+    1. Use the available search tools to find relevant and reliable information
+    2. Synthesize information from multiple sources when needed
+    3. Provide accurate and comprehensive answers based on your search results
+    4. Do not use Chinese in your responses, keep using English only
+    5. Do not search the same query multiple times
+    6. Do not call tools inside <think></think>
+    7. Always put your final answer in \boxed{} format
+    For example:
+    - If the answer is "American", write: \boxed{American}
+    - If the answer is "yes", write: \boxed{yes}
+    - If the answer is a year like "1985", write: \boxed{1985}
+    
+    Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
+  # query_prompt: "<question>{query}</question>"
+  query_prompt: |
+    Answer the given question by using the tool(s) provided. Please perform brief reasoning and use the tool step by step, in an interleaved manner. You may call tool multiple rounds, but avoid making the same tool call multiple times.
+    For example:
+    <think> your think </think>
+    <tool_call> 1 tool call per round </tool_call>
+    <tool_response> response from tool </tool_response>
+    <think> another round of think </think>
+    <tool_call> another round of tool call </tool_call>
+    <tool_response> response from tool </tool_response>
+    ...
+
+    Question: {query}
+
+    After you have gathered enough information to answer the question, the final response should be in the following format:
+    <think> your final thought on what should be the final answer </think>
+    ...
+    \boxed{{your succinct, final answer, in a few words}}
   max_turn: 100
   max_turn_prompt: "You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
   max_tokens: 131072
   max_tokens_prompt: "You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n<answer>your answer</answer>"
-  max_tokens_prompt_margin: 3072
+  max_tokens_prompt_margin: 8192
   llm_retry_config:
     max_tries: 5
     max_time: null
     exceptions:
       - pkg://searchagent.llm.parsers:ParsingError
+      - pkg://searchagent.agent.search_agent:BadTurnError
     giveup: null
     jitter: pkg://backoff:full_jitter
     factor: 1.0
@@ -85,13 +125,13 @@ agent:
     base: 2.0
 
 dataloader:
-  source: data/browsecomp_plus_decrypted_qa.jsonl
+  source: /home/jovyan1/AReaL/browsecomp_plus_decrypted_qa.jsonl
   input_key: question
   answer_key: answer
   max_items: null
 
-max_concurrency: 16
-output_path: outputs/agent_history
+max_concurrency: 512
+output_path: outputs/rl_0522
 overwrite_output: false
 
 checkpoint:

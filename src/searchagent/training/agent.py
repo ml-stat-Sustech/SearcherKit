@@ -85,7 +85,7 @@ class SearchAgentTraining(SearchAgent):
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
         tool_calls_list = list(tool_calls)
-        if len(tool_calls_list) > 1:
+        if len(tool_calls_list) > 10:
             raise TooManyToolCallsError("Too many parallel tool calls")
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:

@@ -27,7 +27,8 @@ from searchagent.training.rewards import assign_overlong_penalty, f1_score
 
 logger = get_logger(__name__)
 
-_ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
+# _ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
+_ANSWER_PATTERN = re.compile(r'\\boxed\{(?P<answer>[^}]*)\}', re.DOTALL)
 
 
 class ARealSearchAgentWorkflow(RolloutWorkflow):
