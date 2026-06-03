@@ -17,8 +17,10 @@ from searchagent.agent.search_agent import LLMContextError, LLMOutputError
 from searchagent.llm.parsers import ParsingError
 from searchagent.log import get_logger
 from searchagent.training.agent import (
+    InvalidSearchQueryListError,
     RepeatedToolCallError,
     SearchAgentTraining,
+    TooManyQueriesError,
     TooManyToolCallsError,
 )
 from searchagent.training.areal_client import ARealClient
@@ -72,6 +74,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         context_error = False
         repeated_query = False
         too_many_tool_call = False
+        invalid_search_query = False
         try:
             agent.reset()
             await agent.run(data["question"])
@@ -79,9 +82,13 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             format_error = True
             repeated_query = True
             logger.warning(repr(exc))
-        except TooManyToolCallsError as exc:
+        except (TooManyQueriesError, TooManyToolCallsError) as exc:
             format_error = True
             too_many_tool_call = True
+            logger.warning(repr(exc))
+        except InvalidSearchQueryListError as exc:
+            format_error = True
+            invalid_search_query = True
             logger.warning(repr(exc))
         except (LLMOutputError, ValidationError, ParsingError) as exc:
             format_error = True
@@ -94,6 +101,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             stats.scalar(context_error=float(context_error))
             stats.scalar(repeated_query=float(repeated_query))
             stats.scalar(too_many_tool_call=float(too_many_tool_call))
+            stats.scalar(invalid_search_query=float(invalid_search_query))
 
         history = agent.history
 

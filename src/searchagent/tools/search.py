@@ -17,12 +17,20 @@ Search the configured data source.
 SEARCH_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "query": {"type": "string"},
+        "query_list": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 4,
+        },
         "top_k": {"type": "integer", "minimum": 1},
     },
-    "required": ["query"],
+    "required": ["query_list"],
     "additionalProperties": False,
 }
+
+RESULT_SEPARATOR = "\n-*-*-\n"
+DEFAULT_TOP_K = 3
 
 def _format_results(results: list[SearchResult]) -> str:
     text = ""
@@ -40,6 +48,18 @@ def _limit_response(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}\n\n[Truncated] Response exceeded configured content limit."
+
+def _coerce_query_list(kwargs: Mapping[str, Any]) -> list[str]:
+    if "query_list" in kwargs:
+        value = kwargs["query_list"]
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [str(query) for query in value]
+        return [str(value)]
+    if "query" in kwargs:
+        return [str(kwargs["query"])]
+    raise KeyError("query_list")
 
 
 class SearchTool(BaseTool):
@@ -74,9 +94,9 @@ class SearchTool(BaseTool):
                 raise ValueError("SearchTool requires a source to be created from a tool config")
             self.__init__(
                 build_source(config.source),
-                name = config.name,
+                name=config.name,
                 description=config.description,
-                inputSchema=inputSchema,
+                inputSchema=inputSchema or config.inputSchema,
                 response_char_limit=config.response_char_limit,
             )
             return
@@ -95,13 +115,16 @@ class SearchTool(BaseTool):
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
     async def _run(self, **kwargs: Any) -> str:
-        query = str(kwargs["query"])
-        top_k = int(kwargs.get("top_k", 10))
-        try:
-            results = await self.source.search(query, top_k=top_k)
-        except SourceError as e:
-            raise RecoverableError(str(e)) from e
-        text = _format_results(results)
+        query_list = _coerce_query_list(kwargs)
+        top_k = int(kwargs.get("top_k", DEFAULT_TOP_K))
+        chunks = []
+        for query in query_list:
+            try:
+                results = await self.source.search(query, top_k=top_k)
+            except SourceError as exc:
+                raise RecoverableError(str(exc)) from exc
+            chunks.append(_format_results(results))
+        text = RESULT_SEPARATOR.join(chunks)
         if self.response_char_limit is not None:
             text = _limit_response(text, self.response_char_limit)
         return text

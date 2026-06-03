@@ -153,6 +153,7 @@ class ElasticsearchSource(DataSource):
         summary_api_key: str | None = None,
         summary_base_url: str | None = None,
         summary_max_chars: int = 400000,
+        summary_max_tokens: int | None = None,
         summary_timeout: float = 3600,
         summary_max_concurrency: int | None = None,
         summary_default_kwargs: Mapping[str, Any] | None = None,
@@ -196,6 +197,7 @@ class ElasticsearchSource(DataSource):
         summary_api_key: str | None = None,
         summary_base_url: str | None = None,
         summary_max_chars: int = 400000,
+        summary_max_tokens: int | None = None,
         summary_timeout: float = 3600,
         summary_max_concurrency: int | None = None,
         summary_default_kwargs: Mapping[str, Any] | None = None,
@@ -237,6 +239,7 @@ class ElasticsearchSource(DataSource):
             summary_api_key = summary_api_key or config.summary_api_key
             summary_base_url = summary_base_url or config.summary_base_url
             summary_max_chars = config.summary_max_chars
+            summary_max_tokens = config.summary_max_tokens
             summary_timeout = config.summary_timeout
             if summary_max_concurrency is None:
                 summary_max_concurrency = config.summary_max_concurrency
@@ -253,6 +256,8 @@ class ElasticsearchSource(DataSource):
             raise ValueError("snippet_chars must be positive")
         if summary_max_chars <= 0:
             raise ValueError("summary_max_chars must be positive")
+        if summary_max_tokens is not None and summary_max_tokens <= 0:
+            raise ValueError("summary_max_tokens must be positive")
         if summary_timeout <= 0:
             raise ValueError("summary_timeout must be positive")
         _validate_max_concurrency("es_max_concurrency", es_max_concurrency)
@@ -327,6 +332,7 @@ class ElasticsearchSource(DataSource):
         self.summary_api_key = summary_api_key
         self.summary_base_url = summary_base_url
         self.summary_max_chars = summary_max_chars
+        self.summary_max_tokens = summary_max_tokens
         self.summary_timeout = summary_timeout
         self._summary_semaphore = _build_semaphore(summary_max_concurrency)
         self.summary_default_kwargs = dict(summary_default_kwargs or {})
@@ -344,6 +350,7 @@ class ElasticsearchSource(DataSource):
             else None
         )
         self._summary_client = summary_client
+        self._summary_tokenizer: Any | None = None
         self.client = client or self._build_client(
             hosts=hosts,
             client_kwargs=client_kwargs or {},
@@ -638,12 +645,28 @@ class ElasticsearchSource(DataSource):
         url = document.url or document.id
         return f"[{title}]({url})\n{document.text}".strip()
 
+    def _truncate_summary_content(self, content: str) -> str:
+        content = content[: self.summary_max_chars]
+        if self.summary_max_tokens is None:
+            return content
+        if self._summary_tokenizer is None:
+            from transformers import AutoTokenizer
+
+            self._summary_tokenizer = AutoTokenizer.from_pretrained(self.summary_model)
+        token_ids = self._summary_tokenizer.encode(content, add_special_tokens=False)
+        if len(token_ids) <= self.summary_max_tokens:
+            return content
+        return self._summary_tokenizer.decode(
+            token_ids[: self.summary_max_tokens],
+            skip_special_tokens=True,
+        )
+
     async def _summarize(self, *, goal: str, content: str) -> tuple[str, str]:
         try:
             return await retry_async(
                 self._request_summary,
                 goal,
-                content[: self.summary_max_chars],
+                self._truncate_summary_content(content),
                 policy=self.summary_retry_policy or RetryPolicy(exceptions=(SummaryError,)),
                 op_name="elasticsearch.summary",
             )

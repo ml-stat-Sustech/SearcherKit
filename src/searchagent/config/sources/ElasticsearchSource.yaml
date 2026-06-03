@@ -36,6 +36,7 @@ summary_model: null
 summary_api_key: null
 summary_base_url: null
 summary_max_chars: 400000
+summary_max_tokens: null
 summary_timeout: 3600
 summary_max_concurrency: null
 summary_default_kwargs: null

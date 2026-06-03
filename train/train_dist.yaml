@@ -6,16 +6,16 @@ trial_name: trial0
 seed: 1
 dynamic_bs: false
 enable_offload: false
-total_train_epochs: 1
+total_train_epochs: 3
 tokenizer_path: ${actor.path}
 
 cluster:
   n_nodes: 2
   n_gpus_per_node: 8
-  fileroot: /home/jovyan1/AReaL/experiments
+  fileroot: /home/jovyan/code/searchagent/outputs/areal/experiments
   name_resolve:
     type: nfs
-    nfs_record_root: /home/jovyan1/AReaL/name_resolve
+    nfs_record_root: /home/jovyan/code/searchagent/outputs/areal/name_resolve
 
 scheduler:
   type: ray
@@ -47,46 +47,25 @@ workflow:
       kwargs: {}
     max_tokens: 65536
     system_prompt: |
-      You are a helpful AI assistant that can search for information to answer questions accurately.
-      
-      When answering questions:
-      1. Use the available tools to find relevant and reliable information
-      2. Synthesize information from multiple sources when needed
-      3. Provide accurate and comprehensive answers based on your search results
-      4. Do not search the same query multiple times
-      5. Make exactly one tool call at a time
-      6. Always put your final answer in \boxed{} format
-      
-      Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
-    # system_prompt: "You are a helpfule assistant, answer the question with tools.\n\nWhile calling the tools, avoid making identical tool calls that had been called before.\nAvoid making more than 5 tool calls in a single response, but always make more tool calls in the next turn if more information is needed.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>\n\n"
-    # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
-    query_prompt: |
-      You are a deep research agent. You need to answer the given question by interacting with a search engine, using the search tool provided. Please perform brief reasoning and use the tool step by step, in an interleaved manner. You may call search multiple rounds
-      For example:
-      <think> your think </think>
-      <tool_call> 1 tool call per round </tool_call>
-      <tool_response> response from tool </tool_response>
-      <think> another round of think </think>
-      <tool_call> another round of tool calls</tool_call>
-      <tool_response> response from tool </tool_response>
-      ...
-
-      Question: {query}
-
-      After you have gathered enough information to answer the question, the final response should be in the following format:
-      <think> your final thought on what should be the final answer </think>
-      ...
-      \boxed{{your succinct, final answer, in a few words}}
-
+      You are a helpful and harmless assistant.
+      Answer the given question. You must first conduct step by step reasoning between <thought> and </thought> first every time you get new information.
+      If you need external information, call the search tool by returning a JSON object inside <tool_call> tags.
+      and it will return the top searched results between <tool_response> and </tool_response>.
+      You can search as many times as you want. Break down the user's question into specific sub-questions for searching.
+      Check previous search history to ensure new queries are unique.
+      If you find no further external knowledge needed, you can directly provide the answer inside <answer> and </answer>, without detailed illustrations.
+      For example, <answer> Beijing </answer>.
+    query_prompt: "{query}"
     max_tokens_prompt_margin: 11000
     max_turn: 1000
     max_turn_prompt: |
       You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
-      \boxed{your final answer, in a few words}
+      <answer>your final answer, in a few words</answer>
     max_tokens_prompt: |
       You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
-      \boxed{your final answer, in a few words}
+      <answer>your final answer, in a few words</answer>
     raise_repeat_tool_call: true
+    max_queries_per_tool_call: 4
     llm_retry_config: null
     tool_retry_config:
       max_tries: 3
@@ -100,31 +79,53 @@ workflow:
     sources:
       - name: elasticsearch
         type: elasticsearch
-        hosts: ["http://elasticsearch:9200"]
-        index: wiki20251101_qwen3-embedding-8b
+        hosts: ["http://10.32.34.135:9200"]
+        index: browsecomp_plus_qwen3-embedding-8b
         search_fields: ["title", "text"]
+        es_max_concurrency: 1024
+        embedding_max_concurrency: 2048
+        summary_max_concurrency: 1024
         title_field: title
         text_field: text
         url_field: url
-        embedding_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
+        highlight: false
+        snippet_chars: 8192
+        vector_search_mode: vector
+        embedding_prefix: |
+          Instruct: Given a web search query, retrieve relevant passages that answer the query
+          Query:
+        embedding_model: /data/hf/hub/models--Qwen--Qwen3-Embedding-8B/snapshots/1d8ad4ca9b3dd8059ad90a75d4983776a23d44af
+        embedding_api_key: api_key
+        embedding_base_url: http://10.32.20.11:8004/v1
         search_summary_enabled: true
-        summary_model: Qwen3-8B
+        summary_max_chars: 120000
+        summary_max_tokens: 20000
+        summary_model: /data/hf/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
         summary_api_key: api_key
-        summary_base_url: 127.0.0.1:8000
+        summary_base_url: http://10.32.20.11:6010/v1
+        summary_default_kwargs:
+          max_tokens: 1024
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
     tools:
       - type: search
         name: search
-        description: Search the configured data source.
+        description: Search for more information.
         inputSchema:
           type: object
           properties:
-            query:
-              type: string
+            query_list:
+              type: array
+              items:
+                type: string
+              minItems: 1
+              maxItems: 4
             top_k:
               type: integer
               minimum: 1
           required:
-            - query
+            - query_list
           additionalProperties: false
         source: elasticsearch
         response_char_limit: null
@@ -137,9 +138,9 @@ eval_workflow:
       model: ${actor.path}
       retry_policy: null
       default_kwargs:
-        temperature: 0.6
+        temperature: 1.0
         max_completion_tokens: 9000
-        top_p: 0.95
+        top_p: 1.0
         extra_body:
           chat_template_kwargs:
             enable_thinking: true
@@ -163,6 +164,7 @@ eval_workflow:
     max_turn_prompt: ${workflow.agent.max_turn_prompt}
     max_tokens_prompt: ${workflow.agent.max_tokens_prompt}
     raise_repeat_tool_call: false
+    max_queries_per_tool_call: ${workflow.agent.max_queries_per_tool_call}
     llm_retry_config: null
     tool_retry_config:
       max_tries: 3
@@ -177,26 +179,57 @@ eval_workflow:
     sources:
       - name: elasticsearch
         type: elasticsearch
-        hosts: ["http://elasticsearch:9200"]
+        hosts: ["http://10.32.34.135:9200"]
         index: browsecomp_plus_qwen3-embedding-8b
         search_fields: ["title", "text"]
+        es_max_concurrency: 1024
+        embedding_max_concurrency: 2048
+        summary_max_concurrency: 1024
         title_field: title
         text_field: text
         url_field: url
-        embedding_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
+        highlight: false
+        snippet_chars: 8192
+        vector_search_mode: vector
+        embedding_prefix: |
+          Instruct: Given a web search query, retrieve relevant passages that answer the query
+          Query:
+        embedding_model: /data/hf/hub/models--Qwen--Qwen3-Embedding-8B/snapshots/1d8ad4ca9b3dd8059ad90a75d4983776a23d44af
+        embedding_api_key: api_key
+        embedding_base_url: http://10.32.20.11:8004/v1
         search_summary_enabled: true
-        summary_model: Qwen3-8B
+        summary_max_chars: 120000
+        summary_max_tokens: 20000
+        summary_model: /data/hf/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
         summary_api_key: api_key
-        summary_base_url: 127.0.0.1:8000
+        summary_base_url: http://10.32.20.11:6010/v1
+        summary_default_kwargs:
+          max_tokens: 1024
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
     tools:
-      - type: mcp
+      - type: search
         name: search
-        mcp_tool_name: search
-        endpoint: http://10.32.64.11:8300/mcp/
-        max_concurrency: 512
+        description: Search for more information.
+        inputSchema:
+          type: object
+          properties:
+            query_list:
+              type: array
+              items:
+                type: string
+              minItems: 1
+              maxItems: 4
+            top_k:
+              type: integer
+              minimum: 1
+          required:
+            - query_list
+          additionalProperties: false
+        source: elasticsearch
+        response_char_limit: null
         raise_argument_validation_error: false
-        transport: streamable-http
-        raise_on_fatal: true
 
 rollout:
   experiment_name: ${experiment_name}
@@ -212,7 +245,7 @@ rollout:
   tokenizer_path: ${tokenizer_path}
   dump_to_file: true
   request_timeout: 7200
-  openai:
+  agent:
     mode: inline
     tool_call_parser: qwen
     reasoning_parser: qwen3
@@ -246,10 +279,10 @@ actor:
   # enable_tree_training: true
   # pad_to_maximum: true # Must be set to true for tree training
   weight_update_mode: xccl
-  backend: fsdp:c4
+  backend: fsdp:d4c2
   experiment_name: ${experiment_name}
   trial_name: ${trial_name}
-  path: /home/jovyan1/Qwen3-8B
+  path: /data/hf/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
   attn_impl: "flash_attention_3"
   init_from_scratch: false
   disable_dropout: false
@@ -260,19 +293,23 @@ actor:
     max_tokens_per_mb: 70000
   optimizer:
     type: adam
-    lr: 5e-6
+    lr: 1e-6
     lr_scheduler_type: constant
     gradient_clipping: 1.0
     warmup_steps_proportion: 0.001
-  eps_clip: 0.6
-  eps_clip_higher: 1.25
+  eps_clip: 0.2
+  eps_clip_higher: 0.28
   temperature: ${gconfig.temperature}
   overlong_reward_penalty: false
   kl_ctl: 0.0
-  ppo_n_minibatches: 1
-  recompute_logprob: false
-  use_decoupled_loss: false
-  behave_imp_weight_cap: 5.0
+  ppo_n_minibatches: 4
+  recompute_logprob: true
+  use_decoupled_loss: true
+  rejection_sampling:
+    level: sequence
+    action: mask
+    metric: ratio
+    upper: 5.0
   reward_norm:
     mean_level: group
     std_level: group
@@ -287,7 +324,15 @@ actor:
       gpu: 1
       mem: 32
       cmd: python3 -m areal.infra.rpc.rpc_server
-      env_vars: {SearchAgent_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}
+      env_vars:
+        SearchAgent_LOG_LEVEL: "WARN"
+        SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"
+        CUDA_HOME: /data/rubrics/verl/.cuda-toolkit
+        CUDA_PATH: /data/rubrics/verl/.cuda-toolkit
+        CPATH: /home/jovyan/miniconda3/envs/webagent-train/lib/python3.12/site-packages/nvidia/curand/include
+        CPLUS_INCLUDE_PATH: /home/jovyan/miniconda3/envs/webagent-train/lib/python3.12/site-packages/nvidia/curand/include
+        LIBRARY_PATH: /home/jovyan/miniconda3/envs/webagent-train/lib/python3.12/site-packages/nvidia/curand/lib:/data/rubrics/verl/.cuda-toolkit/lib64
+        LD_LIBRARY_PATH: /home/jovyan/miniconda3/envs/webagent-train/lib/python3.12/site-packages/nvidia/curand/lib:/data/rubrics/verl/.cuda-toolkit/lib64
 
 ref:
   experiment_name: ${experiment_name}
@@ -323,14 +368,14 @@ train_dataset:
   shuffle: true
   pin_memory: true
   num_workers: 16
-  path: /home/jovyan1/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean.jsonl
+  path: /home/jovyan/data/searchagent/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean.jsonl
   type: rl
 
 valid_dataset:
   batch_size: 256
   pin_memory: true
   num_workers: 4
-  path: /home/jovyan1/AReaL/browsecomp_plus_decrypted_qa.jsonl
+  path: /home/jovyan/data/searchagent/browsecomp_plus_decrypted_qa.jsonl
   type: rl
 
 # Utilities
@@ -364,9 +409,13 @@ stats_logger:
   trial_name: ${trial_name}
   fileroot: ${cluster.fileroot}
   wandb:
-    mode: online
+    mode: disabled
     project: ${experiment_name}
     name: ${trial_name}
+  swanlab:
+    mode: cloud
+    project: searchagent
+    name: zero_query_repeat_align
 
 perf_tracer:
   experiment_name: ${experiment_name}

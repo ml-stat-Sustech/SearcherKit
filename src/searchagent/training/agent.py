@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+import re
+import string
+from collections.abc import Iterable, Mapping
 from typing import overload
 
 from searchagent.agent.search_agent import LLMOutputError, SearchAgent
@@ -22,6 +24,33 @@ class RepeatedToolCallError(LLMOutputError):
     """Raised when the model repeats a tool call with identical arguments."""
 
 
+class TooManyQueriesError(LLMOutputError):
+    """Raised when a search tool call contains too many queries."""
+
+
+class InvalidSearchQueryListError(LLMOutputError):
+    """Raised when a search tool call does not provide a valid query_list."""
+
+
+_QUERY_ARTICLE_PATTERN = re.compile(r"\b(a|an|the)\b")
+_QUERY_PUNCTUATION_TABLE = str.maketrans("", "", string.punctuation)
+
+
+def _normalize_search_query(query: str) -> str:
+    text = query.lower().translate(_QUERY_PUNCTUATION_TABLE)
+    text = _QUERY_ARTICLE_PATTERN.sub(" ", text)
+    return " ".join(text.split())
+
+
+def _extract_search_queries(arguments: Mapping[str, object]) -> list[object]:
+    query_list = arguments.get("query_list")
+    if not query_list or not isinstance(query_list, list):
+        raise InvalidSearchQueryListError(
+            "Search tool call must provide a non-empty query_list"
+        )
+    return query_list
+
+
 class SearchAgentTraining(SearchAgent):
     @overload
     def __init__(
@@ -38,6 +67,7 @@ class SearchAgentTraining(SearchAgent):
         self,
         raise_repeat_tool_call: bool = False,
         *,
+        max_queries_per_tool_call: int | None = None,
         config: AgentConfig | None = None,
         llm_client: Client | None = None,
         **kwargs,
@@ -73,10 +103,12 @@ class SearchAgentTraining(SearchAgent):
                 tool_retry_policy=tool_retry_policy,
             )
             self.raise_repeat_tool_call = config.raise_repeat_tool_call
+            self.max_queries_per_tool_call = config.max_queries_per_tool_call
             self.previous_tool_queries: set[tuple[str, str]] = set()
             return
         super().__init__(**kwargs)
         self.raise_repeat_tool_call = raise_repeat_tool_call
+        self.max_queries_per_tool_call = max_queries_per_tool_call
         self.previous_tool_queries: set[tuple[str, str]] = set()
 
     def reset(self):
@@ -90,6 +122,31 @@ class SearchAgentTraining(SearchAgent):
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:
                 raise LLMOutputError(f"Tool {tc.name} not found")
+            queries = _extract_search_queries(tc.arguments) if tc.name == "search" else None
+            if queries is not None:
+                if (
+                    self.max_queries_per_tool_call is not None
+                    and len(queries) > self.max_queries_per_tool_call
+                ):
+                    raise TooManyQueriesError(
+                        f"Tool {tc.name} received {len(queries)} queries; "
+                        f"maximum is {self.max_queries_per_tool_call}"
+                    )
+                for query in queries:
+                    try:
+                        query_key = (tc.name, _normalize_search_query(query))
+                    except (AttributeError, TypeError) as exc:
+                        raise InvalidSearchQueryListError(
+                            "Search query_list items must be normalizable strings"
+                        ) from exc
+                    if query_key in self.previous_tool_queries:
+                        if self.raise_repeat_tool_call:
+                            raise RepeatedToolCallError(
+                                f"Query {tc.name} has repeated query {query!r}"
+                            )
+                    else:
+                        self.previous_tool_queries.add(query_key)
+                continue
             argument_str = json.dumps(tc.arguments, sort_keys=True)
             if (tc.name, argument_str) in self.previous_tool_queries:
                 if self.raise_repeat_tool_call:

@@ -35,7 +35,7 @@ def test_source_backed_search_and_visit_tools_share_named_source() -> None:
             ToolConfig(type="visit", name="visit", source="memory"),
         )
 
-        search_payload = await search_tool.run(query="wires sources", top_k=1)
+        search_payload = await search_tool.run(query_list=["wires sources"], top_k=1)
         assert "[SearchAgent]" in search_payload
         assert "SearchAgent wires tools to data sources." in search_payload
 
@@ -47,6 +47,44 @@ def test_source_backed_search_and_visit_tools_share_named_source() -> None:
         assert "SearchAgent wires tools to data sources." in visit_with_goal
 
     asyncio.run(run_tools())
+
+
+def test_source_backed_search_accepts_multiple_queries() -> None:
+    async def run_tool() -> None:
+        add_source_cfg(
+            "multi-query-memory",
+            SourceConfig(
+                name="multi-query-memory",
+                type="memory",
+                documents=[
+                    Document(
+                        id="doc-1",
+                        title="Alpha",
+                        text="Alpha topic evidence.",
+                    ),
+                    Document(
+                        id="doc-2",
+                        title="Beta",
+                        text="Beta topic evidence.",
+                    ),
+                ],
+            ),
+        )
+
+        search_tool = build_tool(
+            ToolConfig(type="search", name="search", source="multi-query-memory"),
+        )
+
+        search_payload = await search_tool.run(query_list=["alpha topic", "beta topic"], top_k=1)
+
+        assert search_payload.count("\n-*-*-\n") == 1
+        alpha_payload, beta_payload = search_payload.split("\n-*-*-\n")
+        assert "[Alpha]" in alpha_payload
+        assert "Alpha topic evidence." in alpha_payload
+        assert "[Beta]" in beta_payload
+        assert "Beta topic evidence." in beta_payload
+
+    asyncio.run(run_tool())
 
 
 def test_build_tool_uses_registered_source_config() -> None:

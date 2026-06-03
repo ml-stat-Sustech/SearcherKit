@@ -89,6 +89,7 @@ class SourceConfig:
     summary_api_key: str | None = None
     summary_base_url: str | None = None
     summary_max_chars: int = 400000
+    summary_max_tokens: int | None = None
     summary_timeout: float = 3600
     summary_max_concurrency: int | None = None
     summary_default_kwargs: dict[str, Any] | None = None

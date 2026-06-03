@@ -55,13 +55,17 @@ agent:
       inputSchema:
         type: object
         properties:
-          query:
-            type: string
+          query_list:
+            type: array
+            items:
+              type: string
+            minItems: 1
+            maxItems: 4
           top_k:
             type: integer
             minimum: 1
         required:
-          - query
+          - query_list
         additionalProperties: false
       source: memory
       response_char_limit: null

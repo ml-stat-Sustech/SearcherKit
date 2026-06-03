@@ -10,6 +10,7 @@ from searchagent.agent.search_agent import SearchAgentConfig
 @dataclass
 class AgentConfig(SearchAgentConfig):
     raise_repeat_tool_call: bool = field(default=True)
+    max_queries_per_tool_call: int | None = field(default=None)
 
 
 @dataclass

@@ -121,11 +121,12 @@ def _summary_retry_config(max_tries: int) -> RetryConfig:
 
 def _summary_source(
     *,
-    summary_client: FakeSummaryClient,
+    summary_client: FakeSummaryClient | None = None,
     client: FakeElasticsearchClient | None = None,
     fetch_by_url: bool = False,
     search_summary_enabled: bool = True,
     fetch_summary_enabled: bool = True,
+    summary_max_tokens: int | None = None,
     retry_config: RetryConfig | None = None,
 ) -> ElasticsearchSource:
     kwargs: dict[str, Any] = {}
@@ -138,6 +139,7 @@ def _summary_source(
         fetch_summary_enabled=fetch_summary_enabled,
         summary_model="summary-model",
         summary_api_key="key",
+        summary_max_tokens=summary_max_tokens,
         summary_client=summary_client,
         summary_retry_config=retry_config,
         **kwargs,
@@ -314,6 +316,22 @@ def test_elasticsearch_search_summary_enabled_uses_all_result_text() -> None:
         assert "Second full document text for summary." in prompt
 
     asyncio.run(run_source())
+
+
+def test_elasticsearch_summary_truncates_by_token_limit() -> None:
+    class FakeTokenizer:
+        def encode(self, content: str, *, add_special_tokens: bool = False) -> list[int]:
+            assert add_special_tokens is False
+            return [ord(ch) for ch in content]
+
+        def decode(self, token_ids: list[int], *, skip_special_tokens: bool = True) -> str:
+            assert skip_special_tokens is True
+            return "".join(chr(token_id) for token_id in token_ids)
+
+    source = _summary_source(summary_max_tokens=5)
+    source._summary_tokenizer = FakeTokenizer()
+
+    assert source._truncate_summary_content("abcdefghij") == "abcde"
 
 
 def test_elasticsearch_search_summary_retries_once_then_succeeds() -> None:
