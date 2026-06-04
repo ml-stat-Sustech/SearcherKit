@@ -83,6 +83,25 @@ agent:
 
 The agent runner will bind each session to a single endpoint to maximize cache hits.
 
+### Deploy embedding database as search source
+```bash
+searchagent plugins deploy browsecomp-plus \
+  --dataset_path Tevatron/browsecomp-plus-corpus \
+  --es_host http://127.0.0.1:9200 \
+  --index_name browsecomp_plus_qwen3 \
+  --dense-vector \
+  --model_name /models/Qwen3-Embedding-8B \
+  --embedding_dim 4096 \
+  --prompt_strategy qwen3 \
+  --overwrite
+```
+
+### Start the agent with a bundled recipe:
+
+```bash
+searchagent run --config-path searchagent
+```
+
 ## Usages
 
 First verify that the CLI is installed and can see the top-level commands:
