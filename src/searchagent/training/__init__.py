@@ -1,7 +1,7 @@
 """Training support for SearchAgent.
 
-Heavy training dependencies such as AReaL are imported by the concrete
-submodules that need them.
+Heavy training dependencies such as AReaL, slime, and Megatron are imported by
+the concrete submodules that need them.
 """
 
 from typing import Any
