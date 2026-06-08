@@ -18,7 +18,7 @@ SEARCH_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "query": {"type": "string"},
-        "top_k": {"type": "integer", "minimum": 1},
+        # "top_k": {"type": "integer", "minimum": 1},
     },
     "required": ["query"],
     "additionalProperties": False,
@@ -27,11 +27,11 @@ SEARCH_INPUT_SCHEMA: dict[str, Any] = {
 def _format_results(results: list[SearchResult]) -> str:
     text = ""
     for i, result in enumerate(results, start=1):
-        text += f"{i}. [{result.document.title}]({result.document.url})\n"
+        # text += f"{i}. [{result.document.title}]({result.document.url})\n"
         text += f"{result.snippet or result.document.text}\n"
-        text += f"Score: {result.score:.2f}\n"
-        if result.document.metadata:
-            text += f"Metadata: {json.dumps(result.document.metadata, ensure_ascii=False, indent=None)}\n"
+        # text += f"Score: {result.score:.2f}\n"
+        # if result.document.metadata:
+        #     text += f"Metadata: {json.dumps(result.document.metadata, ensure_ascii=False, indent=None)}\n"
         text += "\n"
 
     return text
@@ -96,7 +96,7 @@ class SearchTool(BaseTool):
 
     async def _run(self, **kwargs: Any) -> str:
         query = str(kwargs["query"])
-        top_k = int(kwargs.get("top_k", 10))
+        top_k = int(kwargs.get("top_k", 5))
         try:
             results = await self.source.search(query, top_k=top_k)
         except SourceError as e:
