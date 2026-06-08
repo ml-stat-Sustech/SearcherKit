@@ -30,13 +30,48 @@ class IndexDocument:
         return source
 
 
+@dataclass(slots=True)
+class SentenceEmbeddingModel:
+    """SentenceTransformer plus optional multi-GPU process pool."""
+
+    model: Any
+    pool: Any | None = None
+    devices: list[str] | None = None
+
+    def encode(
+        self,
+        texts: list[str],
+        *,
+        normalize_embeddings: bool,
+        batch_size: int,
+        show_progress_bar: bool,
+    ) -> Any:
+        encode_kwargs = {}
+        if self.pool is not None:
+            encode_kwargs["pool"] = self.pool
+        if self.devices is not None:
+            encode_kwargs["device"] = self.devices
+        return self.model.encode(
+            texts,
+            normalize_embeddings=normalize_embeddings,
+            batch_size=batch_size,
+            show_progress_bar=show_progress_bar,
+            **encode_kwargs,
+        )
+
+    def close(self) -> None:
+        if self.pool is not None:
+            self.model.stop_multi_process_pool(self.pool)
+            self.pool = None
+
+
 def apply_embedding_prompt(text: str, strategy: str = "none") -> str:
     if strategy == "none":
         return text
     if strategy == "e5":
         return f"passage: {text}"
     if strategy == "qwen3":
-        return f"Instruct: Given a web search query, retrieve relevant passages that answer the query\nPassage:{text}"
+        return text
     raise ValueError(f"unknown prompt strategy: {strategy!r}")
 
 
@@ -120,12 +155,24 @@ def load_sentence_transformer(model_name: str) -> Any:
         raise ValueError("model_name must be non-empty when vector indexing is enabled")
     try:
         from sentence_transformers import SentenceTransformer
+        import torch
     except ImportError as exc:
         raise ImportError(
             "Vector indexing requires the 'sentence-transformers' package. "
             "Install with `uv sync --extra indexing`."
         ) from exc
-    return SentenceTransformer(model_name, trust_remote_code=True)
+
+    cuda_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if cuda_count > 1:
+        model = SentenceTransformer(model_name, device="cpu", trust_remote_code=True)
+        devices = [f"cuda:{idx}" for idx in range(cuda_count)]
+        if hasattr(model, "start_multi_process_pool"):
+            pool = model.start_multi_process_pool(target_devices=devices)
+            return SentenceEmbeddingModel(model=model, pool=pool)
+        return SentenceEmbeddingModel(model=model, devices=devices)
+    return SentenceEmbeddingModel(
+        model=SentenceTransformer(model_name, trust_remote_code=True)
+    )
 
 
 def encode_documents(
@@ -225,13 +272,17 @@ def deploy_to_elasticsearch(
         shards=shards,
         replicas=replicas,
     )
-    return index_documents(
-        client,
-        index_name=index_name,
-        documents=documents,
-        embedding_model=model,
-        prompt_strategy=prompt_strategy,
-        batch_size=batch_size,
-        embedding_batch_size=embedding_batch_size,
-        max_text_chars=max_text_chars,
-    )
+    try:
+        return index_documents(
+            client,
+            index_name=index_name,
+            documents=documents,
+            embedding_model=model,
+            prompt_strategy=prompt_strategy,
+            batch_size=batch_size,
+            embedding_batch_size=embedding_batch_size,
+            max_text_chars=max_text_chars,
+        )
+    finally:
+        if model is not None:
+            model.close()
