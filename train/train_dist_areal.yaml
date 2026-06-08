@@ -12,10 +12,10 @@ tokenizer_path: ${actor.path}
 cluster:
   n_nodes: 2
   n_gpus_per_node: 8
-  fileroot: /home/jovyan1/searchagent/outputs
+  fileroot: /home/jovyan1/wsy/searchagent/searchagent-slime/logs
   name_resolve:
     type: nfs
-    nfs_record_root: /home/jovyan1/searchagent/name_resolve
+    nfs_record_root: /home/jovyan1/wsy/searchagent/searchagent-slime/logs/name_resolve
 
 scheduler:
   type: ray
@@ -112,12 +112,12 @@ workflow:
           Query:
         embedding_model: /home/jovyan/Qwen3-Embedding-8B
         embedding_api_key: api_key
-        embedding_base_url: http://10.32.64.11:8004
+        embedding_base_url: http://10.32.29.237:8004/v1
         search_summary_enabled: true
         summary_model: /home/jovyan/Qwen3-8B
         summary_api_key: api_key
         summary_max_chars: 100000
-        summary_base_url: http://10.32.64.11:6010/v1
+        summary_base_url: http://10.32.29.237:6010/v1
         summary_default_kwargs:
           max_tokens: 1024
           extra_body:
@@ -198,12 +198,12 @@ eval_workflow:
           Query:
         embedding_model: /home/jovyan/Qwen3-Embedding-8B
         embedding_api_key: api_key
-        embedding_base_url: http://10.32.64.11:8004
+        embedding_base_url: http://10.32.29.237:8004/v1
         search_summary_enabled: true
         summary_model: /home/jovyan/Qwen3-8B
         summary_api_key: api_key
         summary_max_chars: 100000
-        summary_base_url: http://10.32.64.11:6010/v1
+        summary_base_url: http://10.32.29.237:6010/v1
         summary_default_kwargs:
           max_tokens: 1024
           extra_body:
@@ -239,12 +239,13 @@ rollout:
   tokenizer_path: ${tokenizer_path}
   dump_to_file: true
   request_timeout: 7200
-  openai:
+  agent:
+    agent_cls_path: areal.experimental.openai.proxy.online_agent._OnlineAgent
     mode: inline
     tool_call_parser: qwen
     reasoning_parser: qwen3
     export_style: concat
-    chat_template_type: concat 
+    chat_template_type: concat
     turn_discount: 1.0
     engine_max_tokens: ${workflow.agent.max_tokens}
     session_timeout_seconds: 7200
@@ -275,7 +276,7 @@ actor:
   experiment_name: ${experiment_name}
   trial_name: ${trial_name}
   path: /home/jovyan1/Qwen3-8B
-  attn_impl: "flash_attention_3"
+  attn_impl: "flash_attention_2"
   init_from_scratch: false
   disable_dropout: true
   gradient_checkpointing: true
@@ -324,7 +325,7 @@ ref:
   trial_name: ${trial_name}
   backend: ${actor.backend}
   path: ${actor.path}
-  attn_impl: "flash_attention_3"
+  attn_impl: "flash_attention_2"
   init_from_scratch: false
   dtype: ${actor.dtype}
   mb_spec:
@@ -394,7 +395,11 @@ stats_logger:
   trial_name: ${trial_name}
   fileroot: ${cluster.fileroot}
   wandb:
-    mode: online
+    mode: disabled
+    project: ${experiment_name}
+    name: ${trial_name}
+  swanlab:
+    mode: cloud
     project: ${experiment_name}
     name: ${trial_name}
 
