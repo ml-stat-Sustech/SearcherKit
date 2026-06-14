@@ -23,7 +23,8 @@ from searchagent.common.retry import RetryPolicy, retry_async
 
 logger = get_logger(__name__)
 
-_ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
+# _ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
+_ANSWER_PATTERN = re.compile(r'\\boxed\{(?P<answer>[^}]*)\}', re.DOTALL)
 
 
 def _attempt_extract_answer_content(content: str) -> str:
