@@ -40,7 +40,7 @@ workflow:
         upstream_parsed: true
         drop_thinking: false
       kwargs: {}
-    max_tokens: 65536
+    max_tokens: 40960
     system_prompt: |
       You are a helpful AI assistant that can search for information to answer questions accurately.
       
@@ -55,23 +55,7 @@ workflow:
       Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
     # system_prompt: "You are a helpfule assistant, answer the question with tools.\n\nWhile calling the tools, avoid making identical tool calls that had been called before.\nAvoid making more than 5 tool calls in a single response, but always make more tool calls in the next turn if more information is needed.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>\n\n"
     # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
-    query_prompt: |
-      You are a deep research agent. You need to answer the given question by interacting with a search engine, using the search tool provided. Please perform brief reasoning and use the tool step by step, in an interleaved manner. You may call search multiple rounds
-      For example:
-      <think> your think </think>
-      <tool_call> 1 tool call per round </tool_call>
-      <tool_response> response from tool </tool_response>
-      <think> another round of think </think>
-      <tool_call> another round of tool calls</tool_call>
-      <tool_response> response from tool </tool_response>
-      ...
-
-      Question: {query}
-
-      After you have gathered enough information to answer the question, the final response should be in the following format:
-      <think> your final thought on what should be the final answer </think>
-      ...
-      \boxed{{your succinct, final answer, in a few words}}
+    query_prompt: "{query}"
 
     max_tokens_prompt_margin: 11000
     max_turn: 50
@@ -239,7 +223,7 @@ rollout:
   tokenizer_path: ${tokenizer_path}
   dump_to_file: true
   request_timeout: 7200
-  openai:
+  agent:
     mode: inline
     tool_call_parser: qwen
     reasoning_parser: qwen3
@@ -282,7 +266,7 @@ actor:
   dtype: bfloat16
   mb_spec:
     # max_tokens_per_mb: ${workflow.agent.max_tokens}
-    max_tokens_per_mb: 90000
+    max_tokens_per_mb: 40960
   optimizer:
     type: adam
     lr: 5e-6
@@ -296,9 +280,10 @@ actor:
   kl_ctl: 0.0
   ppo_n_minibatches: 4
   rejection_sampling:
-    level: sequence
+    level: token
     upper: 5.0
-    agg: max
+    agg: mean
+    action: clamp
   # behave_imp_weight_cap: 5.0
   # behave_imp_weight_mode: sequence_mask
   recompute_logprob: true
@@ -329,7 +314,7 @@ ref:
   dtype: ${actor.dtype}
   mb_spec:
     # max_tokens_per_mb: ${workflow.agent.max_tokens}
-    max_tokens_per_mb: 70000
+    max_tokens_per_mb: 40960
   optimizer: null
   scheduling_strategy:
     type: colocation
