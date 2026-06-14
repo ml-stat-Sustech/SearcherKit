@@ -70,6 +70,7 @@ agent:
             enable_thinking: false
   tools:
     - type: search
+    - type: search
       name: search
       description: Search for more information.
       inputSchema:
