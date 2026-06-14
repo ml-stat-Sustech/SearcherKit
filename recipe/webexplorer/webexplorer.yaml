@@ -52,9 +52,11 @@ agent:
     - type: search
       name: search
       source: bcp
+      response_char_limit: null
     - type: visit
       name: visit
       source: bcp
+      response_char_limit: null
   system_prompt: |
     You are a helpful assistant.
 
@@ -65,6 +67,7 @@ agent:
 
     When you have enough evidence, provide the final answer inside
     <answer></answer> and stop calling tools.
+  query_prompt: null
   max_turn: 100
   max_turn_prompt: |
     You have reached the final step. You are forbidden to call any tools.

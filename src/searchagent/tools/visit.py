@@ -15,6 +15,7 @@ VISIT_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "document_id": {"type": "string"},
+        "goal": {"type": "string"},
     },
     "required": ["document_id"],
     "additionalProperties": False,
@@ -89,8 +90,10 @@ class VisitTool(BaseTool):
 
     async def _run(self, **kwargs: Any) -> str:
         document_id = str(kwargs["document_id"])
+        raw_goal = kwargs.get("goal")
+        goal = str(raw_goal) if raw_goal is not None else None
         try:
-            document = await self.source.fetch(document_id)
+            document = await self.source.fetch(document_id, goal=goal)
         except SourceError as e:
             raise RecoverableError(str(e)) from e
         except KeyError as e:
@@ -99,3 +102,6 @@ class VisitTool(BaseTool):
         if self.response_char_limit:
             return _limit_response(text, self.response_char_limit)
         return text
+
+    async def close(self) -> None:
+        await self.source.close()

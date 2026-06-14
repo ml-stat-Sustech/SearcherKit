@@ -9,6 +9,8 @@ inputSchema:
   properties:
     document_id:
       type: string
+    goal:
+      type: string
   required:
     - document_id
   additionalProperties: false

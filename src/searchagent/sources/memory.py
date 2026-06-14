@@ -43,7 +43,7 @@ class MemorySource(DataSource):
         scored.sort(key=lambda item: item.score or 0.0, reverse=True)
         return scored[:top_k]
 
-    async def fetch(self, document_id: str) -> Document:
+    async def fetch(self, document_id: str, *, goal: str | None = None) -> Document:
         for document in self.documents:
             if document.id == document_id:
                 return document

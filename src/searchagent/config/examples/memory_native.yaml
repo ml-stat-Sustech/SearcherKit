@@ -49,12 +49,15 @@ agent:
     - type: search
       name: search
       source: memory
+      response_char_limit: null
     - type: visit
       name: visit
       source: memory
+      response_char_limit: null
   system_prompt: |
     Use search to find relevant documents and visit to read a selected document.
     Put the final answer inside <answer></answer> tags.
+  query_prompt: null
   max_turn: 6
   max_turn_prompt: |
     Stop calling tools and answer now in the format:

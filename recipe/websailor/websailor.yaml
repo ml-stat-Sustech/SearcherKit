@@ -49,9 +49,11 @@ agent:
     - type: search
       name: search
       source: bcp
+      response_char_limit: null
     - type: visit
       name: visit
       source: bcp
+      response_char_limit: null
   system_prompt: |
     You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up until you find the corresponding information.
 
@@ -62,6 +64,7 @@ agent:
     2. **Repeated Verification**: Before presenting a Final Answer, you will **cross-check** and **validate the information** you've gathered to confirm its accuracy and reliability.
 
     3. **Attention to Detail**: You will carefully analyze each information source to ensure that all data is current, relevant, and from credible origins.
+  query_prompt: null
   max_turn: 100
   max_turn_prompt: |
     You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:

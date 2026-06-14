@@ -7,7 +7,7 @@ servers, and evaluation recipes.
 ## Install
 
 ```bash
-git clone https://github.com/your-org/searchagent.git
+git clone https://github.com/ml-stat-Sustech//searchagent.git
 cd searchagent
 uv sync
 ```
@@ -31,6 +31,79 @@ python -m searchagent --help
 
 ## Quick Start
 
+Before running, deploy the following services
+- elasticsearch **< 9.0.0**
+- embedding model
+- LLM model
+
+### Elasticsearch
+
+Use docker:
+```bash
+local_path=/path/to/es/data
+docker run \
+  --name es-wiki \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -v ${local_path}:/usr/share/elasticsearch/data \
+  -d elasticsearch:8.19.5
+
+curl http://127.0.0.1:9200
+```
+
+Without docker:
+
+- [Download](https://www.elastic.co/downloads/past-releases/elasticsearch-8-19-16)
+
+- [Offical Doc](https://www.elastic.co/downloads/elasticsearch)
+
+### Embedding Model
+
+For deploying a local embedding model, we recommend using [Text Embeddings Inference](https://github.com/huggingface/text-embeddings-inference), A blazing fast inference solution for text embeddings models.
+
+### LLM Model
+
+We recommend using [vLLM](https://github.com/vllm-project/vllm) or [SGLang](https://github.com/sgl-project/sglang) to deploy your model. 
+
+For better KV Cache hit rate, we recommand replace data parallel config with dedicated server setup. 
+
+For example, for a `dp=2, tp=2` setup, start 2 seperate servers with `dp=1, tp=2`.
+
+Pass the corresponding endpoint URLs in a list to the agent config:
+
+```yaml
+agent:
+  llm_client:
+    openai:
+      base_url:
+        - http://127.0.0.1:8001
+        - http://127.0.0.1:8002
+```
+
+The agent runner will bind each session to a single endpoint to maximize cache hits.
+
+### Deploy embedding database as search source
+```bash
+searchagent plugins deploy browsecomp-plus \
+  --dataset_path Tevatron/browsecomp-plus-corpus \
+  --es_host http://127.0.0.1:9200 \
+  --index_name browsecomp_plus_qwen3 \
+  --dense-vector \
+  --model_name /models/Qwen3-Embedding-8B \
+  --embedding_dim 4096 \
+  --prompt_strategy qwen3 \
+  --overwrite
+```
+
+### Start the agent with a bundled recipe:
+
+```bash
+searchagent run --config-path searchagent
+```
+
+## Usages
+
 First verify that the CLI is installed and can see the top-level commands:
 
 ```bash
@@ -48,8 +121,7 @@ The validator recursively compares every key in the composed config against the
 corresponding dataclass fields (`RunConfig`, `SearchAgentConfig`, `ClientConfig`,
 `SourceConfig`, `ToolConfig`, etc.) and reports:
 
-- **WARNING** — unexpected field in config (not in target dataclass)
-- **ERROR** — required field missing (no default value in target dataclass)
+- **ERROR** — unexpected field in config (not in target dataclass) or required field missing (no default value in target dataclass)
 
 Hydra-style overrides are supported:
 

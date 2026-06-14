@@ -64,6 +64,7 @@ agent:
           - query
         additionalProperties: false
       source: memory
+      response_char_limit: null
     - type: visit
       name: visit
       description: Fetch a document from the configured data source.
@@ -72,12 +73,16 @@ agent:
         properties:
           document_id:
             type: string
+          goal:
+            type: string
         required:
           - document_id
         additionalProperties: false
       source: memory
+      response_char_limit: null
 
   system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."
+  query_prompt: null
   max_turn: 10
   max_turn_prompt: null
   max_tokens: 1024
