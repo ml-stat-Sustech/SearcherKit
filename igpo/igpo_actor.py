@@ -9,6 +9,10 @@ from areal.utils.functional import (
 
 # TODO: make answer format configurable instead of hardcoded
 _ANSWER_FORMAT = r"\boxed{{{answer}}}"
+# Qwen chat template wraps assistant content as
+# "<|im_start|>assistant\n{content}<|im_end|>\n".
+_ASSISTANT_BEGIN_TOKENS = 3
+_ASSISTANT_END_TOKENS = 2
 
 
 class IGPOActor(PPOActor):
@@ -25,10 +29,23 @@ class IGPOActor(PPOActor):
         max_turns = 0
         for i in range(bs):
             eos_pos = torch.where(is_eos[i])[0]
+            # pretend an eos at end of sequences
+            valid_pos = torch.where(attn_mask[i].bool())[0]
+            if valid_pos.numel() != 0:
+                last_pos = valid_pos[-1]
+                if eos_pos.numel() == 0 or eos_pos[-1] != last_pos:
+                    eos_pos = torch.cat([eos_pos, last_pos.unsqueeze(0)])
+
             # turn end = [p0, t0, t1, ...]  (even indices, skip answer eos at -1)
             turn_ends = eos_pos[0:-1:2]
             # response end = [p0, a0, a1, ...]  (p0 + odd indices, skip answer eos)
             resp_ends = torch.cat([eos_pos[:1], eos_pos[1:-1:2]])
+
+            # Drop trailing abnormal response without corresponding tool/result turn.
+            aligned_len = min(turn_ends.numel(), resp_ends.numel())
+            turn_ends = turn_ends[:aligned_len]
+            resp_ends = resp_ends[:aligned_len]
+
             turn_ends_list.append(turn_ends)
             resp_ends_list.append(resp_ends)
             max_turns = max(max_turns, len(turn_ends))
@@ -49,21 +66,20 @@ class IGPOActor(PPOActor):
         tokenizer = self.engine.tokenizer
         answer_tokens_list = []
         answer_spans_list = []
-        lbrace_id = tokenizer.encode("{", add_special_tokens=False)[0]
-        rbrace_id = tokenizer.encode("}", add_special_tokens=False)[0]
 
         for text in ground_truths:
             answer_content = _ANSWER_FORMAT.format(answer=text)
             assistant_tokens = tokenizer.apply_chat_template(
                 [{"role": "assistant", "content": answer_content}],
                 tokenize=True,
-            )
-            at = torch.tensor(assistant_tokens, dtype=torch.int32, device=device)
-            answer_tokens_list.append(at)
+                add_generation_prompt=False,
+                return_tensors="pt",
+            )["input_ids"].to(device).squeeze(0)
+            answer_tokens_list.append(assistant_tokens)
 
-            lbrace_pos = int((at == lbrace_id).nonzero(as_tuple=True)[0][0])
-            rbrace_pos = int((at == rbrace_id).nonzero(as_tuple=True)[0][-1])
-            answer_spans_list.append((lbrace_pos + 1, rbrace_pos))
+            answer_spans_list.append(
+                (_ASSISTANT_BEGIN_TOKENS, len(assistant_tokens) - _ASSISTANT_END_TOKENS)
+            )
 
         return answer_tokens_list, answer_spans_list
 
@@ -100,7 +116,8 @@ class IGPOActor(PPOActor):
                 prefix = input_ids[i, :cut_pos + 1]
                 full = torch.cat([prefix, ans_tok])
                 mask = torch.zeros(len(full), dtype=torch.bool, device=device)
-                mask[len(prefix) + ans_start: len(prefix) + ans_end] = True
+                # engine.forward() returns next-token logprobs: logprobs[t] scores full[t + 1].
+                mask[len(prefix) + ans_start - 1: len(prefix) + ans_end - 1] = True
                 all_seqs.append(full)
                 all_answer_masks.append(mask)
 

@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-python3 -m searchagent.training.train_dist \
+python3 -m searchagent.training.train_igpo \
     --config "${SCRIPT_DIR}/train_dist.yaml" \
     scheduler.type=ray \
     cluster.n_nodes=2 \
@@ -21,7 +21,7 @@ python3 -m searchagent.training.train_dist \
     actor.optimizer.warmup_steps_proportion=0 \
     actor.path=/home/jovyan1/Qwen3-8B \
     rollout.backend=sglang:d4 \
-    rollout.max_concurrent_rollouts=256 \
+    rollout.max_concurrent_rollouts=128 \
     gconfig.n_samples=8 \
     trial_name=qwen3_igpo_$(date +%Y%m%d_%H%M%S) \
     train_dataset.batch_size=128 \

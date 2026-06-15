@@ -150,5 +150,10 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         areal_client.apply_reward_discount(self.reward_discount)
 
         traj = areal_client.export_interactions(style=self.export_style)
-        traj["ground_truth"] = data.get("answer", "")
+        ground_truth  = data.get("answer", "")
+        # TODO: 不那么hack的方法
+        for interaction in traj.values():
+            tensor_dict = interaction.to_tensor_dict()
+            tensor_dict["ground_truth"] = [ground_truth]
+            interaction._cache = tensor_dict
         return traj

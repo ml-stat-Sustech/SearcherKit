@@ -9,6 +9,7 @@ from areal.api.cli_args import load_expr_config
 
 from searchagent.training.config import SearchAgentTrainingConfig
 
+from igpo.igpo_trainer import IGPOTrainer
 
 def main(args: list[str]) -> None:
     config, _ = load_expr_config(args, SearchAgentTrainingConfig)
@@ -24,7 +25,7 @@ def main(args: list[str]) -> None:
         split="train",
     )
 
-    with PPOTrainer(
+    with IGPOTrainer(
         config,
         train_dataset=train_dataset,
         valid_dataset=valid_dataset,

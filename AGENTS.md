@@ -6,6 +6,9 @@
 - Do not add compatibility re-export layers by default. After moving code, update
   imports and config targets to the real module paths, then search for stale
   paths.
+- Do not add overly defensive programming. If input/output behavior is unclear,
+  first inspect the code statically or run a small test to confirm whether that
+  behavior is actually possible before adding exception handling.
 - After changing config, CLI, recipes, or plugin entry points, run at least a
   compose/help/import check. Do not stop at editing files.
 
