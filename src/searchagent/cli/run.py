@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config-name", default="config", help="Config name without .yaml")
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Set log level to DEBUG for verbose output.",
+    )
+    parser.add_argument(
         "overrides",
         nargs=argparse.REMAINDER,
         help="Hydra-style overrides, for example agent.llm_client.model=Qwen3-8B",
@@ -46,6 +51,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         config_name=args.config_name,
         overrides=args.overrides,
     )
-    setup_logger()
+    setup_logger(level="DEBUG" if args.debug else None)
     asyncio.run(_run_config(cfg))
     return 0
