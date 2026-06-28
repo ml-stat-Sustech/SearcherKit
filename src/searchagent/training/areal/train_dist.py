@@ -11,7 +11,7 @@ def _print_fallback_help(missing_name: str) -> None:
         file=sys.stderr,
     )
     print(
-        "usage: python -m searchagent.training.train_dist_areal --config CONFIG "
+        "usage: python -m searchagent.training.areal.train_dist --config CONFIG "
         "[overrides ...]\n\n"
         "SearchAgent AReaL training entry. Full AReaL dependencies are required "
         "to parse and run the complete training CLI.\n\n"
@@ -22,15 +22,25 @@ def _print_fallback_help(missing_name: str) -> None:
 
 
 def _build_config_type(grpo_config_type, workflow_config_type):
-    @dataclass
-    class SearchAgentARealTrainingConfig(grpo_config_type):
-        workflow: workflow_config_type = field(default_factory=workflow_config_type)
-        eval_workflow: workflow_config_type = field(default_factory=workflow_config_type)
-        dynamic_filter_fn: str | None = field(
+    namespace = {
+        "__module__": __name__,
+        "__annotations__": {
+            "workflow": workflow_config_type,
+            "eval_workflow": workflow_config_type,
+            "dynamic_filter_fn": str | None,
+        },
+        "workflow": field(default_factory=workflow_config_type),
+        "eval_workflow": field(default_factory=workflow_config_type),
+        "dynamic_filter_fn": field(
             default="searchagent.training.rewards.should_accept"
-        )
-
-    return SearchAgentARealTrainingConfig
+        ),
+    }
+    config_type = type(
+        "SearchAgentARealTrainingConfig",
+        (grpo_config_type,),
+        namespace,
+    )
+    return dataclass(config_type)
 
 
 def _load_dependencies(argv: list[str]):
@@ -74,8 +84,8 @@ def main(args: list[str] | None = None) -> None:
         valid_dataset=valid_dataset,
     ) as trainer:
         trainer.train(
-            workflow="searchagent.training.workflow.ARealSearchAgentWorkflow",
-            eval_workflow="searchagent.training.workflow.ARealSearchAgentWorkflow",
+            workflow="searchagent.training.areal.workflow.ARealSearchAgentWorkflow",
+            eval_workflow="searchagent.training.areal.workflow.ARealSearchAgentWorkflow",
             workflow_kwargs={"config": config.workflow},
             eval_workflow_kwargs={"config": config.eval_workflow},
             dynamic_filter_fn=config.dynamic_filter_fn,

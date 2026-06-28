@@ -25,6 +25,7 @@ dist/
 
 # JetBrains IDE
 .idea/
+.vscode/
 
 # Unit test reports
 TEST*.xml
@@ -60,4 +61,13 @@ docs/assets/searchagent-execution-flow.svg
 docs/assets/searchagent-extension-points.svg
 docs/assets/searchagent-feature-map.svg
 docs/visual-overview.md
-slime/
+/third_party/
+/slime/
+/sglang/
+/Megatron-LM/
+/flash-attention/
+logs/
+docs/slime/embedding_tools/tei_logs/
+docs/slime/embedding_tools/summary_logs/
+docs/slime/embedding_tools/tei_pids.txt
+temp

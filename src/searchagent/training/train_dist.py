@@ -4,7 +4,7 @@ import sys
 
 
 def main(args: list[str]) -> None:
-    from searchagent.training.train_dist_slime import main as slime_main
+    from searchagent.training.slime.train_dist import main as slime_main
 
     slime_main(args)
 

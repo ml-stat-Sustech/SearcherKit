@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from searchagent.training.train_slime import main
+from searchagent.training.slime.train import main
 
 
 if __name__ == "__main__":

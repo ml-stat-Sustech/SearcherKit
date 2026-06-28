@@ -12,6 +12,7 @@ from searchagent.llm.parsers import get_parser
 from searchagent.sources import add_source_cfg
 from searchagent.tools import build_tool
 from searchagent.training.config import AgentConfig
+from searchagent.training.rewards import normalize_query
 
 
 class TooManyToolCallsError(LLMOutputError):
@@ -69,6 +70,9 @@ class SearchAgentTraining(SearchAgent):
                 max_tokens=config.max_tokens,
                 max_tokens_prompt=config.max_tokens_prompt,
                 max_tokens_prompt_margin=config.max_tokens_prompt_margin,
+                run_timeout_seconds=config.run_timeout_seconds,
+                run_timeout_prompt=config.run_timeout_prompt,
+                run_timeout_prompt_margin_seconds=config.run_timeout_prompt_margin_seconds,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
             )
@@ -90,7 +94,10 @@ class SearchAgentTraining(SearchAgent):
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:
                 raise LLMOutputError(f"Tool {tc.name} not found")
-            argument_str = json.dumps(tc.arguments, sort_keys=True)
+            if isinstance(tc.arguments, dict) and "query" in tc.arguments:
+                argument_str = normalize_query(tc.arguments["query"])
+            else:
+                argument_str = json.dumps(tc.arguments, ensure_ascii=False, sort_keys=True)
             if (tc.name, argument_str) in self.previous_tool_queries:
                 if self.raise_repeat_tool_call:
                     raise RepeatedToolCallError(
