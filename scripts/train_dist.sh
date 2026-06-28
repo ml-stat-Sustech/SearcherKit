@@ -11,7 +11,7 @@ cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 python3 -m searchagent.training.train_dist \
-    --config "${SCRIPT_DIR}/train_dist.yaml" \
+    --config "${REPO_ROOT}/src/searchagent/config/training/train_dist.yaml" \
     scheduler.type=ray \
     cluster.n_nodes=2 \
     actor.backend=megatron:d3t2 \
