@@ -16,8 +16,7 @@ from searchagent.errors import SearchAgentError
 from searchagent.runtime import startup
 from searchagent.common.retry import retry_async, RetryConfig, RetryPolicy
 from searchagent.runtime.batch import BatchItem, BatchSummary
-from searchagent.runtime.checkpoint import CheckpointConfig, CheckpointStore
-from searchagent.runtime.errors import CheckpointError
+from searchagent.runtime.checkpoint import CheckpointConfig, CheckpointError, CheckpointStore
 from searchagent.runtime.trace import (
     history_stats as _history_stats,
     make_run_id as _make_run_id,

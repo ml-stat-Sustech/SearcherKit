@@ -7,10 +7,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from searchagent.runtime.errors import CheckpointCorruptionError, CheckpointError
-
 
 CHECKPOINT_VERSION = 1
+
+
+class CheckpointError(Exception):
+    """Checkpoint state cannot be read, written, or interpreted safely."""
+
+
+class CheckpointCorruptionError(CheckpointError):
+    """Checkpoint payload is not valid JSON or has an unexpected shape."""
 
 
 @dataclass
