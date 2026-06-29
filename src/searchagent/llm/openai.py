@@ -11,7 +11,7 @@ from openai import AsyncOpenAI
 
 from searchagent.common.retry import RetryPolicy, wrap_async
 from searchagent.llm.base import Client, ClientConfig
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 
 if TYPE_CHECKING:
     from openai.types.completion_usage import CompletionUsage

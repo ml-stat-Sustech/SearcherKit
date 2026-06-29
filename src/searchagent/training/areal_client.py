@@ -8,7 +8,7 @@ from openai.types.completion_usage import CompletionUsage
 from areal.experimental.openai import ArealOpenAI
 
 from searchagent.llm.base import Client
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 
 logger = get_logger(__name__)
 

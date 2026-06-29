@@ -10,7 +10,7 @@ from jsonschema import validate, ValidationError
 
 from searchagent.common.retry import RetryConfig
 from searchagent.tools.summarizer import Summarizer
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -47,7 +47,6 @@ class ToolConfig:
     transport: str = "streamable-http"
     auth_header: str | None = None
     max_concurrency: int | None = None
-    enable_trace_logging: bool = True
     raise_on_fatal: bool = True
     mcp_tool_name: str = ""
 

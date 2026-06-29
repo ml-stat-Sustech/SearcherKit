@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 
 from searchagent.common.messages import ChatMessage, system, user
 from searchagent.agent import BaseAgent
-from searchagent.log import get_logger, log_context
+from searchagent.common.log import get_logger, log_context
 
 if TYPE_CHECKING:
     from searchagent.llm.base import Client

@@ -14,7 +14,7 @@ from contextlib import nullcontext
 from tqdm import tqdm
 import openai
 
-from searchagent.log import get_logger, setup_logger
+from searchagent.common.log import get_logger, setup_logger
 from searchagent.agent import BaseAgent
 from searchagent.agent import SingleTurnAgent
 from searchagent.llm.openai import OpenAIClient

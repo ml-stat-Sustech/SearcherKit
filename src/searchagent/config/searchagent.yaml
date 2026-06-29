@@ -14,7 +14,7 @@ retry_policy:
 agent:
   llm_client:
     type: openai
-    model: /home/jovyan/gemma-4-12B-it
+    model: /home/jovyan1/searchagent/outputs/checkpoints/jovyan/webagent/qwen3_igpo_20260615_135454/default/epoch1epochstep104globalstep209
     default_kwargs:
       temperature: 1.0
       top_p: 1.0
@@ -40,7 +40,7 @@ agent:
   sources:
     - name: elasticsearch
       type: elasticsearch
-      hosts: ["http://10.32.64.110:9200"]
+      hosts: ["http://10.32.33.135:9200"]
       index: browsecomp_plus_qwen3-embedding-8b
       search_fields: ["title", "text"]
       es_max_concurrency: 1024
@@ -150,7 +150,7 @@ dataloader:
   max_items: null
 
 max_concurrency: 128
-output_path: outputs/gemma4_12b
+output_path: outputs/rl_0625
 overwrite_output: false
 
 checkpoint:

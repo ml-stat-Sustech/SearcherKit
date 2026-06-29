@@ -10,7 +10,7 @@ from typing import Iterable, Any, TYPE_CHECKING
 from searchagent.common.messages import tool, system, user, ChatMessage, ToolCall
 from searchagent.common.messages import Tool as ToolMsgType
 from searchagent.agent import BaseAgent
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 
 if TYPE_CHECKING:
     from searchagent.llm.base import Client

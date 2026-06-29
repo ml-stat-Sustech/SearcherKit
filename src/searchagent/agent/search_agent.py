@@ -19,7 +19,7 @@ from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_pars
 from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
 from searchagent.errors import LLMError
-from searchagent.log import append_trace_interaction, get_logger, log_context
+from searchagent.common.log import get_logger, log_context, LogTiming
 from searchagent.common.retry import retry_async, RetryPolicy, RetryConfig
 
 # TODO
@@ -193,6 +193,10 @@ class SearchAgent(BaseAgent):
     def turn(self):
         return sum(map(lambda x: x.role == "assistant", self.history))
 
+    @property
+    def timing_report(self) -> dict[str, Any]:
+        return self._timing.to_dict()
+
     @staticmethod
     def _is_context_length_error(exc: BadRequestError | InternalServerError) -> bool:
         response = getattr(exc, "response", None)
@@ -252,6 +256,12 @@ class SearchAgent(BaseAgent):
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
+
+        async def _timed_run(tc_name: str, coro):
+            with self._timing(f"tool.{tc_name}"):
+                result = await coro
+            return result
+
         for tc in tool_call_list:
             logger.info(
                 "Dispatching tool call id=%s name=%s args=%s",
@@ -266,17 +276,21 @@ class SearchAgent(BaseAgent):
                 continue
             
             if self.tool_retry_policy is None:
-                tool_call_coros.append(self.tool_dict[tc.name].run(**dict(tc.arguments)))
+                tool_call_coros.append(_timed_run(
+                    tc.name,
+                    self.tool_dict[tc.name].run(**dict(tc.arguments)),
+                ))
             else:
-                tool_call_coros.append(
+                tool_call_coros.append(_timed_run(
+                    tc.name,
                     retry_async(
                         self.tool_dict[tc.name].run,
                         policy=self.tool_retry_policy,
                         op_name=f"tool.{tc.name}",
                         log=logger,
                         **dict(tc.arguments),
-                    )
-                )
+                    ),
+                ))
             
         gathered = await asyncio.gather(*tool_call_coros, return_exceptions=True)
         first_exception: Exception | None = None
@@ -291,18 +305,6 @@ class SearchAgent(BaseAgent):
                     tc.name,
                     result,
                 )
-                append_trace_interaction(
-                    {
-                        "call_id": tc.id,
-                        "tool_name": tc.name,
-                        "arguments": dict(tc.arguments),
-                        "arguments_preview": _preview_payload(dict(tc.arguments)),
-                        "response_preview": None,
-                        "response_length": 0,
-                        "status": "failed",
-                        "error": str(result),
-                    }
-                )
                 continue
 
             response_preview = _preview_payload(result)
@@ -311,17 +313,6 @@ class SearchAgent(BaseAgent):
                 tc.id,
                 tc.name,
                 response_preview,
-            )
-            append_trace_interaction(
-                {
-                    "call_id": tc.id,
-                    "tool_name": tc.name,
-                    "arguments": dict(tc.arguments),
-                    "arguments_preview": _preview_payload(dict(tc.arguments)),
-                    "response_preview": response_preview,
-                    "response_length": len(result),
-                    "status": "error" if result.startswith("[Tool]") else "completed",
-                }
             )
             results.append(result)
         if first_exception is not None:
@@ -363,8 +354,11 @@ class SearchAgent(BaseAgent):
             tools = []
         
         parsed = self.parser.to_model(history)
-        
-        call_result_raw, usage = await self.client.complete_with_usage(parsed, tools=tools, session_id = self.id)
+
+        with self._timing("llm_call"):
+            call_result_raw, usage = await self.client.complete_with_usage(
+                parsed, tools=tools, session_id=self.id
+            )
 
         self.context_token_size = usage.total_tokens if usage else -1
         logger.debug("LLM turn completed total_tokens=%s", self.context_token_size)
@@ -384,118 +378,120 @@ class SearchAgent(BaseAgent):
             assistant, and tool messages.
         """
         try:
-            await self.init_tools()
-            self.reset()
-            self.id = session_id
-            self.history: list[ChatMessage] = [
-                system(
-                    self.system_prompt,
-                    tools=[ToolMsgType(tool.name, tool.description, tool.inputSchema)
-                           for tool in self.tool_dict.values()],
-                ),
-                user(self.query_prompt.format(query=query)),
-            ]
-            logger.info("Starting agent loop query=%r", query[:120])
+            self._timing = LogTiming()
+            with self._timing("total_time"):
+                await self.init_tools()
+                self.reset()
+                self.id = session_id
+                self.history: list[ChatMessage] = [
+                    system(
+                        self.system_prompt,
+                        tools=[ToolMsgType(tool.name, tool.description, tool.inputSchema)
+                               for tool in self.tool_dict.values()],
+                    ),
+                    user(self.query_prompt.format(query=query)),
+                ]
+                logger.info("Starting agent loop query=%r", query[:120])
 
-            self.max_turn_reminder_prompted = False
-            self.max_token_reminder_prompted = False
-            while True:
-                with log_context(turn=self.turn):
+                self.max_turn_reminder_prompted = False
+                self.max_token_reminder_prompted = False
+                while True:
+                    with self._timing("turn"), log_context(turn=self.turn):
 
-                    logger.debug("Calling LLM turn=%s history_messages=%s", self.turn, len(self.history))
+                        logger.debug("Calling LLM turn=%s history_messages=%s", self.turn, len(self.history))
 
-                    # 1. Reset stop flags
-                    self.context_max_token_exceeded = False
-                    self.turn_limit_exceeded = False
-                    self.no_more_tool_calls = False # No more tool call is set to True if llm call is valid (no exceed context length) and contains no tool calls
+                        # 1. Reset stop flags
+                        self.context_max_token_exceeded = False
+                        self.turn_limit_exceeded = False
+                        self.no_more_tool_calls = False # No more tool call is set to True if llm call is valid (no exceed context length) and contains no tool calls
 
-                    new_call_result = None
-                    new_tool_results = None
+                        new_call_result = None
+                        new_tool_results = None
 
 
-                    # 2. Execute agent turn and set stop flags
-                    try:
-                        if self.llm_retry_policy is None:
-                            new_call_result = await self.parse_and_call_llm(self.history)
+                        # 2. Execute agent turn and set stop flags
+                        try:
+                            if self.llm_retry_policy is None:
+                                new_call_result = await self.parse_and_call_llm(self.history)
+                            else:
+                                new_call_result = await retry_async(
+                                    self.parse_and_call_llm,
+                                    self.history,
+                                    policy=self.llm_retry_policy,
+                                    op_name="searchagent.parse_and_call_llm",
+                                    log=logger,
+                                )
+                        except (BadRequestError, InternalServerError) as exc:
+                            if self._is_context_length_error(exc):
+                                logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
+                                raise LLMContextError from exc
+                            traceback.print_exc()
+                            raise
+
+                        if self.turn >= self.max_turn - 1 and new_call_result.tool_calls:
+                            self.turn_limit_exceeded = True
+
+                        if self.context_token_size >= self.max_tokens - self.max_tokens_prompt_margin:
+                            self.context_max_token_exceeded = True
+
+                        # call tools from llm result (if any)
+                        if new_call_result.tool_calls:
+                            results = await self.call_tools(new_call_result.tool_calls)
+                            for tc, r in zip(new_call_result.tool_calls, results):
+                                tc.result = r
+                            new_tool_results = tool([copy.copy(tc) for tc in new_call_result.tool_calls])
                         else:
-                            new_call_result = await retry_async(
-                                self.parse_and_call_llm,
-                                self.history,
-                                policy=self.llm_retry_policy,
-                                op_name="searchagent.parse_and_call_llm",
-                                log=logger,
+                            self.no_more_tool_calls = True
+
+
+                        # 3. Decide stop
+                        if await self.stop():
+                            # add this turn msg and stop
+                            if new_call_result:
+                                self.history.append(new_call_result)
+                                if new_tool_results:
+                                    self.history.append(new_tool_results)
+                            logger.info(
+                                "Agent loop now stopped",
                             )
-                    except (BadRequestError, InternalServerError) as exc:
-                        if self._is_context_length_error(exc):
-                            logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
-                            raise LLMContextError from exc
-                        traceback.print_exc()
-                        raise
-
-                    if self.turn >= self.max_turn - 1 and new_call_result.tool_calls:
-                        self.turn_limit_exceeded = True
-
-                    if self.context_token_size >= self.max_tokens - self.max_tokens_prompt_margin:
-                        self.context_max_token_exceeded = True
-
-                    # call tools from llm result (if any)
-                    if new_call_result.tool_calls:
-                        results = await self.call_tools(new_call_result.tool_calls)
-                        for tc, r in zip(new_call_result.tool_calls, results):
-                            tc.result = r
-                        new_tool_results = tool([copy.copy(tc) for tc in new_call_result.tool_calls])
-                    else:
-                        self.no_more_tool_calls = True
+                            break
 
 
-                    # 3. Decide stop
-                    if await self.stop():
-                        # add this turn msg and stop
+                        # 4. A chance to wrap up before limit encontered
+                        if self.context_max_token_exceeded and not self.max_token_reminder_prompted and self.max_tokens_prompt:
+                            logger.warning(
+                                "Context limit apporaching, total=%d, limit=%d, margin=%d triggered, Requesting model to wrap up",
+                                self.context_token_size,
+                                self.max_tokens,
+                                self.max_tokens_prompt_margin,
+                            )
+                            self.history.append(new_call_result)
+                            new_tool_results.tool_responses = new_tool_results.tool_responses[:1]
+                            new_tool_results.tool_responses[0].result = self.max_tokens_prompt
+                            self.history.append(new_tool_results)
+                            self.max_token_reminder_prompted = True
+                            continue
+                        if self.turn_limit_exceeded and not self.max_turn_reminder_prompted and self.max_turn_prompt:
+                            logger.warning(
+                                "Turn limit apporaching, turn=%d, limit=%d, Requesting model to wrap up",
+                                self.turn,
+                                self.max_turn,
+                            )
+                            self.history.append(new_call_result)
+                            # self.history.append(user(self.max_turn_prompt))
+                            new_tool_results.tool_responses = new_tool_results.tool_responses[:1]
+                            new_tool_results.tool_responses[0].result = self.max_turn_prompt
+                            self.history.append(new_tool_results)
+                            self.max_turn_reminder_prompted = True
+                            continue
+
+
+                        # 5. Append msg of this turn. Turn number would not be increased before here
                         if new_call_result:
                             self.history.append(new_call_result)
-                            if new_tool_results:
-                                self.history.append(new_tool_results)
-                        logger.info(
-                            "Agent loop now stopped",
-                        )
-                        break
+                            assert new_tool_results # tool results should be set when reached here
+                            self.history.append(new_tool_results)
 
-
-                    # 4. A chance to wrap up before limit encontered
-                    if self.context_max_token_exceeded and not self.max_token_reminder_prompted and self.max_tokens_prompt:
-                        logger.warning(
-                            "Context limit apporaching, total=%d, limit=%d, margin=%d triggered, Requesting model to wrap up",
-                            self.context_token_size,
-                            self.max_tokens,
-                            self.max_tokens_prompt_margin,
-                        )
-                        self.history.append(new_call_result)
-                        new_tool_results.tool_responses = new_tool_results.tool_responses[:1]
-                        new_tool_results.tool_responses[0].result = self.max_tokens_prompt
-                        self.history.append(new_tool_results)
-                        self.max_token_reminder_prompted = True
-                        continue
-                    if self.turn_limit_exceeded and not self.max_turn_reminder_prompted and self.max_turn_prompt:
-                        logger.warning(
-                            "Turn limit apporaching, turn=%d, limit=%d, Requesting model to wrap up",
-                            self.turn,
-                            self.max_turn,
-                        )
-                        self.history.append(new_call_result)
-                        # self.history.append(user(self.max_turn_prompt))
-                        new_tool_results.tool_responses = new_tool_results.tool_responses[:1]
-                        new_tool_results.tool_responses[0].result = self.max_turn_prompt
-                        self.history.append(new_tool_results)
-                        self.max_turn_reminder_prompted = True
-                        continue
-
-
-                    # 5. Append msg of this turn. Turn number would not be increased before here
-                    if new_call_result:
-                        self.history.append(new_call_result)
-                        assert new_tool_results # tool results should be set when reached here
-                        self.history.append(new_tool_results)
-                
             logger.info("Reasoning completed agent=SearchAgent turns=%s messages=%s", self.turn, len(self.history))
             return self.history
         finally:

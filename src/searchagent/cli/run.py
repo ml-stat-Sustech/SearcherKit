@@ -7,7 +7,7 @@ from typing import Sequence
 from omegaconf import OmegaConf
 
 from searchagent.cli.config import compose_config
-from searchagent.log import setup_logger
+from searchagent.common.log import setup_logger
 from searchagent.runtime.runner import AgentRunner, RunConfig
 
 

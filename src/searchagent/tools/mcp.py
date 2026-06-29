@@ -16,7 +16,7 @@ from fastmcp import Client
 from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 
-from searchagent.log import get_logger, get_trace_id, setup_logger
+from searchagent.common.log import get_logger, setup_logger
 from searchagent.errors import FatalError, RecoverableError
 from searchagent.tools.base import BaseTool, ToolConfig
 
@@ -63,7 +63,6 @@ class BaseMCPTool(BaseTool):
         auth_header: str | None = None,
         transport: Literal["sse", "streamable-http"] = "streamable-http",
         max_concurrency: int | None = None,
-        enable_trace_logging: bool = True,
         raise_on_fatal: bool = True,
         raise_argument_validation_error: bool = False,
     ) -> None: ...
@@ -79,7 +78,6 @@ class BaseMCPTool(BaseTool):
         auth_header: str | None = None,
         transport: Literal["sse", "streamable-http"] = "streamable-http",
         max_concurrency: int | None = None,
-        enable_trace_logging: bool = True,
         raise_on_fatal: bool = True,
         raise_argument_validation_error: bool = False,
         config: ToolConfig | None = None,
@@ -97,7 +95,6 @@ class BaseMCPTool(BaseTool):
             self.auth_header = config.auth_header
             self.transport = config.transport  # type: ignore[assignment]
             self.max_concurrency = config.max_concurrency
-            self.enable_trace_logging = config.enable_trace_logging
             self.raise_on_fatal = config.raise_on_fatal
         else:
             if not name:
@@ -117,7 +114,6 @@ class BaseMCPTool(BaseTool):
             self.auth_header = auth_header
             self.transport = transport
             self.max_concurrency = max_concurrency
-            self.enable_trace_logging = enable_trace_logging
             self.raise_on_fatal = raise_on_fatal
 
         if self.max_concurrency is not None and self.max_concurrency <= 0:
@@ -180,12 +176,11 @@ class BaseMCPTool(BaseTool):
                         f"Failed to connect MCP endpoint {self.endpoint}: {exc}"
                     ) from exc
                 self._connected = True
-                self._trace_log(
-                    logging.INFO,
-                    "Reused pooled MCP client",
-                    endpoint=self.endpoint,
-                    transport=self.transport,
-                    ref_count=entry.ref_count,
+                logger.info(
+                    "Reused pooled MCP client endpoint=%s transport=%s ref_count=%s",
+                    self.endpoint,
+                    self.transport,
+                    entry.ref_count,
                 )
                 return
 
@@ -209,11 +204,10 @@ class BaseMCPTool(BaseTool):
 
             
             self._connected = True
-            self._trace_log(
-                logging.INFO,
-                "Connected to MCP endpoint",
-                endpoint=self.endpoint,
-                transport=self.transport,
+            logger.info(
+                "Connected to MCP endpoint endpoint=%s transport=%s",
+                self.endpoint,
+                self.transport,
             )
 
     def _build_transport(self, *, headers: dict[str, str] | None = None) -> Any:
@@ -279,11 +273,10 @@ class BaseMCPTool(BaseTool):
             raise FatalError("MCP client is not initialized")
 
         async with self._semaphore:
-            self._trace_log(
-                logging.INFO,
-                "Calling MCP tool",
-                tool_name=self.mcp_tool_name,
-                args_preview=self._preview(arguments),
+            logger.info(
+                "Calling MCP tool tool_name=%s args_preview=%s",
+                self.mcp_tool_name,
+                self._preview(arguments),
             )
             try:
                 return await self._client.call_tool(self.mcp_tool_name, arguments, timeout=1800)
@@ -335,12 +328,6 @@ class BaseMCPTool(BaseTool):
             return text
         return text[:limit] + "..."
 
-    def _trace_log(self, level: int, message: str, **fields: Any) -> None:
-        if level == logging.DEBUG and not self.enable_trace_logging:
-            return
-        payload = {"trace_id": get_trace_id() or "-", **fields}
-        logger.log(level, "%s | %s", message, payload)
-
 
 class MCPTool(BaseMCPTool):
     """Generic MCP tool that forwards keyword arguments to a server tool."""
@@ -388,11 +375,9 @@ class MCPTool(BaseMCPTool):
 
     async def _run(self, **kwargs: Any) -> str:
         text = self._extract_text(await self._run_mcp_tool(kwargs))
-        trace = get_trace_id() or self._new_trace_id()
         return await self._apply_response_length_guard(
             response_text=text,
             arguments=kwargs,
-            trace_id=trace,
         )
 
     @staticmethod
@@ -421,17 +406,14 @@ class MCPTool(BaseMCPTool):
         *,
         response_text: str,
         arguments: dict[str, Any],
-        trace_id: Optional[str] = None,
     ) -> str:
         if not self.response_char_limit or len(response_text) <= self.response_char_limit:
             return response_text
 
-        self._trace_log(
-            logging.WARNING,
-            "Response exceeded configured limit; truncating",
-            trace_id=trace_id,
-            length=len(response_text),
-            limit=self.response_char_limit,
+        logger.warning(
+            "Response exceeded configured limit; truncating length=%d limit=%d",
+            len(response_text),
+            self.response_char_limit,
         )
         clipped = response_text[: self.response_char_limit]
         return f"{clipped}\n\n[Truncated] Response exceeded configured content limit."

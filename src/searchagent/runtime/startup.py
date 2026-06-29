@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 from omegaconf import DictConfig
 
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 
 logger = get_logger(__name__)
 

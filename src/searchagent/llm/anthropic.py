@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable, Iterable, overload
 
 from searchagent.common.retry import RetryPolicy, wrap_async
 from searchagent.llm.base import Client, ClientConfig
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 
 logger = get_logger(__name__)
 

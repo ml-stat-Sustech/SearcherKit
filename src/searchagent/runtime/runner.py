@@ -10,7 +10,7 @@ import time
 from typing import Any, Iterable, Sequence, TYPE_CHECKING
 
 from searchagent.agent.search_agent import SearchAgent, SearchAgentConfig
-from searchagent.log import configure_run_logging, get_logger, log_context, update_trace_metadata
+from searchagent.common.log import configure_run_logging, get_logger, log_context
 from searchagent.common.dataloader import DataConfig, DataItem, GenericDataLoader
 from searchagent.errors import SearchAgentError
 from searchagent.runtime import startup
@@ -96,7 +96,7 @@ class AgentRunner:
         query: str,
         extra: dict[str, Any] | None = None,
         retry_policy: RetryPolicy | None = None,
-    ) -> asyncio.Task[list[ChatMessage]]:
+    ) -> asyncio.Task[tuple[list[ChatMessage], dict[str, Any]]]:
         logger.info("Received request query=%r has_extra=%s", _preview_query(query), bool(extra))
 
         async def _run():
@@ -110,7 +110,7 @@ class AgentRunner:
                     _preview_query(query),
                     len(history),
                 )
-                return history
+                return history, agent.timing_report
 
         if retry_policy:
             return asyncio.create_task(
@@ -129,7 +129,7 @@ class AgentRunner:
         *,
         extras: Iterable[dict[str, Any] | None] | None = None,
         retry_policy: RetryPolicy | None = None,
-    ) -> list[asyncio.Task[list[ChatMessage]]]:
+    ) -> list[asyncio.Task[tuple[list[ChatMessage], dict[str, Any]]]]:
         query_list = list(queries)
         if extras is None:
             extra_list: Sequence[dict[str, Any] | None] = [None] * len(query_list)
@@ -264,12 +264,14 @@ class AgentRunner:
         resolved_retry_policy = resolved_values["retry_policy"]
         resolved_overwrite_output = bool(resolved_values["overwrite_output"])
         output_dir = Path(resolved_values["output_path"])
+        history_dir = output_dir / "history"
         checkpoint_cfg = resolved_values["checkpoint"]
         logging_cfg = resolved_values["logging"]
 
         # Begin agent run
 
         output_dir.mkdir(parents=True, exist_ok=True)
+        history_dir.mkdir(parents=True, exist_ok=True)
         configure_run_logging(output_dir=output_dir, cfg=logging_cfg)
         run_id = _make_run_id()
         checkpoint_store = CheckpointStore.from_output_dir(output_dir, config=checkpoint_cfg)
@@ -292,7 +294,7 @@ class AgentRunner:
                 answer: Any,
                 record_path: Path,
                 trace_id: str,
-            ) -> dict[str, Any]:
+            ) -> tuple[dict[str, Any], dict[str, Any]]:
                 sample_id = f"{index:06d}"
                 started_at = datetime.now().isoformat(timespec="milliseconds")
                 started_monotonic = time.monotonic()
@@ -310,24 +312,6 @@ class AgentRunner:
                             trace_id=trace_id,
                             started_at=started_at,
                         )
-                    update_trace_metadata(
-                        run_id=run_id,
-                        sample_id=sample_id,
-                        run={"run_id": run_id},
-                        sample={
-                            "index": index,
-                            "sample_id": sample_id,
-                            "trace_id": trace_id,
-                            "query": prompt,
-                            "record_path": str(record_path),
-                            "started_at": started_at,
-                        },
-                        execution={
-                            "status": "running",
-                            "success": None,
-                            "error": None,
-                        },
-                    )
                     logger.info(
                         "Starting sample execution index=%s output=%s query=%r",
                         index,
@@ -335,12 +319,13 @@ class AgentRunner:
                         _preview_query(prompt),
                     )
                     try:
-                        history = await self.submit(
+                        history, timing = await self.submit(
                             prompt,
                             extra=extra,
                             retry_policy=resolved_retry_policy,
                         )
                         stats = _history_stats(history)
+                        timing_dict = timing
                         tool_summary = _tool_summary(history)
                         ended_at = datetime.now().isoformat(timespec="milliseconds")
                         elapsed = round(time.monotonic() - started_monotonic, 3)
@@ -352,6 +337,7 @@ class AgentRunner:
                             "answer": answer,
                             "history": [_serialize_message(message) for message in history],
                             "stats": stats,
+                            "timing": timing_dict,
                         }
                         record_path.write_text(
                             json.dumps(payload, ensure_ascii=False, default=str, indent=2),
@@ -365,19 +351,6 @@ class AgentRunner:
                                 ended_at=ended_at,
                                 elapsed=elapsed,
                             )
-                        update_trace_metadata(
-                            execution={
-                                "status": "completed",
-                                "success": True,
-                                "error": None,
-                                "ended_at": ended_at,
-                                "elapsed": elapsed,
-                            },
-                            stats={
-                                **stats,
-                                "tool_summary": tool_summary,
-                            },
-                        )
                     except (SearchAgentError, OSError, TimeoutError, ValueError, RuntimeError) as exc:
                         ended_at = datetime.now().isoformat(timespec="milliseconds")
                         elapsed = round(time.monotonic() - started_monotonic, 3)
@@ -395,15 +368,6 @@ class AgentRunner:
                                     sample_id,
                                     checkpoint_exc,
                                 )
-                        update_trace_metadata(
-                            execution={
-                                "status": "failed",
-                                "success": False,
-                                "error": str(exc),
-                                "ended_at": ended_at,
-                                "elapsed": elapsed,
-                            },
-                        )
                         logger.exception(
                             "Sample execution failed index=%s query=%r",
                             index,
@@ -417,7 +381,7 @@ class AgentRunner:
                         stats["turns"],
                         stats["tool_calls"],
                     )
-                    return stats
+                    return stats, timing_dict
 
             start_time = time.time()
 
@@ -425,7 +389,7 @@ class AgentRunner:
             dataloader_exhausted = False
             max_in_flight = self.max_concurrency or 32
             scheduled_count = 0
-            in_flight: dict[asyncio.Task[dict[str, Any]], BatchItem] = {}
+            in_flight: dict[asyncio.Task[tuple[dict[str, Any], dict[str, Any]]], BatchItem] = {}
             failure_types = (
                 SearchAgentError,
                 OSError,
@@ -447,7 +411,7 @@ class AgentRunner:
 
                     summary.total += 1
                     sample_id = f"{index:06d}"
-                    record_path = output_dir / f"{index:06d}.json"
+                    record_path = history_dir / f"{index:06d}.json"
                     if (
                         checkpoint_store is not None
                         and not resolved_overwrite_output
@@ -520,7 +484,7 @@ class AgentRunner:
                 for task in done:
                     item = in_flight.pop(task)
                     try:
-                        result = task.result()
+                        stats, timing_dict = task.result()
                     except failure_types as exc:
                         summary.failed += 1
                         logger.error(
@@ -531,7 +495,7 @@ class AgentRunner:
                             exc,
                         )
                         continue
-                    summary.add_completed(result)
+                    summary.add_completed(stats, timing_dict)
 
                 while len(in_flight) < max_in_flight and await _schedule_next():
                     pass
@@ -546,7 +510,7 @@ class AgentRunner:
                 encoding="utf-8",
             )
             logger.info(
-                "Completed agent batch run total=%s in %.3f sec. completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f",
+                "Completed agent batch run total=%s in %.3f sec. completed=%s failed=%s skipped=%s avg_turns=%.3f avg_tool_calls=%.3f avg_llm_time=%.3fs avg_tool_time=%.3fs avg_task_time=%.3fs",
                 summary_payload["total"],
                 summary_payload["time_elapsed"],
                 summary_payload["completed"],
@@ -554,5 +518,8 @@ class AgentRunner:
                 summary_payload["skipped"],
                 summary_payload["avg_turns"],
                 summary_payload["avg_tool_calls"],
+                summary_payload["avg_llm_time"],
+                summary_payload["avg_tool_time"],
+                summary_payload["avg_task_time"],
             )
             return summary_payload

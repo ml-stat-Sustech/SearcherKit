@@ -15,7 +15,7 @@ from areal.utils import stats_tracker
 
 from searchagent.agent.search_agent import LLMContextError, LLMOutputError
 from searchagent.llm.parsers import ParsingError
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 from searchagent.training.agent import (
     RepeatedToolCallError,
     SearchAgentTraining,

@@ -12,7 +12,7 @@ from searchagent.common.messages import ChatMessage, ToolCall, assistant, system
 from searchagent.common.messages import Tool as ToolType
 from searchagent.common.utils import get_first_or_default, get_or_default
 from searchagent.llm.parsers.base import Parser, ParserConfig, ParsingError
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 from searchagent.tools import to_openai_tool
 
 logger = get_logger(__name__)

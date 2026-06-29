@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable, ParamSpec, TypeVar, overload
 
 import backoff
 
-from searchagent.log import get_logger
+from searchagent.common.log import get_logger
 from searchagent.common.utils import get_or_default
 from searchagent.common.config import import_from_path
 from searchagent.errors import RecoverableError
