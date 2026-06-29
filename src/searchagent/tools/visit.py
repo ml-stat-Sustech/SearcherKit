@@ -5,7 +5,8 @@ import json
 
 from searchagent.errors import RecoverableError, SourceError
 from searchagent.sources import DataSource, Document, build_source
-from searchagent.tools.base import BaseTool, ToolConfig
+from searchagent.tools.base import BaseTool, SummarizerConfig, ToolConfig
+from searchagent.tools.summarizer import Summarizer
 
 VISIT_DESCRIPTION = """
 Get the content of a document.
@@ -31,8 +32,8 @@ def _format_document(document: Document) -> str:
     text = ""
     text += f"[{document.title}]({document.url})\n"
     text += f"{document.text}\n"
-    if document.metadata:
-        text += f"Metadata: {json.dumps(document.metadata, ensure_ascii=False, indent=None)}\n"
+    # if document.metadata:
+    #     text += f"Metadata: {json.dumps(document.metadata, ensure_ascii=False, indent=None)}\n"
 
     return text
 
@@ -51,6 +52,8 @@ class VisitTool(BaseTool):
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         response_char_limit: int | None = None,
+        summarizer: Summarizer | None = None,
+        summary_goal_key = "goal",
     ) -> None: ...
 
     def __init__(
@@ -61,10 +64,12 @@ class VisitTool(BaseTool):
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         response_char_limit: int | None = None,
+        summarizer: Summarizer | None = None,
+        summary_goal_key = "goal",
         config: ToolConfig | None = None,
     ) -> None:
         if config:
-            if not getattr(config, "source", None):
+            if config.source is None:
                 raise ValueError("VisitTool requires a source to be created from a tool config")
             self.__init__(
                 build_source(config.source),
@@ -72,6 +77,8 @@ class VisitTool(BaseTool):
                 description=config.description,
                 inputSchema=inputSchema,
                 response_char_limit=config.response_char_limit,
+                summarizer=Summarizer(config = config.summarizer) if config.summarizer else None,
+                summary_goal_key=summary_goal_key
             )
             return
         if source is None:
@@ -80,6 +87,8 @@ class VisitTool(BaseTool):
             name=name,
             description=description or VISIT_DESCRIPTION,
             inputSchema=inputSchema or VISIT_INPUT_SCHEMA,
+            summarizer=summarizer,
+            summary_goal_key=summary_goal_key
         )
         self.source = source
         self.response_char_limit = (

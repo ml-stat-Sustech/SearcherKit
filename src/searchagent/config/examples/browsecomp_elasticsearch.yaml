@@ -53,15 +53,6 @@ agent:
       snippet_chars: 512
       metadata_fields:
         - links
-      search_summary_enabled: false
-      fetch_summary_enabled: false
-      summary_model: null
-      summary_api_key: null
-      summary_base_url: null
-      summary_max_chars: 400000
-      summary_timeout: 3600
-      summary_default_kwargs: null
-      summary_retry_config: null
   tools:
     - type: search
       name: search

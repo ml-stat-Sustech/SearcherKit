@@ -45,7 +45,6 @@ agent:
       search_fields: ["title", "text"]
       es_max_concurrency: 1024
       embedding_max_concurrency: 2048
-      summary_max_concurrency: 1024
       title_field: title
       text_field: text
       url_field: url
@@ -58,18 +57,7 @@ agent:
       embedding_model: /home/jovyan/Qwen3-Embedding-8B
       embedding_api_key: api_key
       embedding_base_url: http://10.32.64.110:8004
-      search_summary_enabled: true
-      summary_model: /home/jovyan/Qwen3-8B-AWQ
-      summary_api_key: api_key
-      summary_max_chars: 40000
-      summary_base_url: http://127.0.0.1:6010/v1
-      summary_default_kwargs:
-        max_tokens: 1024
-        extra_body:
-          chat_template_kwargs:
-            enable_thinking: false
   tools:
-    - type: search
     - type: search
       name: search
       description: Search for more information.
@@ -82,8 +70,20 @@ agent:
           - query
         additionalProperties: false
       source: elasticsearch
-      response_char_limit: null
       raise_argument_validation_error: false
+      summary_goal_key: query
+      summarizer:
+        model: /home/jovyan/Qwen3-8B-AWQ
+        api_key: api_key
+        max_chars: 40000
+        base_url: http://127.0.0.1:6010/v1
+        max_concurrency: 1024
+        default_kwargs:
+          max_tokens: 1024
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
+        retry_config: null
   system_prompt: |
    You are a helpful AI assistant that can search for information to answer questions accurately.
     

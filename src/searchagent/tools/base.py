@@ -8,6 +8,8 @@ from typing import Any, overload
 
 from jsonschema import validate, ValidationError
 
+from searchagent.common.retry import RetryConfig
+from searchagent.tools.summarizer import Summarizer
 from searchagent.log import get_logger
 
 logger = get_logger(__name__)
@@ -15,6 +17,18 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Unified Tool configuration
 # ---------------------------------------------------------------------------
+
+@dataclass
+class SummarizerConfig:
+    model: str = ""
+    api_key: str | None = None
+    base_url: str | None = None
+    max_chars: int = 400000
+    timeout: float = 3600
+    max_concurrency: int | None = None
+    default_kwargs: dict[str, Any] | None = None
+    retry_config: RetryConfig | None = None
+
 
 @dataclass
 class ToolConfig:
@@ -43,6 +57,10 @@ class ToolConfig:
     # Source-backed tools
     source: str | None = None
 
+    # Summary tools
+    summarizer: SummarizerConfig | None = None
+    summary_goal_key: str = "query"
+
     # Factory extension
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -68,6 +86,9 @@ class BaseTool(abc.ABC):
         inputSchema: Mapping[str, Any] | None = None,
         *,
         raise_argument_validation_error: bool = False,
+        summarizer: Summarizer | None = None,
+        summary_goal_key = "query",
+        **kwargs: Any,
     ) -> None: ...
 
     def __init__(
@@ -77,9 +98,12 @@ class BaseTool(abc.ABC):
         inputSchema: Mapping[str, Any] | None = None,
         *,
         raise_argument_validation_error: bool = False,
+        summarizer: Summarizer | None = None,
         config: ToolConfig | None = None,
+        summary_goal_key = "query",
         **kwargs: Any,
     ) -> None:
+        self.summarizer = None
         if config:
             if not config.name:
                 raise ValueError("tool config requires a model-visible name")
@@ -87,6 +111,9 @@ class BaseTool(abc.ABC):
             self.description = config.description
             self.inputSchema = config.inputSchema
             self.raise_argument_validation_error = config.raise_argument_validation_error
+            if config.summarizer is not None:
+                self._configure_summarizer(config=config.summarizer)
+                self.summary_goal_key = config.summary_goal_key
         else:
             if not name:
                 raise ValueError("tool requires a model-visible name")
@@ -94,6 +121,47 @@ class BaseTool(abc.ABC):
             self.description = description
             self.inputSchema = inputSchema
             self.raise_argument_validation_error = raise_argument_validation_error
+            if summarizer is not None:
+                self._configure_summarizer(summarizer=summarizer)
+                self.summary_goal_key = summary_goal_key
+
+    def _configure_summarizer(
+        self,
+        *,
+        config: SummarizerConfig | None = None,
+        summarizer: Summarizer | None = None,
+    ) -> None:
+        if summarizer is not None:
+            self.summarizer = summarizer
+            return
+        if config is not None:
+            self.summarizer = Summarizer(config=config)
+            return
+        raise ValueError("Provide either a summarizer or a summarizer config to configure the tool's summarizer")
+
+    @property
+    def summary_enabled(self) -> bool:
+        return self.summarizer is not None
+
+    def format_summary(
+        self,
+        *,
+        goal: str,
+        evidence: str,
+        summary: str,
+    ) -> str:
+        heading = f"The useful information for query {goal} as follows:"
+        lines = [
+            heading,
+            "",
+            "Evidence in page:",
+            evidence or "No evidence extracted.",
+            "",
+            "Summary:",
+            summary or "No summary available.",
+            "",
+        ]
+        return "\n".join(lines).strip()
 
     async def init(self, *args: Any, **kwargs: Any) -> None:
         """Initialize tool resources."""
@@ -120,7 +188,12 @@ class BaseTool(abc.ABC):
                 f"Problem:{exc!r}\n\n"
                 f"Argument type should be:\n{json.dumps(self.inputSchema)}"
             )
-        return await self._run(**kwargs)
+        tool_result = await self._run(**kwargs)
+        if self.summarizer:
+            goal = kwargs.get(self.summary_goal_key, "")
+            evidence, summary = await self.summarizer.summarize(goal=goal, content=tool_result)
+            tool_result = self.format_summary(goal=goal, evidence=evidence, summary=summary)
+        return tool_result
 
     @abc.abstractmethod
     async def _run(self, **kwargs: Any) -> str:

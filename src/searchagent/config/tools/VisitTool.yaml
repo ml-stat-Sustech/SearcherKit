@@ -18,3 +18,5 @@ source: memory
 source_config: null
 response_char_limit: null
 raise_argument_validation_error: false
+summarizer: null
+summary_goal_key: goal

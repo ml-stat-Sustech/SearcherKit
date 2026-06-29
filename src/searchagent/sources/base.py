@@ -83,16 +83,6 @@ class SourceConfig:
     embedding_max_concurrency: int | None = None
     embedding_default_kwargs: dict[str, Any] | None = None
     embedding_retry_config: RetryConfig | None = None
-    search_summary_enabled: bool = False
-    fetch_summary_enabled: bool = False
-    summary_model: str | None = None
-    summary_api_key: str | None = None
-    summary_base_url: str | None = None
-    summary_max_chars: int = 400000
-    summary_timeout: float = 3600
-    summary_max_concurrency: int | None = None
-    summary_default_kwargs: dict[str, Any] | None = None
-    summary_retry_config: RetryConfig | None = None
 
     # -- Memory --------------------------------------------------------------
     documents: list[Document] | None = None

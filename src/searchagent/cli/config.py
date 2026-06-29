@@ -22,7 +22,7 @@ from searchagent.llm.base import (
 from searchagent.llm.parsers import ParserConfig, QwenParserConfig
 from searchagent.runtime.runner import RunConfig
 from searchagent.sources import SourceConfig
-from searchagent.tools.base import ToolConfig
+from searchagent.tools.base import SummarizerConfig, ToolConfig
 
 
 _CONFIG_STORE_REGISTERED = False
@@ -53,6 +53,7 @@ def register_config_store() -> None:
     cs.store(name="__transformers_config__", node=TransformersConfig)
     cs.store(name="__qwen_parser_config__", node=QwenParserConfig)
     cs.store(name="__tool_config__", node=ToolConfig())
+    cs.store(name="__summarizer_config__", node=SummarizerConfig())
     cs.store(name="__source_config__", node=SourceConfig())
     _CONFIG_STORE_REGISTERED = True
 

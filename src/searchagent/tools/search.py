@@ -9,6 +9,7 @@ from typing import Any, overload
 from searchagent.errors import RecoverableError, SourceError
 from searchagent.sources import DataSource, SearchResult, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
+from searchagent.tools.summarizer import Summarizer
 
 SEARCH_DESCRIPTION = """
 Search the configured data source.
@@ -18,7 +19,7 @@ SEARCH_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "query": {"type": "string"},
-        # "top_k": {"type": "integer", "minimum": 1},
+        "top_k": {"type": "integer", "minimum": 1},
     },
     "required": ["query"],
     "additionalProperties": False,
@@ -27,7 +28,7 @@ SEARCH_INPUT_SCHEMA: dict[str, Any] = {
 def _format_results(results: list[SearchResult]) -> str:
     text = ""
     for i, result in enumerate(results, start=1):
-        # text += f"{i}. [{result.document.title}]({result.document.url})\n"
+        text += f"{i}. [{result.document.title}]({result.document.url})\n"
         text += f"{result.snippet or result.document.text}\n"
         # text += f"Score: {result.score:.2f}\n"
         # if result.document.metadata:
@@ -57,6 +58,8 @@ class SearchTool(BaseTool):
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         response_char_limit: int | None = None,
+        summarizer: Summarizer | None = None,
+        summary_goal_key = "query",
     ) -> None: ...
 
     def __init__(
@@ -67,10 +70,12 @@ class SearchTool(BaseTool):
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         response_char_limit: int | None = None,
+        summarizer: Summarizer | None = None,
+        summary_goal_key = "query",
         config: ToolConfig | None = None,
     ) -> None:
         if config:
-            if not getattr(config, "source", None):
+            if config.source is None:
                 raise ValueError("SearchTool requires a source to be created from a tool config")
             self.__init__(
                 build_source(config.source),
@@ -78,6 +83,8 @@ class SearchTool(BaseTool):
                 description=config.description,
                 inputSchema=inputSchema,
                 response_char_limit=config.response_char_limit,
+                summarizer=Summarizer(config=config.summarizer) if config.summarizer else None,
+                summary_goal_key=config.summary_goal_key,
             )
             return
         if source is None:
@@ -86,6 +93,8 @@ class SearchTool(BaseTool):
             name=name,
             description=description or SEARCH_DESCRIPTION,
             inputSchema=inputSchema or SEARCH_INPUT_SCHEMA,
+            summarizer=summarizer,
+            summary_goal_key=summary_goal_key,
         )
         self.source = source
         self.response_char_limit = (
