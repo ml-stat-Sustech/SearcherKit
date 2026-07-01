@@ -36,6 +36,16 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=argparse.REMAINDER,
         help="Arguments forwarded to the selected plugin deploy command.",
     )
+    convert = subparsers.add_parser(
+        "convert",
+        add_help=False,
+        help="Run a plugin conversion command, such as SFT dataset conversion.",
+    )
+    convert.add_argument(
+        "convert_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments forwarded to the conversion command.",
+    )
     return parser
 
 
@@ -59,7 +69,20 @@ def _deploy(plugin: str, plugin_args: Sequence[str]) -> None:
     raise ValueError(f"unknown plugin: {plugin}")
 
 
+def _convert(convert_args: Sequence[str]) -> int:
+    from searchagent.plugins.conversion.main import main as convert_main
+
+    return convert_main(
+        _clean_plugin_args(convert_args),
+        prog="searchagent plugins convert",
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    if argv is not None:
+        argv = list(argv)
+        if argv and argv[0] == "convert":
+            return _convert(argv[1:])
     args = build_parser().parse_args(argv)
     if args.command == "list":
         _print_plugins()
@@ -67,4 +90,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "deploy":
         _deploy(args.plugin, args.plugin_args)
         return 0
+    if args.command == "convert":
+        return _convert(args.convert_args)
     raise ValueError(f"unknown plugins command: {args.command}")

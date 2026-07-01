@@ -1,0 +1,3 @@
+input_path: ${oc.env:SFT_CONVERSION_INPUT,/data/hf/hub/agent_tmp/agentic_sft/data/openseeker_red_search_visit_agentic.jsonl}
+output_path: ${oc.env:SFT_TRAIN_DATASET,outputs/sft/openseeker-qwen3-8b/ms_swift.jsonl}
+max_records: 0

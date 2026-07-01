@@ -1,0 +1,47 @@
+data:
+  train_path: ${oc.env:SFT_TRAIN_DATASET,outputs/sft/openseeker-qwen3-8b/ms_swift.jsonl}
+
+backend:
+  swift_bin: ${oc.env:SWIFT_BIN,/home/jovyan/miniconda3/envs/webagent-sft-swift40/bin/swift}
+  command: sft
+  model: ${oc.env:SFT_MODEL,/data/hf/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218}
+  template: qwen3
+  agent_template: hermes
+  loss_scale: hermes
+  output_dir: ${oc.env:SFT_OUTPUT_DIR,outputs/sft/openseeker-qwen3-8b}
+  tuner_type: null
+  train_type: full
+  torch_dtype: null
+  rope_scaling: ${oc.env:SFT_ROPE_SCALING,"{\"type\":\"yarn\",\"factor\":6.4}"}
+  max_model_len: 262144
+  max_length: 262144
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: null
+  gradient_accumulation_steps: 8
+  learning_rate: 1e-6
+  num_train_epochs: 1
+  save_steps: 100
+  eval_steps: null
+  deepspeed: zero3_offload
+  dataloader_num_workers: 16
+  gradient_checkpointing: true
+  dataset_num_proc: 16
+  load_from_cache_file: true
+  packing: false
+  sequence_parallel_size: 8
+  attn_impl: flash_attn
+  save_total_limit: 2
+  logging_steps: 1
+  report_to: ${oc.env:REPORT_TO,swanlab}
+  split_dataset_ratio: null
+  save_only_model: null
+  use_liger_kernel: null
+  env:
+    TOKENIZERS_PARALLELISM: "false"
+    PYTORCH_ALLOC_CONF: expandable_segments:True
+    CELOSS_PARALLEL_SIZE: "2048"
+    TORCH_EXTENSIONS_DIR: ${oc.env:TORCH_EXTENSIONS_DIR,/home/jovyan/code/searchagent/kjob/torch_extensions_swift40}
+  extra_args:
+    swanlab_project: ${oc.env:SFT_SWANLAB_PROJECT,searchagent-sft}
+    swanlab_exp_name: ${oc.env:SFT_SWANLAB_EXP_NAME,openseeker-qwen3-8b}
+    swanlab_mode: ${oc.env:SFT_SWANLAB_MODE,cloud}

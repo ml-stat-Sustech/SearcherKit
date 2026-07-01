@@ -79,7 +79,7 @@ workflow:
     sources:
       - name: elasticsearch
         type: elasticsearch
-        hosts: ["http://10.32.34.135:9200"]
+        hosts: ["http://10.32.33.135:9200"]
         index: wiki20251101_qwen3-embedding-8b
         search_fields: ["title", "text"]
         es_max_concurrency: 1024
@@ -165,7 +165,7 @@ eval_workflow:
     sources:
       - name: elasticsearch
         type: elasticsearch
-        hosts: ["http://10.32.34.135:9200"]
+        hosts: ["http://10.32.33.135:9200"]
         index: browsecomp_plus_qwen3-embedding-8b
         search_fields: ["title", "text"]
         es_max_concurrency: 1024
