@@ -5,6 +5,7 @@ description = "Pluggable search agent runtime for offline web sources and multip
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.9.0",
     "backoff>=2.2.1",
     "datasets>=4.8.4",
     "fastmcp>=3.0.0",

@@ -84,5 +84,15 @@ class SourceConfig:
     embedding_default_kwargs: dict[str, Any] | None = None
     embedding_retry_config: RetryConfig | None = None
 
+    # -- Web ----------------------------------------------------------------
+    serper_api_key: str | None = None
+    serper_endpoint: str = "https://google.serper.dev/search"
+    serper_timeout: float = 30
+    jina_api_key: str | None = None
+    jina_base_url: str = "https://r.jina.ai/"
+    jina_timeout: float = 60
+    web_max_concurrency: int | None = None
+    web_retry_config: RetryConfig | None = None
+
     # -- Memory --------------------------------------------------------------
     documents: list[Document] | None = None

@@ -54,6 +54,10 @@ def build_source(name: str | None = None, *, config: SourceConfig | None = None)
         from .memory import MemorySource
 
         return MemorySource(config=config)
+    if source_type == "web":
+        from .web import WebSource
+
+        return WebSource(config=config)
     if source_type == "custom":
         if not config.target:
             raise ValueError(
