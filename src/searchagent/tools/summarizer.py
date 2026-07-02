@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import nullcontext
 from collections.abc import Mapping
-from typing import Any, overload
+from typing import TYPE_CHECKING, Any, overload
 
 import json_repair
 from openai import AsyncOpenAI, APIError, APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
@@ -13,7 +13,9 @@ from openai import AsyncOpenAI, APIError, APIConnectionError, APITimeoutError, O
 from searchagent.common.retry import RetryConfig, RetryPolicy, retry_async
 from searchagent.errors import RecoverableError
 from searchagent.sources.base import Document
-from searchagent.tools.base import SummarizerConfig
+
+if TYPE_CHECKING:
+    from searchagent.tools.base import SummarizerConfig
 
 SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
 
@@ -64,7 +66,7 @@ class Summarizer:
     def __init__(
         self,
         *,
-        config: SummarizerConfig,
+        config: "SummarizerConfig",
     ) -> None: ...
 
     @overload
@@ -84,7 +86,7 @@ class Summarizer:
     def __init__(
         self,
         *,
-        config: SummarizerConfig | None = None,
+        config: "SummarizerConfig | None" = None,
         model: str = "",
         api_key: str | None = None,
         base_url: str | None = None,
