@@ -75,10 +75,12 @@ class SearchTool(BaseTool):
         config: ToolConfig | None = None,
     ) -> None:
         if config:
-            if config.source is None:
+            if not config.source:
                 raise ValueError("SearchTool requires a source to be created from a tool config")
+            if len(config.source) != 1:
+                raise ValueError("SearchTool requires exactly one source")
             self.__init__(
-                build_source(config.source),
+                build_source(config.source[0]),
                 name = config.name,
                 description=config.description,
                 inputSchema=inputSchema,

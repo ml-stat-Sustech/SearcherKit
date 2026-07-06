@@ -48,11 +48,13 @@ agent:
   tools:
     - type: search
       name: search
-      source: bcp
+      source:
+        - bcp
       response_char_limit: null
     - type: visit
       name: visit
-      source: bcp
+      source:
+        - bcp
       response_char_limit: null
   system_prompt: |
     You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up until you find the corresponding information.

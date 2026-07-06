@@ -8,6 +8,28 @@
   paths.
 - After changing config, CLI, recipes, or plugin entry points, run at least a
   compose/help/import check. Do not stop at editing files.
+- When running project commands, prefer an already existing/active virtual
+  environment. Use `uv run` only when no usable environment can be found.
+- For network-related commands or tests, use `uv run` even when a virtual
+  environment exists. This includes real network calls, localhost services,
+  proxies, and HTTP mocking/interception tools such as `respx` or mock
+  transports.
+
+## Testing Rules
+- New tests should cover three concerns when they apply: config initialization,
+  functional behavior, and retry behavior.
+- Config initialization means the same test flow should exercise construction
+  through normal non-config arguments and through the config/factory path. For
+  example, test the object once with direct constructor parameters and once with
+  `config=...` or the module factory that consumes that config.
+- Functional tests are the normal behavior checks for the object under test:
+  inputs, outputs, request payloads, parsed responses, state changes, and error
+  surfaces that are part of the object contract.
+- Retry tests are additional functional tests for objects that can encounter
+  recoverable errors such as timeouts, transient provider errors, or temporary
+  source failures. When such errors exist, include both scenarios: the first
+  `n-1` attempts fail and the `n`th attempt succeeds, and all `n` attempts fail
+  and the final error is surfaced.
 
 ## Project Overview
 SearchAgent is a pluggable search-agent runtime for retrieval-augmented tasks,

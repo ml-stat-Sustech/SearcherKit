@@ -54,7 +54,7 @@ class ToolConfig:
     response_char_limit: int | None = None
 
     # Source-backed tools
-    source: str | None = None
+    source: list[str] = field(default_factory=list)
 
     # Summary tools
     summarizer: SummarizerConfig | None = None

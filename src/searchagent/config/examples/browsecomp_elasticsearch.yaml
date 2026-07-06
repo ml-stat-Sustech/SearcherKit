@@ -5,7 +5,7 @@
 # python -m searchagent plugins deploy browsecomp-plus --dataset_path Tevatron/browsecomp-plus-corpus --es_host http://127.0.0.1:9200 --index_name browsecomp_hybrid
 #
 # Then run from the repository root:
-# python -m searchagent run --config-name examples/browsecomp_elasticsearch
+# python -m searchagent run --config-path src/searchagent/config --config-name examples/browsecomp_elasticsearch
 
 defaults:
   - /agent@agent: SearchAgent
@@ -56,11 +56,13 @@ agent:
   tools:
     - type: search
       name: search
-      source: bcp
+      source:
+        - bcp
       response_char_limit: null
     - type: visit
       name: visit
-      source: bcp
+      source:
+        - bcp
       response_char_limit: null
   system_prompt: |
     Solve the user's question by using search for candidate sources and visit for full documents.

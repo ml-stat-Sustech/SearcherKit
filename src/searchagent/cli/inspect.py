@@ -115,7 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
         prog="searchagent inspect",
         description="Recursively validate config fields against structured types.",
     )
-    parser.add_argument("--config-path", default=None)
+    parser.add_argument(
+        "--config-path",
+        default=None,
+        help="Directory containing the Hydra config. Defaults to the packaged searchagent config directory.",
+    )
     parser.add_argument("--config-name", default="config")
     parser.add_argument(
         "overrides",

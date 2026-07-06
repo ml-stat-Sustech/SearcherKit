@@ -2,7 +2,7 @@
 # Native source-backed tool example using an in-memory corpus.
 #
 # Run from the repository root:
-# python -m searchagent run --config-name examples/memory_native
+# python -m searchagent run --config-path src/searchagent/config --config-name examples/memory_native
 
 defaults:
   - /agent@agent: SearchAgent
@@ -48,11 +48,13 @@ agent:
   tools:
     - type: search
       name: search
-      source: memory
+      source:
+        - memory
       response_char_limit: null
     - type: visit
       name: visit
-      source: memory
+      source:
+        - memory
       response_char_limit: null
   system_prompt: |
     Use search to find relevant documents and visit to read a selected document.

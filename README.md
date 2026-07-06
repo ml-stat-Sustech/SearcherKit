@@ -20,10 +20,8 @@ uv sync --extra vllm
 uv sync --extra indexing
 ```
 
-After installing the package or activating the environment, use the short
-`searchagent ...` command through the console script. If the environment is not
-activated, prefix commands with `uv run`, for example
-`uv run searchagent --help`. The module form works too:
+After installing the package, use the short `searchagent ...` command through
+the console script. The module form works too:
 
 ```bash
 python -m searchagent --help
@@ -132,7 +130,7 @@ searchagent inspect --config-path recipe/webexplorer --config-name webexplorer a
 Run the packaged default config:
 
 ```bash
-searchagent run --config-name config
+searchagent run
 ```
 
 This default config uses the in-memory example source under
@@ -142,7 +140,7 @@ Edit `src/searchagent/config/config.yaml` or pass Hydra-style overrides to point
 the run at your own model endpoint, data file, or output directory:
 
 ```bash
-searchagent run --config-name config \
+searchagent run \
   agent.llm_client.model=Qwen3-8B \
   agent.llm_client.openai.base_url=http://127.0.0.1:8001/v1 \
   agent.llm_client.openai.api_key=EMPTY \
@@ -216,10 +214,12 @@ agent:
   tools:
     - type: search
       name: search
-      source: memory
+      source:
+        - memory
     - type: visit
       name: visit
-      source: memory
+      source:
+        - memory
     - type: mcp
       name: web_search
       mcp_tool_name: search
@@ -244,10 +244,12 @@ agent:
   tools:
     - type: search
       name: search
-      source: bcp
+      source:
+        - bcp
     - type: visit
       name: visit
-      source: bcp
+      source:
+        - bcp
 ```
 
 See `docs/architecture.md` for the intended layering.

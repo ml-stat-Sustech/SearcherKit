@@ -108,7 +108,8 @@ workflow:
           required:
             - query
           additionalProperties: false
-        source: elasticsearch
+        source:
+          - elasticsearch
         raise_argument_validation_error: false
         summarizer:
           model: /home/jovyan/Qwen3-8B
@@ -194,7 +195,8 @@ eval_workflow:
           required:
             - query
           additionalProperties: false
-        source: elasticsearch
+        source:
+          - elasticsearch
         raise_argument_validation_error: false
         summarizer:
           model: /home/jovyan/Qwen3-8B

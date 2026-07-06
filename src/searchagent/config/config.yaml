@@ -34,7 +34,7 @@ agent:
       drop_thinking: true
 
   # Sources define how SearchAgent connects to searchable data backends.
-  # Native tools reference a named source through `source: <name>`.
+  # Native tools reference named sources through `source: [<name>]`.
   sources:
     - type: memory
       name: memory
@@ -63,7 +63,8 @@ agent:
         required:
           - query
         additionalProperties: false
-      source: memory
+      source:
+        - memory
       response_char_limit: null
     - type: visit
       name: visit
@@ -78,7 +79,8 @@ agent:
         required:
           - document_id
         additionalProperties: false
-      source: memory
+      source:
+        - memory
       response_char_limit: null
 
   system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."

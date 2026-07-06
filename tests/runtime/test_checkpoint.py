@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from searchagent.runtime.checkpoint import (
+    CHECKPOINT_VERSION,
+    CheckpointConfig,
+    CheckpointCorruptionError,
+    CheckpointStore,
+)
+
+
+def test_from_output_dir_respects_config(tmp_path) -> None:
+    disabled_store = CheckpointStore.from_output_dir(
+        tmp_path,
+        config=CheckpointConfig(enabled=False),
+    )
+    assert disabled_store is None
+
+    configured_store = CheckpointStore.from_output_dir(
+        tmp_path,
+        config={
+            "dir": str(tmp_path / "custom-checkpoints"),
+            "filename": "state.json",
+        },
+    )
+
+    assert configured_store is not None
+    assert configured_store.path == tmp_path / "custom-checkpoints" / "state.json"
+
+
+def test_checkpoint_store_records_completed_sample(tmp_path) -> None:
+    async def run_case() -> None:
+        record_path = tmp_path / "history" / "000000.json"
+        record_path.parent.mkdir()
+        record_path.write_text("{}", encoding="utf-8")
+        store = CheckpointStore.from_output_dir(tmp_path)
+
+        assert store is not None
+        await store.start_run(run_id="run-1", output_dir=tmp_path)
+        await store.mark_pending(
+            sample_id="000000",
+            index=0,
+            trace_id="trace-1",
+            record_path=record_path,
+            prompt="query",
+        )
+        await store.mark_started(
+            sample_id="000000",
+            run_id="run-1",
+            trace_id="trace-1",
+            started_at="2026-04-25T00:00:00",
+        )
+        await store.mark_completed(
+            sample_id="000000",
+            stats={"turns": 2, "tool_calls": 1},
+            record_path=record_path,
+            ended_at="2026-04-25T00:00:01",
+            elapsed=1.0,
+        )
+
+        sample = store.sample_state("000000")
+        assert store.path.exists()
+        assert sample is not None
+        assert sample["status"] == "completed"
+        assert sample["attempts"] == 1
+        assert sample["stats"] == {"turns": 2, "tool_calls": 1}
+        assert store.is_completed("000000", record_path)
+        assert not store.is_resume_candidate("000000")
+
+        reloaded = CheckpointStore.from_output_dir(tmp_path)
+        assert reloaded is not None
+        assert reloaded.is_completed("000000", record_path)
+
+    asyncio.run(run_case())
+
+
+def test_checkpoint_store_identifies_resume_candidates(tmp_path) -> None:
+    async def run_case() -> None:
+        store = CheckpointStore.from_output_dir(tmp_path)
+
+        assert store is not None
+        await store.mark_pending(
+            sample_id="000001",
+            index=1,
+            trace_id="trace-2",
+            record_path=tmp_path / "history" / "000001.json",
+            prompt="query",
+        )
+        await store.mark_started(
+            sample_id="000001",
+            run_id="run-1",
+            trace_id="trace-2",
+            started_at="2026-04-25T00:00:00",
+        )
+
+        running_store = CheckpointStore.from_output_dir(tmp_path)
+        assert running_store is not None
+        assert running_store.is_resume_candidate("000001")
+        assert running_store.sample_state("000001")["attempts"] == 1
+
+        await running_store.mark_failed(
+            sample_id="000001",
+            error="temporary failure",
+            ended_at="2026-04-25T00:00:02",
+            elapsed=2.0,
+        )
+
+        failed_store = CheckpointStore.from_output_dir(tmp_path)
+        assert failed_store is not None
+        assert failed_store.is_resume_candidate("000001")
+        assert failed_store.sample_state("000001")["error"] == "temporary failure"
+
+    asyncio.run(run_case())
+
+
+def test_checkpoint_store_rejects_corrupt_manifest(tmp_path) -> None:
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    (checkpoint_dir / "manifest.json").write_text(
+        '{"version": 999, "runs": [], "samples": {}}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CheckpointCorruptionError, match="unsupported checkpoint version"):
+        CheckpointStore.from_output_dir(tmp_path)
+
+    (checkpoint_dir / "manifest.json").write_text(
+        f'{{"version": {CHECKPOINT_VERSION}, "runs": {{}}, "samples": {{}}}}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CheckpointCorruptionError, match="runs"):
+        CheckpointStore.from_output_dir(tmp_path)

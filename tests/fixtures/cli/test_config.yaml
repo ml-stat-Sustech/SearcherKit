@@ -1,0 +1,101 @@
+defaults:
+  - agent@agent: SearchAgent
+  - llm@agent.llm_client: OpenAIClient
+  - llm@agent.parser: QwenParser
+  - common@retry_policy: RetryPolicy
+  - common@dataloader: GenericDataLoader
+  - _self_
+
+retry_policy:
+  max_tries: 1
+
+agent:
+  llm_client:
+    type: openai
+    model: mock-chat
+    default_kwargs:
+      temperature: 0
+    openai:
+      api_key: test-key
+      base_url: https://llm.example.test/v1
+      concurrency_limit: 2
+      extra_client_kwargs:
+        max_retries: 0
+  parser:
+    type: qwen
+    qwen:
+      upstream_parsed: true
+      drop_thinking: false
+  sources:
+    - name: elasticsearch
+      type: elasticsearch
+      hosts: ["http://localhost:9200"]
+      index: cli-docs
+      search_fields: ["title", "text"]
+      es_max_concurrency: 2
+      embedding_max_concurrency: 2
+      title_field: title
+      text_field: text
+      url_field: url
+      highlight: false
+      snippet_chars: 256
+      vector_search_mode: vector
+      embedding_prefix: "query: "
+      embedding_model: mock-embedding
+      embedding_api_key: test-key
+      embedding_base_url: https://embedding.example.test/v1
+      embedding_default_kwargs:
+        encoding_format: float
+  tools:
+    - type: search
+      name: search
+      description: Search for more information.
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+          top_k:
+            type: integer
+            minimum: 1
+        required:
+          - query
+        additionalProperties: false
+      source:
+        - elasticsearch
+      raise_argument_validation_error: false
+      summary_goal_key: query
+      summarizer:
+        model: mock-summary
+        api_key: test-key
+        base_url: https://summary.example.test/v1
+        max_chars: 4000
+        max_concurrency: 2
+        default_kwargs:
+          max_tokens: 256
+        retry_config: null
+  system_prompt: "Use tools and answer in boxed format."
+  query_prompt: "Question: {query}"
+  max_turn: 3
+  max_tokens: 4096
+  max_tokens_prompt_margin: 128
+  llm_retry_config: null
+  tool_retry_config: null
+
+dataloader:
+  source: tests/fixtures/datasets/cli_placeholder.jsonl
+  input_key: question
+  answer_key: answer
+  max_items: 1
+
+max_concurrency: 1
+output_path: outputs/cli_integration_placeholder
+overwrite_output: true
+
+checkpoint:
+  enabled: false
+  dir: null
+  resume: false
+  filename: manifest.json
+
+logging: null

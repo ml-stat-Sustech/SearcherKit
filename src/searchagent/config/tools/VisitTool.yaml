@@ -14,7 +14,8 @@ inputSchema:
   required:
     - document_id
   additionalProperties: false
-source: memory
+source:
+  - memory
 source_config: null
 response_char_limit: null
 raise_argument_validation_error: false

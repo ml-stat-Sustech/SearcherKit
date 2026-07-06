@@ -62,10 +62,12 @@ agent:
   tools:
     - type: search
       name: search
-      source: memory
+      source:
+        - memory
     - type: visit
       name: visit
-      source: memory
+      source:
+        - memory
     - type: mcp
       name: web_search
       mcp_tool_name: search
@@ -90,10 +92,12 @@ agent:
   tools:
     - type: search
       name: search
-      source: bcp
+      source:
+        - bcp
     - type: visit
       name: visit
-      source: bcp
+      source:
+        - bcp
 ```
 
 ## Plugin Deployment

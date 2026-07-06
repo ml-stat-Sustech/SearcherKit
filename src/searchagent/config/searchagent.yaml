@@ -69,7 +69,8 @@ agent:
         required:
           - query
         additionalProperties: false
-      source: elasticsearch
+      source:
+        - elasticsearch
       raise_argument_validation_error: false
       summary_goal_key: query
       summarizer:
