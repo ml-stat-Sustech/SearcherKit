@@ -103,23 +103,7 @@ agent:
     
     Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
   # query_prompt: "<question>{query}</question>"
-  query_prompt: |
-    Answer the given question by using the tool(s) provided. Please perform brief reasoning and use the tool step by step, in an interleaved manner. You may call tool multiple rounds, but avoid making the same tool call multiple times.
-    For example:
-    <think> your think </think>
-    <tool_call> 1 tool call per round </tool_call>
-    <tool_response> response from tool </tool_response>
-    <think> another round of think </think>
-    <tool_call> another round of tool call </tool_call>
-    <tool_response> response from tool </tool_response>
-    ...
-
-    Question: {query}
-
-    After you have gathered enough information to answer the question, the final response should be in the following format:
-    <think> your final thought on what should be the final answer </think>
-    ...
-    \boxed{{your succinct, final answer, in a few words}}
+  query_prompt: "{query}"
   max_turn: 100
   max_turn_prompt: "You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n\\boxed{your answer}"
   max_tokens: 262144

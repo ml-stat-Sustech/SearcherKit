@@ -6,6 +6,7 @@ import asyncio
 import json
 import traceback
 import copy
+import time
 from dataclasses import dataclass, field
 from typing import Iterable, Any, TYPE_CHECKING, overload
 
@@ -63,6 +64,9 @@ class SearchAgentConfig:
     max_tokens: int = 1024
     max_tokens_prompt: str | None = None
     max_tokens_prompt_margin: int = 128
+    run_timeout_seconds: float | None = None
+    run_timeout_prompt: str | None = None
+    run_timeout_prompt_margin_seconds: float | None = None
     llm_retry_config: RetryConfig | None = None
     tool_retry_config: RetryConfig | None = None
 
@@ -74,7 +78,7 @@ class SearchAgent(BaseAgent):
     1. Send conversation history to the LLM.
     2. Parse the assistant response into chat/tool-call messages.
     3. Execute requested tools and append tool outputs.
-    4. Optionally inject reminder prompts near configured turn/token limits.
+    4. Optionally inject reminder prompts near configured turn/token/time limits.
     5. Stop when no more tool calls are needed or turn budget is exhausted.
     """
     @overload
@@ -92,6 +96,9 @@ class SearchAgent(BaseAgent):
                  max_tokens: int = 1024,
                  max_tokens_prompt: str | None = None,
                  max_tokens_prompt_margin: int = 128,
+                 run_timeout_seconds: float | None = None,
+                 run_timeout_prompt: str | None = None,
+                 run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None):
         """
@@ -108,6 +115,12 @@ class SearchAgent(BaseAgent):
             max_tokens_prompt: Optional user prompt injected near token limit.
             max_tokens_prompt_margin: Safety margin before `max_tokens` to trigger
                 the token-limit reminder prompt.
+            run_timeout_seconds: Optional wall-clock run budget in seconds. The
+                agent uses this for wrap-up prompting; callers may still enforce
+                a hard timeout around `run`.
+            run_timeout_prompt: Optional user prompt injected near run timeout.
+            run_timeout_prompt_margin_seconds: Remaining-time margin before
+                `run_timeout_seconds` to trigger the timeout reminder prompt.
             llm_retry_policy: Retry policy for LLM parsing/call steps. If `None`,
                 retries are disabled.
             tool_retry_policy: Retry policy for tool execution. If `None`, retries
@@ -126,6 +139,9 @@ class SearchAgent(BaseAgent):
                  max_tokens: int = 1024,
                  max_tokens_prompt: str | None = None,
                  max_tokens_prompt_margin: int = 128,
+                 run_timeout_seconds: float | None = None,
+                 run_timeout_prompt: str | None = None,
+                 run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
                  *,
@@ -154,6 +170,9 @@ class SearchAgent(BaseAgent):
                 max_tokens=config.max_tokens,
                 max_tokens_prompt=config.max_tokens_prompt,
                 max_tokens_prompt_margin=config.max_tokens_prompt_margin,
+                run_timeout_seconds=config.run_timeout_seconds,
+                run_timeout_prompt=config.run_timeout_prompt,
+                run_timeout_prompt_margin_seconds=config.run_timeout_prompt_margin_seconds,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
             )
@@ -175,9 +194,15 @@ class SearchAgent(BaseAgent):
         self.max_tokens = max_tokens
         self.max_tokens_prompt = max_tokens_prompt
         self.max_tokens_prompt_margin = max_tokens_prompt_margin
+        self.run_timeout_seconds = run_timeout_seconds
+        self.run_timeout_prompt = run_timeout_prompt
+        self.run_timeout_prompt_margin_seconds = run_timeout_prompt_margin_seconds
         self.llm_retry_policy = llm_retry_policy
         self.tool_retry_policy = tool_retry_policy
         self.context_max_token_exceeded = False
+        self.run_timeout_exceeded = False
+        self.run_elapsed_seconds = 0.0
+        self.run_timeout_remaining_seconds: float | None = None
         self.history = []
 
     def _add_tool(self, tool: BaseTool) -> None:
@@ -325,6 +350,16 @@ class SearchAgent(BaseAgent):
                 "Agent loop naturally ends without more tool calls",
             )
             return True
+
+        if self.run_timeout_exceeded and (
+            not self.run_timeout_prompt or self.run_timeout_reminder_prompted
+        ):
+            logger.info(
+                "Stopping agent loop due to agent run timeout, elapsed=%.1fs limit=%s",
+                self.run_elapsed_seconds,
+                self.run_timeout_seconds,
+            )
+            return True
         
         if self.context_max_token_exceeded:
             if self.max_tokens_prompt and not self.max_token_reminder_prompted:
@@ -343,6 +378,9 @@ class SearchAgent(BaseAgent):
                 self.turn + 1
             )
             return True
+
+        if self.run_timeout_exceeded:
+            return False
         
         return False
     

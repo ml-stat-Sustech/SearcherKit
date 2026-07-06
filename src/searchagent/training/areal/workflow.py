@@ -21,9 +21,17 @@ from searchagent.training.agent import (
     SearchAgentTraining,
     TooManyToolCallsError,
 )
-from searchagent.training.areal_client import ARealClient
+from searchagent.training.areal.client import ARealClient
 from searchagent.training.config import WorkFlowConfig
-from searchagent.training.rewards import assign_overlong_penalty, f1_score
+from searchagent.training.rewards import (
+    assign_overlong_penalty,
+    count_duplicate_tool_results,
+    count_repeated_tool_queries,
+    count_tool_calls,
+    count_truncated_tool_responses,
+    f1_score,
+    searchagent_reward_components,
+)
 
 logger = get_logger(__name__)
 
@@ -71,6 +79,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
 
         format_error = False
         context_error = False
+        tool_parser_error = False
         repeated_query = False
         too_many_tool_call = False
         try:
@@ -86,6 +95,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             logger.warning(repr(exc))
         except (LLMOutputError, ValidationError, ParsingError) as exc:
             format_error = True
+            tool_parser_error = True
             logger.warning(repr(exc))
         except LLMContextError:
             context_error = True
@@ -102,6 +112,13 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             num_turns=agent.turn,
             context_tokens=agent.context_token_size,
             context_limit_prompted=agent.max_token_reminder_prompted,
+            searched_query_count=max(int(repeated_query), count_repeated_tool_queries(history)),
+            tool_parser_error_count=int(tool_parser_error),
+            too_many_tool_call_count=int(too_many_tool_call),
+            too_many_turn_count=int(getattr(agent, "max_turn_reminder_prompted", False)),
+            response_truncated_count=count_truncated_tool_responses(history),
+            too_long_seq_truncated_count=int(context_error),
+            duplicate_search_result_count=count_duplicate_tool_results(history),
         )
 
         visit_cnt = 0
@@ -129,21 +146,33 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         else:
             answer = matches[0].group("answer").strip()
 
-        format_score = 0.0 if format_error else 0.1
         overlong_penalty = assign_overlong_penalty(
             agent.context_token_size,
             agent.max_tokens,
             agent.max_tokens_prompt_margin / 2,
         )
         outcome_score = f1_score(answer.lower(), data["answer"].lower()) if answer else 0.0
+        tool_call_count = count_tool_calls(history)
+        reward_parts = searchagent_reward_components(
+            outcome_score=outcome_score,
+            overlong_penalty=overlong_penalty,
+            format_error=format_error,
+            tool_call_count=tool_call_count,
+            repeated_query=repeated_query,
+            too_many_tool_call=too_many_tool_call,
+        )
 
         stats_tracker.get(workflow_context.stat_scope()).scalar(
-            format_score=format_score,
+            format_score=reward_parts["format_score"],
+            search_score=reward_parts["search_score"],
+            repeated_query_penalty=reward_parts["repeated_query_penalty"],
+            too_many_tool_call_penalty=reward_parts["too_many_tool_call_penalty"],
+            tool_call_count=tool_call_count,
             overlong_penalty=overlong_penalty,
             outcome_score=outcome_score,
         )
 
-        final_reward = outcome_score + overlong_penalty
+        final_reward = reward_parts["reward"]
         stats_tracker.get(workflow_context.stat_scope()).scalar(reward=final_reward)
 
         areal_client.set_last_reward(final_reward)

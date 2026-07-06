@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from areal.api.cli_args import GRPOConfig
-
 from searchagent.agent.search_agent import SearchAgentConfig
 
 
@@ -20,7 +18,7 @@ class WorkFlowConfig:
 
 
 @dataclass
-class SearchAgentTrainingConfig(GRPOConfig):
+class SearchAgentTrainingConfig:
     workflow: WorkFlowConfig = field(default_factory=WorkFlowConfig)
     eval_workflow: WorkFlowConfig = field(default_factory=WorkFlowConfig)
     dynamic_filter_fn: str | None = field(

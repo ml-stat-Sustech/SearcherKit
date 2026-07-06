@@ -41,6 +41,7 @@ _ELASTICSEARCH_ERRORS = tuple(
 )
 
 _OPENAI_ERRORS: tuple[type[Exception], ...] = ()
+SUMMARY_FALLBACK_CHARS = 4096
 
 
 def _lazy_import_openai_errors() -> tuple[type[Exception], ...]:
