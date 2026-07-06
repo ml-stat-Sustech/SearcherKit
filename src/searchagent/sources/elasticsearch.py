@@ -9,9 +9,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, overload
 
 from searchagent.common.retry import RetryConfig, RetryPolicy, retry_async
-from searchagent.errors import SourceError
 
-from .base import Document, SearchResult, SourceConfig, DataSource
+from .base import DataSource, Document, SearchResult, SourceConfig, SourceError
 
 try:
     from elasticsearch import AsyncElasticsearch

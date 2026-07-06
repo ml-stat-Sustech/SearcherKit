@@ -9,8 +9,7 @@ from aioresponses import aioresponses
 from yarl import URL
 
 from searchagent.common.retry import RetryConfig
-from searchagent.errors import SourceError
-from searchagent.sources import DataSource, SourceConfig, build_source
+from searchagent.sources import DataSource, SourceConfig, SourceError, build_source
 from searchagent.sources.elasticsearch import ElasticsearchSource
 
 

@@ -19,16 +19,5 @@ class FatalError(SearchAgentError):
     """An operation cannot continue without configuration or code changes."""
 
 
-class ConfigError(FatalError):
-    """Configuration is missing, invalid, or points to an unknown component."""
-
-
 class LLMError(SearchAgentError):
     """Model provider or model-output failure."""
-
-
-class SourceError(SearchAgentError):
-    """Data source or document retrieval failure."""
-
-
-

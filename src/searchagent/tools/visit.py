@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Mapping, overload
 import json
 
-from searchagent.errors import RecoverableError, SourceError
-from searchagent.sources import DataSource, Document, build_source
+from searchagent.common.errors import RecoverableError
+from searchagent.sources import DataSource, Document, SourceError, build_source
 from searchagent.tools.base import BaseTool, SummarizerConfig, ToolConfig
 from searchagent.tools.summarizer import Summarizer
 

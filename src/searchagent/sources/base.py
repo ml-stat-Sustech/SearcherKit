@@ -7,7 +7,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from searchagent.common.errors import SearchAgentError
 from searchagent.common.retry import RetryConfig
+
+
+class SourceError(SearchAgentError):
+    """Data source or document retrieval failure."""
 
 
 @dataclass(slots=True)

@@ -11,7 +11,7 @@ import pytest
 import respx
 
 from searchagent.common.retry import RetryConfig, RetryPolicy
-from searchagent.errors import RecoverableError
+from searchagent.common.errors import RecoverableError
 from searchagent.sources import Document, SourceConfig, add_source_cfg
 from searchagent.sources.memory import MemorySource
 from searchagent.tools import SummarizerConfig, ToolConfig, build_tool

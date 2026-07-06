@@ -11,7 +11,7 @@ import json_repair
 from openai import AsyncOpenAI, APIError, APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
 
 from searchagent.common.retry import RetryConfig, RetryPolicy, retry_async
-from searchagent.errors import RecoverableError
+from searchagent.common.errors import RecoverableError
 from searchagent.sources.base import Document
 
 if TYPE_CHECKING:

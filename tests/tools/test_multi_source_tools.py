@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 import pytest
 
-from searchagent.errors import RecoverableError
+from searchagent.common.errors import RecoverableError
 from searchagent.sources import Document, SourceConfig, add_source_cfg
 from searchagent.sources.memory import MemorySource
 from searchagent.tools import ToolConfig, build_tool

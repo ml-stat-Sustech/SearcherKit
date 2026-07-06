@@ -12,7 +12,7 @@ from typing import Any, Iterable, Sequence, TYPE_CHECKING
 from searchagent.agent.search_agent import SearchAgent, SearchAgentConfig
 from searchagent.common.log import configure_run_logging, get_logger, log_context
 from searchagent.common.dataloader import DataConfig, DataItem, GenericDataLoader
-from searchagent.errors import SearchAgentError
+from searchagent.common.errors import SearchAgentError
 from searchagent.runtime import startup
 from searchagent.common.retry import retry_async, RetryConfig, RetryPolicy
 from searchagent.runtime.batch import BatchItem, BatchSummary

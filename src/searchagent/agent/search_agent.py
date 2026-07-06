@@ -18,7 +18,7 @@ from searchagent.sources import DataSource, SourceConfig, add_source_cfg
 from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
 from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
-from searchagent.errors import LLMError
+from searchagent.common.errors import LLMError
 from searchagent.common.log import get_logger, log_context, LogTiming
 from searchagent.common.retry import retry_async, RetryPolicy, RetryConfig
 

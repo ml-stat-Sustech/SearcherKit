@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
 
-from searchagent.plugins.conversion.config import load_config
+from searchagent.cli.config import compose_dataclass_config
 from searchagent.plugins.conversion.convert import convert_file
+
+
+@dataclass(slots=True)
+class OpenSeekerMSSwiftConversionConfig:
+    input_path: str
+    output_path: str
+    max_records: int = 0
 
 
 def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
@@ -21,6 +30,25 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
         help="Hydra-style overrides",
     )
     return parser
+
+
+def _default_config_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "config" / "plugins" / "conversion"
+
+
+def load_config(
+    *,
+    config_path: str | Path | None = None,
+    config_name: str = "openseeker_ms_swift",
+    overrides: Sequence[str] | None = None,
+) -> OpenSeekerMSSwiftConversionConfig:
+    return compose_dataclass_config(
+        OpenSeekerMSSwiftConversionConfig,
+        config_path=config_path,
+        config_name=config_name,
+        overrides=overrides,
+        default_config_dir=_default_config_dir(),
+    )
 
 
 def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> int:

@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from searchagent.errors import ConfigError
+from searchagent.cli.config import ConfigError
 from searchagent.training.sft.config import SFTTrainingConfig, load_training_config
 
 

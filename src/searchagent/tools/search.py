@@ -6,8 +6,8 @@ import json
 from collections.abc import Mapping
 from typing import Any, overload
 
-from searchagent.errors import RecoverableError, SourceError
-from searchagent.sources import DataSource, SearchResult, build_source
+from searchagent.common.errors import RecoverableError
+from searchagent.sources import DataSource, SearchResult, SourceError, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
 from searchagent.tools.summarizer import Summarizer
 

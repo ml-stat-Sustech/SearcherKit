@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from searchagent.plugins.conversion.config import load_config
+from searchagent.plugins.conversion.main import load_config
 from searchagent.plugins.conversion.convert import convert_file
 
 

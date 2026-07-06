@@ -8,7 +8,7 @@ from typing import Any, Iterable, Mapping
 
 from searchagent.common.config import import_from_path
 from searchagent.common.messages import ChatMessage
-from searchagent.errors import LLMError
+from searchagent.common.errors import LLMError
 
 
 @dataclass

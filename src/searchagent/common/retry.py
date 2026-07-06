@@ -9,7 +9,7 @@ import backoff
 from searchagent.common.log import get_logger
 from searchagent.common.utils import get_or_default
 from searchagent.common.config import import_from_path
-from searchagent.errors import RecoverableError
+from searchagent.common.errors import RecoverableError
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 class RetryConfig:
     max_tries: int = 3
     max_time: float | None = None
-    exceptions: list[str] = field(default_factory=lambda: ["pkg://searchagent.errors:RecoverableError"])
+    exceptions: list[str] = field(default_factory=lambda: ["pkg://searchagent.common.errors:RecoverableError"])
     giveup: str | None = None
     jitter: str | None = "pkg://backoff:full_jitter"
     factor: float = 1.0

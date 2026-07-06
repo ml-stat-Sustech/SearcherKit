@@ -12,9 +12,8 @@ from urllib.parse import quote
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
 from searchagent.common.retry import RetryConfig, RetryPolicy, retry_async
-from searchagent.errors import SourceError
 
-from .base import DataSource, Document, SearchResult, SourceConfig
+from .base import DataSource, Document, SearchResult, SourceConfig, SourceError
 
 
 _WEB_ERRORS = (ClientError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError)

@@ -6,9 +6,7 @@ from aioresponses import aioresponses
 from yarl import URL
 
 from searchagent.common.retry import RetryConfig
-from searchagent.errors import SourceError
-from searchagent.sources import SourceConfig, build_source
-from searchagent.sources.base import DataSource
+from searchagent.sources import DataSource, SourceConfig, SourceError, build_source
 from searchagent.sources.web import WebSource
 
 

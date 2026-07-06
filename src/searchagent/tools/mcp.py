@@ -17,7 +17,7 @@ from fastmcp.client.transports import SSETransport, StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 
 from searchagent.common.log import get_logger, setup_logger
-from searchagent.errors import FatalError, RecoverableError
+from searchagent.common.errors import FatalError, RecoverableError
 from searchagent.tools.base import BaseTool, ToolConfig
 
 if TYPE_CHECKING:

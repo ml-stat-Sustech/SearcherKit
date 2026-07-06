@@ -84,7 +84,7 @@ agent:
   tool_retry_config:
     max_tries: 5
     exceptions:
-      - pkg://searchagent.errors:RecoverableError
+      - pkg://searchagent.common.errors:RecoverableError
 
 dataloader:
   source: data/browsecomp_plus_decrypted_qa.jsonl

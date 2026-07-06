@@ -8,7 +8,7 @@ from typing import Any
 
 from omegaconf import OmegaConf
 
-from searchagent.errors import ConfigError
+from searchagent.common.errors import ConfigError
 
 
 @dataclass

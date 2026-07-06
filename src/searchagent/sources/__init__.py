@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .base import DataSource, Document, SearchResult, SourceConfig
+from .base import DataSource, Document, SearchResult, SourceConfig, SourceError
 from .factory import build_source, add_source_cfg
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     "Document",
     "SearchResult",
     "SourceConfig",
+    "SourceError",
     "build_source",
     "add_source_cfg",
 ]
