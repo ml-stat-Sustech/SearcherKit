@@ -73,6 +73,32 @@ def add_searchagent_slime_arguments(parser):
         help="Coefficient applied to the normalized scalar outcome reward in IGPO advantages.",
     )
     parser.add_argument(
+        "--searchagent-igpo-reward-side",
+        choices=("actor", "rollout"),
+        default="rollout",
+        help=(
+            "Where SearchAgent IGPO answer-likelihood rewards are computed. "
+            "'actor' computes them with the Megatron actor before advantage calculation; "
+            "'rollout' keeps the older SGLang rollout-time scoring path."
+        ),
+    )
+    parser.add_argument(
+        "--searchagent-igpo-actor-score-micro-batch-size",
+        type=int,
+        default=8,
+        help="Micro-batch size for actor-side IGPO gold-answer logprob scoring.",
+    )
+    parser.add_argument(
+        "--searchagent-ppo-ratio-mode",
+        choices=("token", "step"),
+        default="token",
+        help=(
+            "PPO ratio granularity for SearchAgent slime policy loss. "
+            "'step' aggregates contiguous valid-token spans before PPO clipping, "
+            "matching AReal's importance_sampling_level=step more closely."
+        ),
+    )
+    parser.add_argument(
         "--searchagent-truncation-penalty",
         type=float,
         default=-1.0,

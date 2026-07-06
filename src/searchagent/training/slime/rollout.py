@@ -4,9 +4,11 @@ import asyncio
 import copy
 import re
 from functools import lru_cache
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
+import torch
 from jsonschema import ValidationError
 from omegaconf import OmegaConf
 from slime.agent.trajectory import fan_out_sample_segments, merge_turns
@@ -185,14 +187,59 @@ def _score_history(
         "tool_call_count": tool_call_count,
         "outcome_score": outcome_score,
         "overlong_penalty": overlong_penalty,
+        "outcome_reward": outcome_score + overlong_penalty,
         "truncation_penalty": truncation_penalty if truncated else 0.0,
         "context_tokens": context_token_size,
         "reward": reward_parts["reward"],
     }
 
 
+def _float_metadata_value(metadata: dict[str, Any], key: str) -> float | None:
+    value = metadata.get(key)
+    if isinstance(value, bool) or not isinstance(value, Real):
+        return None
+    return float(value)
+
+
+def _outcome_reward_from_metadata(metadata: Any) -> float | None:
+    if not isinstance(metadata, dict):
+        return None
+
+    outcome_reward = _float_metadata_value(metadata, "outcome_reward")
+    if outcome_reward is not None:
+        return outcome_reward
+
+    outcome_score = _float_metadata_value(metadata, "outcome_score")
+    overlong_penalty = _float_metadata_value(metadata, "overlong_penalty")
+    if outcome_score is None or overlong_penalty is None:
+        return None
+    return outcome_score + overlong_penalty
+
+
+def _outcome_reward_train_metadata(metadata: Any) -> dict[str, float]:
+    if not isinstance(metadata, dict):
+        return {}
+
+    out: dict[str, float] = {}
+    for key in ("outcome_score", "overlong_penalty"):
+        value = _float_metadata_value(metadata, key)
+        if value is not None:
+            out[key] = value
+    outcome_reward = _outcome_reward_from_metadata(metadata)
+    if outcome_reward is not None:
+        out["outcome_reward"] = outcome_reward
+    return out
+
+
 def _is_igpo_enabled(args: Any, *, evaluation: bool) -> bool:
     return not evaluation and _arg_value(args, "advantage_estimator", "grpo") == "igpo"
+
+
+def _igpo_reward_side(args: Any) -> str:
+    value = str(_arg_value(args, "searchagent_igpo_reward_side", "rollout"))
+    if value not in {"actor", "rollout"}:
+        raise ValueError(f"Unsupported searchagent_igpo_reward_side={value!r}; expected 'actor' or 'rollout'")
+    return value
 
 
 def _answer_tokens(tokenizer: Any, answer: str) -> tuple[list[int], int, int]:
@@ -349,7 +396,6 @@ async def _attach_igpo_metadata(
     response_length: int,
     label: str,
 ) -> None:
-    answer_logprobs = await _score_igpo_answer_logprobs(args, tokenizer, turns, label)
     metadata = sample.metadata if isinstance(sample.metadata, dict) else {}
     span_source = "segment"
     spans = metadata.get("train_model_output_spans")
@@ -366,24 +412,33 @@ async def _attach_igpo_metadata(
         turn_indices = [int(item) for item in turn_indices]
     else:
         turn_indices = None
-    ig_token_rewards, ig_reward_mask, ig_turn_rewards = _build_igpo_token_rewards(
-        response_length=response_length,
-        spans=spans,
-        answer_logprobs=answer_logprobs,
-        turn_indices=turn_indices,
-    )
+    answer_logprobs: list[float] = []
+    ig_token_rewards: list[float] = []
+    ig_reward_mask: list[int] = []
+    ig_turn_rewards: list[float] = []
+    if _igpo_reward_side(args) == "rollout":
+        answer_logprobs = await _score_igpo_answer_logprobs(args, tokenizer, turns, label)
+        ig_token_rewards, ig_reward_mask, ig_turn_rewards = _build_igpo_token_rewards(
+            response_length=response_length,
+            spans=spans,
+            answer_logprobs=answer_logprobs,
+            turn_indices=turn_indices,
+        )
     aligned_rewards = int(sum(ig_reward_mask))
     sample.train_metadata = {
         **(sample.train_metadata or {}),
+        **_outcome_reward_train_metadata(metadata),
         "advantage_estimator": "igpo",
-        "ig_token_rewards": ig_token_rewards,
-        "ig_reward_mask": ig_reward_mask,
         "ig_turn_rewards": ig_turn_rewards,
         "ig_answer_logprobs": answer_logprobs,
         "ig_response_spans": spans,
+        "ig_response_turn_indices": turn_indices,
         "ig_response_span_source": span_source,
         "ground_truth": label,
     }
+    if _igpo_reward_side(args) == "rollout":
+        sample.train_metadata["ig_token_rewards"] = ig_token_rewards
+        sample.train_metadata["ig_reward_mask"] = ig_reward_mask
     abs_rewards = [abs(value) for value in ig_turn_rewards]
     sample.metadata = {
         **(sample.metadata or {}),
@@ -506,12 +561,18 @@ async def generate_searchagent(
         "duplicate_search_result_count": count_duplicate_tool_results(history),
         "context_limit_prompted": bool(getattr(agent, "max_token_reminder_prompted", False)),
     }
-    segment = merge_turns(client.turns, metadata=metadata)
+    segment = merge_turns(
+        client.turns,
+        metadata=metadata,
+        eos_token_id=getattr(state.tokenizer, "eos_token_id", None),
+        pad_token_id=getattr(state.tokenizer, "pad_token_id", None),
+    )
     if segment is None or not segment.response_ids:
         empty = _empty_sample(sample, state.tokenizer, reward, metadata)
         if _is_igpo_enabled(args, evaluation=evaluation):
             empty.train_metadata = {
                 **(empty.train_metadata or {}),
+                **_outcome_reward_train_metadata(metadata),
                 "advantage_estimator": "igpo",
                 "ig_token_rewards": [],
                 "ig_reward_mask": [],
@@ -574,11 +635,78 @@ def _sample_reward_value(args: Any, sample: Sample | list[Sample]) -> float:
     return float(sample.get_reward_value(args))
 
 
+def _sample_outcome_reward_value(sample: Sample | list[Sample]) -> float:
+    if isinstance(sample, list):
+        return sum(_sample_outcome_reward_value(item) for item in sample)
+
+    value = _outcome_reward_from_metadata(sample.metadata)
+    if value is None:
+        sample_id = getattr(sample, "index", None)
+        raise ValueError(
+            "AReal-style outcome reward requires sample metadata with "
+            f"'outcome_reward' or both 'outcome_score' and 'overlong_penalty'; sample={sample_id}"
+        )
+    return value
+
+
 def mixed_reward_filter(args: Any, samples: list[Sample | list[Sample]], **kwargs: Any) -> DynamicFilterOutput:
     rewards = [_sample_reward_value(args, sample) for sample in samples]
     keep = bool(rewards) and min(rewards) < max(rewards)
     reason = None if keep else f"constant_reward_{round(rewards[0], 3) if rewards else 'empty'}"
     return DynamicFilterOutput(keep=keep, reason=reason)
+
+
+def areal_outcome_reward_filter(
+    args: Any,
+    samples: list[Sample | list[Sample]],
+    **kwargs: Any,
+) -> DynamicFilterOutput:
+    rewards = [_sample_outcome_reward_value(sample) for sample in samples]
+    if not rewards:
+        return DynamicFilterOutput(keep=False, reason="outcome_mean_empty")
+
+    mean_reward = sum(rewards) / len(rewards)
+    keep = 0.0 < mean_reward < 1.0
+    reason = None if keep else f"outcome_mean_{round(mean_reward, 3)}"
+    return DynamicFilterOutput(keep=keep, reason=reason)
+
+
+def _post_process_scalar_rewards(args: Any, raw_rewards: list[float]) -> list[float]:
+    if not raw_rewards:
+        return []
+
+    if (
+        _arg_value(args, "advantage_estimator") in ["grpo", "igpo", "gspo", "reinforce_plus_plus_baseline"]
+        and bool(_arg_value(args, "rewards_normalization", True))
+    ):
+        rewards = torch.tensor(raw_rewards, dtype=torch.float)
+        group_size = int(_arg_value(args, "n_samples_per_prompt", 1))
+        expected_size = group_size * int(_arg_value(args, "rollout_batch_size", 1))
+        if rewards.shape[-1] == expected_size:
+            rewards = rewards.reshape(-1, group_size)
+        else:
+            rewards = rewards.view(-1, rewards.shape[-1])
+        mean = rewards.mean(dim=-1, keepdim=True)
+        rewards = rewards - mean
+
+        if (
+            _arg_value(args, "advantage_estimator") in ["grpo", "igpo", "gspo"]
+            and bool(_arg_value(args, "grpo_std_normalization", True))
+        ):
+            std = rewards.std(dim=-1, keepdim=True)
+            rewards = rewards / (std + 1e-6)
+
+        return rewards.flatten().tolist()
+
+    return raw_rewards
+
+
+def areal_outcome_reward_post_process(
+    args: Any,
+    samples: list[Sample | list[Sample]],
+) -> tuple[list[float], list[float]]:
+    raw_rewards = [_sample_outcome_reward_value(sample) for sample in samples]
+    return raw_rewards, _post_process_scalar_rewards(args, raw_rewards)
 
 
 def _flatten_samples(samples: list[Sample | list[Sample]]) -> list[Sample]:
@@ -657,12 +785,21 @@ def _searchagent_metadata_metrics(samples: list[Sample]) -> dict[str, float]:
         "too_long_seq_truncated_count",
         "duplicate_search_result_count",
         "reward",
+        "outcome_reward",
         "ig_turn_count",
         "ig_reward_sum",
         "ig_reward_abs_mean",
         "ig_reward_mask_count",
         "ig_reward_unmatched_count",
         "ig_span_reconstructed_count",
+        "train_model_output_span_count",
+        "model_output_span_count",
+        "merge_prefix_drift_count",
+        "merge_concat_recovered_count",
+        "merge_truncated_response_tokens",
+        "train_span_per_turn",
+        "train_span_per_tool_call",
+        "merge_concat_recovery_ratio",
     )
     series: dict[str, list[float]] = {key: [] for key in metric_keys}
     bool_keys = (
@@ -677,6 +814,34 @@ def _searchagent_metadata_metrics(samples: list[Sample]) -> dict[str, float]:
 
     for sample in samples:
         metadata = sample.metadata if isinstance(sample.metadata, dict) else {}
+        train_spans = metadata.get("train_model_output_spans")
+        if isinstance(train_spans, list):
+            metadata = {**metadata, "train_model_output_span_count": len(train_spans)}
+        model_spans = metadata.get("model_output_spans")
+        if isinstance(model_spans, list):
+            metadata = {**metadata, "model_output_span_count": len(model_spans)}
+        train_span_count = metadata.get("train_model_output_span_count")
+        if isinstance(train_span_count, (int, float)) and not isinstance(train_span_count, bool):
+            num_turns = metadata.get("num_turns")
+            if isinstance(num_turns, (int, float)) and not isinstance(num_turns, bool) and num_turns > 0:
+                metadata = {**metadata, "train_span_per_turn": float(train_span_count) / float(num_turns)}
+            tool_call_count = metadata.get("tool_call_count")
+            if (
+                isinstance(tool_call_count, (int, float))
+                and not isinstance(tool_call_count, bool)
+                and tool_call_count > 0
+            ):
+                metadata = {**metadata, "train_span_per_tool_call": float(train_span_count) / float(tool_call_count)}
+        drift_count = metadata.get("merge_prefix_drift_count")
+        recovered_count = metadata.get("merge_concat_recovered_count")
+        if (
+            isinstance(drift_count, (int, float))
+            and not isinstance(drift_count, bool)
+            and drift_count > 0
+            and isinstance(recovered_count, (int, float))
+            and not isinstance(recovered_count, bool)
+        ):
+            metadata = {**metadata, "merge_concat_recovery_ratio": float(recovered_count) / float(drift_count)}
         for key in metric_keys:
             value = metadata.get(key)
             if isinstance(value, bool):

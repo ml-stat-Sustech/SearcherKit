@@ -12,6 +12,7 @@ import json_repair
 
 from searchagent.common.retry import RetryConfig, RetryPolicy, retry_async
 from searchagent.errors import SourceError
+from searchagent.log import get_logger
 
 from .base import Document, SearchResult, SourceConfig, DataSource
 
@@ -44,6 +45,8 @@ _ELASTICSEARCH_ERRORS = tuple(
 )
 
 _OPENAI_ERRORS: tuple[type[Exception], ...] = ()
+SUMMARY_FALLBACK_CHARS = 4096
+logger = get_logger(__name__)
 
 
 def _lazy_import_openai_errors() -> tuple[type[Exception], ...]:
@@ -591,10 +594,21 @@ class ElasticsearchSource(DataSource):
 
     async def _summary_document(self, document: Document, *, goal: str | None) -> Document:
         goal_label = goal or "N/A"
-        evidence, summary = await self._summarize(
-            goal=goal or "N/A",
-            content=self._format_document_content(document),
-        )
+        content = self._format_document_content(document)
+        try:
+            evidence, summary = await self._summarize(
+                goal=goal_label,
+                content=content,
+            )
+        except SourceError as exc:
+            logger.warning(
+                "Elasticsearch visit summary failed; falling back to raw evidence document_id=%r goal=%r error=%s",
+                document.id,
+                goal_label,
+                exc,
+            )
+            evidence = self._fallback_summary_evidence(content)
+            summary = ""
         formatted = self._format_visit_summary(
             document.url or document.title or document.id,
             goal_label,
@@ -614,29 +628,49 @@ class ElasticsearchSource(DataSource):
             self._format_document_content(result.document)
             for result in results
         )
-        evidence, summary = await self._summarize(
-            goal=query,
-            content=content,
-        )
+        summary_fallback = False
+        try:
+            evidence, summary = await self._summarize(
+                goal=query,
+                content=content,
+            )
+        except SourceError as exc:
+            logger.warning(
+                "Elasticsearch search summary failed; falling back to raw evidence query=%r error=%s",
+                query,
+                exc,
+            )
+            evidence = self._fallback_summary_evidence(content)
+            summary = ""
+            summary_fallback = True
         formatted = self._format_search_summary(query, evidence, summary)
         document = Document(
             id=f"summary:{query}",
             title=f"Summary for {query}",
             text=formatted,
             url=None,
-            metadata={"summary": True, "result_count": len(results)},
+            metadata={
+                "summary": True,
+                "summary_fallback": summary_fallback,
+                "result_count": len(results),
+            },
         )
         return SearchResult(
             document=document,
             score=results[0].score,
             snippet=formatted,
-            metadata={"summary": True},
+            metadata={"summary": True, "summary_fallback": summary_fallback},
         )
 
     def _format_document_content(self, document: Document) -> str:
         title = document.title or "[No Title]"
         url = document.url or document.id
         return f"[{title}]({url})\n{document.text[:int(self.summary_max_chars / 5)]}".strip() # TODO: 当前默认top_k = 5, 按文章截断保证上下文限制，之后需要对top_k更好地处理
+
+    def _fallback_summary_evidence(self, content: str) -> str:
+        compact = "\n".join(line.strip() for line in content.splitlines() if line.strip())
+        limit = min(self.summary_max_chars, SUMMARY_FALLBACK_CHARS)
+        return compact[:limit] or "No evidence extracted."
 
     async def _summarize(self, *, goal: str, content: str) -> tuple[str, str]:
         try:

@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 
 from searchagent.common.retry import RetryConfig
-from searchagent.errors import RecoverableError
 from searchagent.sources.elasticsearch import ElasticsearchSource, SummaryError
 from searchagent.tools import SearchTool, VisitTool
 
@@ -338,7 +337,7 @@ def test_elasticsearch_search_summary_retries_once_then_succeeds() -> None:
     asyncio.run(run_source())
 
 
-def test_elasticsearch_search_summary_failure_surfaces_recoverable_error() -> None:
+def test_elasticsearch_search_summary_failure_falls_back_to_raw_evidence() -> None:
     async def run_source() -> None:
         source = _summary_source(
             summary_client=FakeSummaryClient(['{"evidence": "", "summary": ""}']),
@@ -347,8 +346,10 @@ def test_elasticsearch_search_summary_failure_surfaces_recoverable_error() -> No
         )
         search_tool = SearchTool(source)
 
-        with pytest.raises(RecoverableError):
-            await search_tool._run(query="benchmark", top_k=1)
+        payload = await search_tool._run(query="benchmark", top_k=1)
+
+        assert "BrowseComp Plus is a benchmark corpus stored in Elasticsearch." in payload
+        assert "No summary available." in payload
 
     asyncio.run(run_source())
 
@@ -426,7 +427,7 @@ def test_elasticsearch_visit_summary_retries_once_then_succeeds() -> None:
     asyncio.run(run_source())
 
 
-def test_elasticsearch_visit_summary_failure_surfaces_recoverable_error() -> None:
+def test_elasticsearch_visit_summary_failure_falls_back_to_raw_evidence() -> None:
     async def run_source() -> None:
         source = _summary_source(
             summary_client=FakeSummaryClient(['{"evidence": "", "summary": ""}']),
@@ -436,11 +437,13 @@ def test_elasticsearch_visit_summary_failure_surfaces_recoverable_error() -> Non
         )
         visit_tool = VisitTool(source)
 
-        with pytest.raises(RecoverableError):
-            await visit_tool._run(
-                document_id="https://example.test/bcp",
-                goal="find benchmark details",
-            )
+        payload = await visit_tool._run(
+            document_id="https://example.test/bcp",
+            goal="find benchmark details",
+        )
+
+        assert "BrowseComp Plus is a benchmark corpus stored in Elasticsearch." in payload
+        assert "No summary available." in payload
 
     asyncio.run(run_source())
 

@@ -37,6 +37,70 @@ def _chat_template_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _find_kth_token(tokens: list[int], target: int, count: int) -> int:
+    if count <= 0:
+        return -1
+    seen = 0
+    for idx, token in enumerate(tokens):
+        if token == target:
+            seen += 1
+            if seen == count:
+                return idx
+    return -1
+
+
+def _output_ids_without_stop(
+    output_ids: list[int],
+    *,
+    finish_reason: str,
+    eos_token_id: int | None,
+    pad_token_id: int | None,
+) -> list[int]:
+    if finish_reason in {"length", "abort"} or not output_ids:
+        return list(output_ids)
+
+    stop_token_ids = {token_id for token_id in (eos_token_id, pad_token_id) if token_id is not None}
+    if not stop_token_ids:
+        return list(output_ids)
+
+    end = len(output_ids)
+    while end > 0 and output_ids[end - 1] in stop_token_ids:
+        end -= 1
+    return list(output_ids[:end])
+
+
+def concat_prompt_ids_with_parent(
+    rendered_prompt_ids: list[int],
+    *,
+    parent: TurnRecord | None,
+    eos_token_id: int | None,
+    pad_token_id: int | None,
+) -> list[int]:
+    """Build an AReal-like concat prompt from the previous raw token trace."""
+    if parent is None or eos_token_id is None:
+        return list(rendered_prompt_ids)
+
+    parent_tokens = list(parent.prompt_ids) + _output_ids_without_stop(
+        list(parent.output_ids),
+        finish_reason=parent.finish_reason,
+        eos_token_id=eos_token_id,
+        pad_token_id=pad_token_id,
+    )
+    parent_tokens.append(eos_token_id)
+
+    parent_eos_count = parent_tokens.count(eos_token_id)
+    child_cut = _find_kth_token(rendered_prompt_ids, eos_token_id, parent_eos_count)
+    if child_cut < 0 or child_cut + 1 >= len(rendered_prompt_ids):
+        logger.warning(
+            "[slime-client] concat prompt alignment failed; using rendered prompt "
+            "(parent_eos=%d rendered_eos=%d)",
+            parent_eos_count,
+            rendered_prompt_ids.count(eos_token_id),
+        )
+        return list(rendered_prompt_ids)
+    return parent_tokens + list(rendered_prompt_ids[child_cut + 1 :])
+
+
 class SlimeSGLangClient(Client):
     """SearchAgent client backed by slime's SGLang rollout router."""
 
@@ -132,8 +196,16 @@ class SlimeSGLangClient(Client):
                 raise
             encoded = self.tokenizer.apply_chat_template(messages, **kwargs)
         if isinstance(encoded, dict):
-            return list(encoded["input_ids"])
-        return list(encoded)
+            rendered_prompt_ids = list(encoded["input_ids"])
+        else:
+            rendered_prompt_ids = list(encoded)
+
+        return concat_prompt_ids_with_parent(
+            rendered_prompt_ids,
+            parent=self.turns[-1] if self.turns else None,
+            eos_token_id=getattr(self.tokenizer, "eos_token_id", None),
+            pad_token_id=getattr(self.tokenizer, "pad_token_id", None),
+        )
 
     def _sampling_params(self, payload: dict[str, Any], prompt_len: int) -> dict[str, Any]:
         params = dict(self.sampling_params)

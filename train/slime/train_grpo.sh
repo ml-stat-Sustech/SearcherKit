@@ -44,7 +44,10 @@ if [ -n "${CUDA_HOME:-}" ]; then
 fi
 
 SITE_PACKAGES="$(python3 -c 'import site; print(site.getsitepackages()[0])')"
-CUDA_LIB_DIRS="$(find "${SITE_PACKAGES}/nvidia" -maxdepth 3 -type d -name lib 2>/dev/null | sort | paste -sd: -)"
+CUDA_LIB_DIRS=""
+if [ -d "${SITE_PACKAGES}/nvidia" ]; then
+    CUDA_LIB_DIRS="$(find "${SITE_PACKAGES}/nvidia" -maxdepth 3 -type d -name lib | sort | paste -sd: -)"
+fi
 LD_LIBRARY_PARTS="${CUDA_LIB_DIRS}"
 if [ -n "${CONDA_PREFIX:-}" ]; then
     LD_LIBRARY_PARTS="${LD_LIBRARY_PARTS:+${LD_LIBRARY_PARTS}:}${CONDA_PREFIX}/lib"
@@ -111,7 +114,9 @@ SAVE_INTERVAL="${SAVE_INTERVAL:-${EVAL_INTERVAL}}"
 SLIME_ASYNC_MODE="${SLIME_ASYNC_MODE:-1}"
 ROLLOUT_BATCH_SIZE="${ROLLOUT_BATCH_SIZE:-128}"
 N_SAMPLES_PER_PROMPT="${N_SAMPLES_PER_PROMPT:-8}"
-NUM_STEPS_PER_ROLLOUT="${NUM_STEPS_PER_ROLLOUT:-1}"
+# Match AReal's ppo_n_minibatches=4: split one rollout batch into 4
+# optimizer updates.
+NUM_STEPS_PER_ROLLOUT="${NUM_STEPS_PER_ROLLOUT:-4}"
 ROLLOUT_MAX_RESPONSE_LEN="${ROLLOUT_MAX_RESPONSE_LEN:-36864}"
 EVAL_MAX_RESPONSE_LEN="${EVAL_MAX_RESPONSE_LEN:-24576}"
 ROLLOUT_MAX_CONTEXT_LEN="${ROLLOUT_MAX_CONTEXT_LEN:-40960}"
@@ -121,16 +126,22 @@ MAX_TOKENS_PER_GPU="${MAX_TOKENS_PER_GPU:-$((ROLLOUT_MAX_CONTEXT_LEN / CONTEXT_P
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-$((ROLLOUT_BATCH_SIZE * N_SAMPLES_PER_PROMPT / NUM_STEPS_PER_ROLLOUT))}"
 LOG_PROBS_CHUNK_SIZE="${LOG_PROBS_CHUNK_SIZE:-1024}"
 LR="${LR:-5e-6}"
-KL_LOSS_COEF="${KL_LOSS_COEF:-0.001}"
+KL_LOSS_COEF="${KL_LOSS_COEF:-0.0}"
 SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.7}"
 SEARCHAGENT_EVAL_CONCURRENCY="${SEARCHAGENT_EVAL_CONCURRENCY:-64}"
 ADVANTAGE_ESTIMATOR="${ADVANTAGE_ESTIMATOR:-grpo}"
 SEARCHAGENT_IGPO_REWARD_COEF="${SEARCHAGENT_IGPO_REWARD_COEF:-1.0}"
 SEARCHAGENT_IGPO_OUTCOME_REWARD_COEF="${SEARCHAGENT_IGPO_OUTCOME_REWARD_COEF:-1.0}"
+SEARCHAGENT_IGPO_REWARD_SIDE="${SEARCHAGENT_IGPO_REWARD_SIDE:-rollout}"
+SEARCHAGENT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE="${SEARCHAGENT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE:-8}"
+SEARCHAGENT_PPO_RATIO_MODE="${SEARCHAGENT_PPO_RATIO_MODE:-token}"
 SEARCHAGENT_TRUNCATION_PENALTY="${SEARCHAGENT_TRUNCATION_PENALTY:--1.0}"
+DYNAMIC_SAMPLING_FILTER_PATH="${DYNAMIC_SAMPLING_FILTER_PATH:-searchagent.training.slime.rollout.mixed_reward_filter}"
+CUSTOM_REWARD_POST_PROCESS_PATH="${CUSTOM_REWARD_POST_PROCESS_PATH:-}"
 USE_TIS="${USE_TIS:-${SLIME_ASYNC_MODE}}"
 TIS_CLIP="${TIS_CLIP:-2.0}"
 TIS_CLIP_LOW="${TIS_CLIP_LOW:-0}"
+CUSTOM_TIS_FUNCTION_PATH="${CUSTOM_TIS_FUNCTION_PATH:-}"
 if [ "${ADVANTAGE_ESTIMATOR}" != "grpo" ] && [ "${ADVANTAGE_ESTIMATOR}" != "igpo" ]; then
     echo "Unsupported ADVANTAGE_ESTIMATOR=${ADVANTAGE_ESTIMATOR}; expected grpo or igpo" >&2
     exit 2
@@ -139,9 +150,16 @@ TIS_ARGS=()
 if [ "${USE_TIS}" = "1" ]; then
     TIS_ARGS+=(--use-tis --tis-clip "${TIS_CLIP}" --tis-clip-low "${TIS_CLIP_LOW}")
 fi
+if [ -n "${CUSTOM_TIS_FUNCTION_PATH}" ]; then
+    TIS_ARGS+=(--custom-tis-function-path "${CUSTOM_TIS_FUNCTION_PATH}")
+fi
 ADVANTAGE_ARGS=(--advantage-estimator "${ADVANTAGE_ESTIMATOR}")
 if [ "${ADVANTAGE_ESTIMATOR}" = "igpo" ]; then
     ADVANTAGE_ARGS+=(--custom-advantage-function-path searchagent.training.slime.igpo.compute_advantages_and_returns)
+fi
+CUSTOM_REWARD_POST_PROCESS_ARGS=()
+if [ -n "${CUSTOM_REWARD_POST_PROCESS_PATH}" ]; then
+    CUSTOM_REWARD_POST_PROCESS_ARGS+=(--custom-reward-post-process-path "${CUSTOM_REWARD_POST_PROCESS_PATH}")
 fi
 
 if [ "${SLIME_ASYNC_MODE}" = "1" ]; then
@@ -152,6 +170,32 @@ else
     ROLLOUT_FUNCTION_PATH="${ROLLOUT_FUNCTION_PATH:-slime.rollout.sglang_rollout.generate_rollout}"
 fi
 EVAL_FUNCTION_PATH="${EVAL_FUNCTION_PATH:-slime.rollout.sglang_rollout.generate_rollout}"
+
+if [ "${DRY_RUN:-0}" = "1" ]; then
+    printf 'SLIME_TRAIN_MODULE=%s\n' "${SLIME_TRAIN_MODULE}"
+    printf 'ROLLOUT_FUNCTION_PATH=%s\n' "${ROLLOUT_FUNCTION_PATH}"
+    printf 'EVAL_FUNCTION_PATH=%s\n' "${EVAL_FUNCTION_PATH}"
+    printf 'SLIME_ASYNC_MODE=%s\n' "${SLIME_ASYNC_MODE}"
+    printf 'ADVANTAGE_ESTIMATOR=%s\n' "${ADVANTAGE_ESTIMATOR}"
+    printf 'ROLLOUT_BATCH_SIZE=%s\n' "${ROLLOUT_BATCH_SIZE}"
+    printf 'N_SAMPLES_PER_PROMPT=%s\n' "${N_SAMPLES_PER_PROMPT}"
+    printf 'NUM_STEPS_PER_ROLLOUT=%s\n' "${NUM_STEPS_PER_ROLLOUT}"
+    printf 'GLOBAL_BATCH_SIZE=%s\n' "${GLOBAL_BATCH_SIZE}"
+    printf 'EVAL_INTERVAL=%s\n' "${EVAL_INTERVAL}"
+    printf 'SAVE_INTERVAL=%s\n' "${SAVE_INTERVAL}"
+    printf 'LR=%s\n' "${LR}"
+    printf 'KL_LOSS_COEF=%s\n' "${KL_LOSS_COEF}"
+    printf 'USE_TIS=%s\n' "${USE_TIS}"
+    printf 'TIS_CLIP=%s\n' "${TIS_CLIP}"
+    printf 'TIS_CLIP_LOW=%s\n' "${TIS_CLIP_LOW}"
+    printf 'CUSTOM_TIS_FUNCTION_PATH=%s\n' "${CUSTOM_TIS_FUNCTION_PATH}"
+    printf 'SEARCHAGENT_IGPO_REWARD_SIDE=%s\n' "${SEARCHAGENT_IGPO_REWARD_SIDE}"
+    printf 'SEARCHAGENT_PPO_RATIO_MODE=%s\n' "${SEARCHAGENT_PPO_RATIO_MODE}"
+    printf 'DYNAMIC_SAMPLING_FILTER_PATH=%s\n' "${DYNAMIC_SAMPLING_FILTER_PATH}"
+    printf 'CUSTOM_REWARD_POST_PROCESS_PATH=%s\n' "${CUSTOM_REWARD_POST_PROCESS_PATH}"
+    printf 'TRIAL_NAME=%s\n' "${TRIAL_NAME}"
+    exit 0
+fi
 
 python3 -m "${SLIME_TRAIN_MODULE}" \
     --swiglu \
@@ -257,13 +301,17 @@ python3 -m "${SLIME_TRAIN_MODULE}" \
     --balance-data \
     --custom-generate-function-path searchagent.training.slime.rollout.generate_searchagent \
     --custom-rm-path searchagent.training.slime.rollout.custom_rm \
+    "${CUSTOM_REWARD_POST_PROCESS_ARGS[@]}" \
     --custom-rollout-log-function-path searchagent.training.slime.rollout.searchagent_rollout_log \
     --custom-eval-rollout-log-function-path searchagent.training.slime.rollout.searchagent_eval_rollout_log \
-    --dynamic-sampling-filter-path searchagent.training.slime.rollout.mixed_reward_filter \
+    --dynamic-sampling-filter-path "${DYNAMIC_SAMPLING_FILTER_PATH}" \
     --searchagent-agent-config "${SCRIPT_DIR}/train_dist_slime.yaml" \
     --searchagent-agent-config-key agent \
     --searchagent-eval-agent-config-key eval_agent \
     --searchagent-igpo-reward-coef "${SEARCHAGENT_IGPO_REWARD_COEF}" \
     --searchagent-igpo-outcome-reward-coef "${SEARCHAGENT_IGPO_OUTCOME_REWARD_COEF}" \
+    --searchagent-igpo-reward-side "${SEARCHAGENT_IGPO_REWARD_SIDE}" \
+    --searchagent-igpo-actor-score-micro-batch-size "${SEARCHAGENT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE}" \
+    --searchagent-ppo-ratio-mode "${SEARCHAGENT_PPO_RATIO_MODE}" \
     --searchagent-truncation-penalty "${SEARCHAGENT_TRUNCATION_PENALTY}" \
     "$@"
