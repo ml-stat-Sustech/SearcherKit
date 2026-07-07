@@ -58,6 +58,10 @@ def build_source(name: str | None = None, *, config: SourceConfig | None = None)
         from .web import WebSource
 
         return WebSource(config=config)
+    if source_type == "local_file":
+        from .local_file import LocalFileSource
+
+        return LocalFileSource(config=config)
     if source_type == "custom":
         if not config.target:
             raise ValueError(

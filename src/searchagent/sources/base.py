@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC
-from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from searchagent.common.errors import SearchAgentError
 from searchagent.common.retry import RetryConfig
@@ -101,3 +100,8 @@ class SourceConfig:
 
     # -- Memory --------------------------------------------------------------
     documents: list[Document] | None = None
+
+    # -- Local file ----------------------------------------------------------
+    root_path: str | None = None
+    local_file_encoding: str = "utf-8"
+    local_file_errors: str = "replace"

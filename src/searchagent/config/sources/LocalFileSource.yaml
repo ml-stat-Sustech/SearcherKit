@@ -1,0 +1,7 @@
+# LocalFileSource configuration
+# Class: searchagent.sources.LocalFileSource
+name: local_file
+type: local_file
+root_path: null
+local_file_encoding: utf-8
+local_file_errors: replace
