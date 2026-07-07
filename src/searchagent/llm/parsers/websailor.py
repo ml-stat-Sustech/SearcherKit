@@ -19,7 +19,7 @@ class WebSailorParser(QwenParser):
         first_user_prefix: str | None = None,
         user_role_prefix: str = "User: ",
     ) -> None:
-        super().__init__(upstream_parsed=False, drop_thinking=False)
+        super().__init__(drop_thinking=False)
         self.first_user_prefix = first_user_prefix or self.default_first_user_prefix
         self.user_role_prefix = user_role_prefix
 

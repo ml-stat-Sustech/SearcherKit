@@ -9,4 +9,4 @@ class WebExplorerParser(QwenParser):
     """Qwen-compatible parser configured for WebExplorer recipes."""
 
     def __init__(self) -> None:
-        super().__init__(upstream_parsed=False, drop_thinking=False)
+        super().__init__(drop_thinking=False)

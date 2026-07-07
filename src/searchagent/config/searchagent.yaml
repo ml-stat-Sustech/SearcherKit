@@ -33,10 +33,7 @@ agent:
       concurrency_limit: 512
       extra_client_kwargs: null
   parser:
-    type: qwen
-    qwen:
-      upstream_parsed: true
-      drop_thinking: false
+    type: upstream
   sources:
     - name: elasticsearch
       type: elasticsearch

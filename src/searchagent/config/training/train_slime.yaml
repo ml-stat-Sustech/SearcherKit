@@ -11,12 +11,7 @@ agent:
         chat_template_kwargs:
           enable_thinking: true
   parser:
-    type: qwen
-    target: null
-    qwen:
-      upstream_parsed: true
-      drop_thinking: false
-    kwargs: {}
+    type: upstream
   max_tokens: 40960
   system_prompt: |
     You are a helpful AI assistant that can search for information to answer questions accurately.
@@ -117,12 +112,7 @@ eval_agent:
         chat_template_kwargs:
           enable_thinking: true
   parser:
-    type: qwen
-    target: null
-    qwen:
-      upstream_parsed: true
-      drop_thinking: false
-    kwargs: {}
+    type: upstream
   max_tokens: 40960
   system_prompt: |
     You are a helpful AI assistant that can search for information to answer questions accurately.

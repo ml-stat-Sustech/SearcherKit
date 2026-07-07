@@ -1,5 +1,6 @@
 from searchagent.llm.parsers.base import Parser, ParserConfig, ParsingError, QwenParserConfig, get_parser
-from searchagent.llm.parsers.qwen import QwenParser, try_parse_json_object
+from searchagent.llm.parsers.qwen import QwenParser
+from searchagent.llm.parsers.upstream import UpstreamParser
 from searchagent.llm.parsers.webexplorer import WebExplorerParser
 from searchagent.llm.parsers.websailor import WebSailorParser
 
@@ -9,8 +10,8 @@ __all__ = [
     "ParsingError",
     "QwenParser",
     "QwenParserConfig",
+    "UpstreamParser",
     "WebExplorerParser",
     "WebSailorParser",
     "get_parser",
-    "try_parse_json_object",
 ]

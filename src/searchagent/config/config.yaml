@@ -30,7 +30,6 @@ agent:
   parser:
     type: qwen
     qwen:
-      upstream_parsed: false
       drop_thinking: true
 
   # Sources define how SearchAgent connects to searchable data backends.

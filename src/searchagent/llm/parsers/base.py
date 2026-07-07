@@ -13,7 +13,6 @@ from searchagent.common.errors import LLMError
 
 @dataclass
 class QwenParserConfig:
-    upstream_parsed: bool = field(default=False)
     drop_thinking: bool = field(default=True)
 
 
@@ -54,6 +53,10 @@ def get_parser(config: ParserConfig | Mapping[str, Any]) -> Parser:
         return parser
 
     parser_type = config.get("type", "qwen") if isinstance(config, Mapping) else config.type
+    if "upstream" in parser_type.lower():
+        from searchagent.llm.parsers.upstream import UpstreamParser
+
+        return UpstreamParser()
     if "qwen" in parser_type.lower():
         from searchagent.llm.parsers.qwen import QwenParser
 

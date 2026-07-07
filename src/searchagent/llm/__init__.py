@@ -15,7 +15,17 @@ from .base import (
 from .dashscope import DashScopeClient
 from .ollama import OllamaClient
 from .openai import OpenAIClient
-from .parsers import Parser, ParserConfig, ParsingError, QwenParser, QwenParserConfig, WebExplorerParser, WebSailorParser, get_parser
+from .parsers import (
+    Parser,
+    ParserConfig,
+    ParsingError,
+    QwenParser,
+    QwenParserConfig,
+    UpstreamParser,
+    WebExplorerParser,
+    WebSailorParser,
+    get_parser,
+)
 from .transformers import TransformersClient
 from .vllm import VllmClient
 
@@ -37,6 +47,7 @@ __all__ = [
     "ParsingError",
     "QwenParser",
     "QwenParserConfig",
+    "UpstreamParser",
     "WebExplorerParser",
     "WebSailorParser",
     "TransformersClient",

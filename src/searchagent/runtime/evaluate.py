@@ -69,7 +69,7 @@ Schema:
                 exceptions=(openai.RateLimitError, )
             )
         ),
-        parser=QwenParser(upstream_parsed=False),
+        parser=QwenParser(),
         system_prompt=system_prompt
     )
 

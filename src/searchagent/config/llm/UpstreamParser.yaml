@@ -1,0 +1,3 @@
+# UpstreamParser configuration
+# Class: searchagent.llm.parsers.upstream.UpstreamParser
+type: upstream

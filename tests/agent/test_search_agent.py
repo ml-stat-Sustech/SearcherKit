@@ -17,8 +17,8 @@ from searchagent.common.messages import ToolMessage
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm.base import ClientConfig, OpenAIConfig
 from searchagent.llm.openai import OpenAIClient
-from searchagent.llm.parsers import ParserConfig, QwenParserConfig
-from searchagent.llm.parsers.qwen import QwenParser
+from searchagent.llm.parsers import ParserConfig
+from searchagent.llm.parsers.upstream import UpstreamParser
 from searchagent.tools import BaseTool
 
 
@@ -62,13 +62,8 @@ class TrackingTool(BaseTool):
         return f"lookup result for {kwargs['query']}"
 
 
-def _parser() -> QwenParser:
-    return QwenParser(
-        config=ParserConfig(
-            type="qwen",
-            qwen=QwenParserConfig(upstream_parsed=True),
-        )
-    )
+def _parser() -> UpstreamParser:
+    return UpstreamParser()
 
 
 def _client() -> OpenAIClient:
@@ -110,8 +105,7 @@ def _config_agent() -> SearchAgent:
                 ),
             ),
             parser=ParserConfig(
-                type="qwen",
-                qwen=QwenParserConfig(upstream_parsed=True),
+                type="upstream",
             ),
             system_prompt="Config system.",
             query_prompt="Config query: {query}",

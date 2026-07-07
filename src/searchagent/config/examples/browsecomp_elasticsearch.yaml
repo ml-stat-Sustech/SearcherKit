@@ -37,7 +37,6 @@ agent:
   parser:
     type: qwen
     qwen:
-      upstream_parsed: false
       drop_thinking: false
   sources:
     - type: elasticsearch

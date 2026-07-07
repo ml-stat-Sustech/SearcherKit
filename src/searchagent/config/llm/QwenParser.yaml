@@ -3,5 +3,4 @@
 type: qwen
 target: null
 qwen:
-  upstream_parsed: false
   drop_thinking: true

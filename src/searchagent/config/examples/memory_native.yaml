@@ -33,7 +33,6 @@ agent:
   parser:
     type: qwen
     qwen:
-      upstream_parsed: false
       drop_thinking: true
   sources:
     - type: memory

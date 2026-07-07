@@ -51,6 +51,7 @@ def register_config_store() -> None:
     cs.store(group="llm", name="OllamaClient", node=ClientConfig)
     cs.store(group="llm", name="TransformersClient", node=ClientConfig)
     cs.store(group="llm", name="QwenParser", node=ParserConfig)
+    cs.store(group="llm", name="UpstreamParser", node=ParserConfig)
     cs.store(group="common", name="RetryPolicy", node=RetryConfig)
     cs.store(group="common", name="GenericDataLoader", node=DataConfig)
     cs.store(name="__openai_config__", node=OpenAIConfig)

@@ -22,10 +22,7 @@ agent:
       extra_client_kwargs:
         max_retries: 0
   parser:
-    type: qwen
-    qwen:
-      upstream_parsed: true
-      drop_thinking: false
+    type: upstream
   sources:
     - name: elasticsearch
       type: elasticsearch
