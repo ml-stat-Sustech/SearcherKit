@@ -51,6 +51,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         self.agent_config = config.agent
         self.reward = config.reward
         self.overlong_penalty_margin = config.overlong_penalty_margin
+        self.answer_pattern = re.compile(config.answer_pattern, re.DOTALL)
         self.reward_discount = reward_discount
         self.export_style = export_style
         if config.reward != "f1":
@@ -139,7 +140,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         else:
             last_content = last_msg.content
 
-        matches = list(_ANSWER_PATTERN.finditer(last_content))
+        matches = list(self.answer_pattern.finditer(last_content))
         answer = None
         if len(matches) != 1:
             format_error = True

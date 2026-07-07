@@ -54,6 +54,10 @@ def _arg_value(args: Any, name: str, default: Any = None) -> Any:
     return getattr(args, name, default)
 
 
+def _answer_pattern(args: Any) -> re.Pattern[str]:
+    return re.compile(_arg_value(args, "searchagent_answer_pattern", _ANSWER_PATTERN.pattern), re.DOTALL)
+
+
 def _select_key(config: Any, key: str) -> Any:
     node = config
     for part in key.split("."):
@@ -151,10 +155,11 @@ def _score_history(
     format_error: bool,
     repeated_query: bool,
     too_many_tool_call: bool,
+    answer_pattern: re.Pattern[str],
     truncated: bool = False,
 ) -> tuple[float, dict[str, Any]]:
     last_content = _final_content(history)
-    matches = list(_ANSWER_PATTERN.finditer(last_content))
+    matches = list(answer_pattern.finditer(last_content))
     answer = None
     if len(matches) != 1:
         format_error = True
@@ -542,6 +547,7 @@ async def generate_searchagent(
         format_error=format_error,
         repeated_query=repeated_query,
         too_many_tool_call=too_many_tool_call,
+        answer_pattern=_answer_pattern(args),
         truncated=truncated,
     )
     metadata = {
@@ -623,7 +629,7 @@ async def custom_rm(args: Any, sample: Sample | list[Sample], **kwargs: Any) -> 
     if "outcome_score" in metadata and "overlong_penalty" in metadata:
         return float(metadata["outcome_score"]) + float(metadata["overlong_penalty"])
     label = _label_from_sample(sample)
-    matches = list(_ANSWER_PATTERN.finditer(sample.response or ""))
+    matches = list(_answer_pattern(args).finditer(sample.response or ""))
     answer = matches[0].group("answer").strip() if len(matches) == 1 else ""
     return f1_score(answer.lower(), label.lower()) if answer else 0.0
 

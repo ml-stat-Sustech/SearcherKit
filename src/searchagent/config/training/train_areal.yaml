@@ -21,6 +21,7 @@ scheduler:
   type: ray
 
 workflow:
+  answer_pattern: '\\boxed\{(?P<answer>[^}]*)\}'
   agent:
     llm_client:
       type: openai
@@ -125,6 +126,7 @@ workflow:
           retry_config: null
 
 eval_workflow:
+  answer_pattern: ${workflow.answer_pattern}
   agent:
     llm_client:
       type: openai

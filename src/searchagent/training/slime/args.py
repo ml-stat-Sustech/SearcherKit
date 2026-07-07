@@ -105,6 +105,12 @@ def add_searchagent_slime_arguments(parser):
         help="Reward penalty applied when a rollout hits SearchAgent context or length truncation.",
     )
     parser.add_argument(
+        "--searchagent-answer-pattern",
+        type=str,
+        default=r"\\boxed\{(?P<answer>[^}]*)\}",
+        help="Regex used to extract the final answer; must include a named 'answer' group.",
+    )
+    parser.add_argument(
         "--searchagent-eval-concurrency",
         type=int,
         default=64,

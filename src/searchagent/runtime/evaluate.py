@@ -265,6 +265,7 @@ async def _run_evaluate(
 
 
 def evaluate_main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> None:
+    global _ANSWER_PATTERN
     parser = argparse.ArgumentParser(
         prog=prog,
         description="Evaluate saved agent run records with an LLM judge.",
@@ -277,7 +278,19 @@ def evaluate_main(argv: Sequence[str] | None = None, *, prog: str | None = None)
         default=None,
         help="Maximum number of concurrent judge requests.",
     )
+    parser.add_argument(
+        "--answer-pattern",
+        default=_ANSWER_PATTERN.pattern,
+        help=(
+            "Regex used to extract the final answer before judging. It must "
+            "define a named capture group '(?P<answer>...)'."
+        ),
+    )
     args = parser.parse_args(argv)
+    try:
+        _ANSWER_PATTERN = re.compile(args.answer_pattern, re.DOTALL)
+    except re.error as exc:
+        parser.error(str(exc))
 
     setup_logger()
     asyncio.run(

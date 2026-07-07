@@ -8,4 +8,5 @@ export OPENAI_API_KEY=""
 searchagent evaluate \
     /path/to/input \
     /path/to/output \
-    --max-concurrency 128
+    --max-concurrency 128 \
+    --answer-pattern '\\boxed\{(?P<answer>[^}]*)\}'

@@ -15,6 +15,7 @@ class WorkFlowConfig:
     agent: AgentConfig = field(default_factory=AgentConfig)
     reward: str = field(default="f1", metadata={"choices": ["f1", "llm_as_judge"]})
     overlong_penalty_margin: int = field(default=5000)
+    answer_pattern: str = field(default=r"\\boxed\{(?P<answer>[^}]*)\}")
 
 
 @dataclass
