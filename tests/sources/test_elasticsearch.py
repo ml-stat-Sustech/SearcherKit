@@ -195,6 +195,9 @@ def test_search(source_factory: Callable[[], DataSource]) -> None:
                 body = json.loads(request.kwargs["data"])
                 assert body["size"] == 3
                 assert body["query"]["multi_match"]["query"] == "runtime"
+                assert body["highlight"] == {
+                    "fields": {"text": {"fragment_size": 256, "number_of_fragments": 5}}
+                }
                 assert results[0].document.id == "doc-1"
                 assert results[0].document.title == "SearchAgent"
                 assert results[0].document.metadata == {"links": ["https://example.test/next"]}
@@ -267,7 +270,9 @@ def test_hybrid_search_with_highlight(source_factory: Callable[..., DataSource])
                     "k": 2,
                     "num_candidates": 2,
                 }
-                assert body["highlight"] == {"fields": {"text": {"fragment_size": 256}}}
+                assert body["highlight"] == {
+                    "fields": {"text": {"fragment_size": 256, "number_of_fragments": 5}}
+                }
                 assert results[0].document.id == "doc-1"
                 assert results[0].document.title == "SearchAgent"
                 assert results[0].snippet == "pluggable runtime"

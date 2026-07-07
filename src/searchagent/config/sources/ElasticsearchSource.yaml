@@ -5,7 +5,7 @@ type: elasticsearch
 hosts: http://127.0.0.1:9200
 index: browsecomp_hybrid
 search_fields:
-  - title^2
+  - title
   - text
 title_field: title
 text_field: text
@@ -16,6 +16,7 @@ metadata_fields:
   - links
 highlight: true
 highlight_fragment_size: 128
+highlight_number_of_fragments: 5
 snippet_chars: 512
 request_timeout: null
 es_max_concurrency: null

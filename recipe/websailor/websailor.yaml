@@ -37,11 +37,10 @@ agent:
       hosts: http://127.0.0.1:9200
       index: browsecomp_hybrid
       search_fields:
-        - title^2
+        - title
         - text
       document_id_field: url
       fetch_field: url
-      highlight_fragment_size: 128
       snippet_chars: 512
       metadata_fields:
         - links

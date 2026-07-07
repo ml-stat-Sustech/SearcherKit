@@ -105,6 +105,7 @@ class ElasticsearchSource(DataSource):
         metadata_fields: Sequence[str] | None = None,
         highlight: bool = True,
         highlight_fragment_size: int = 256,
+        highlight_number_of_fragments: int = 5,
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         es_max_concurrency: int | None = None,
@@ -137,6 +138,7 @@ class ElasticsearchSource(DataSource):
         metadata_fields: Sequence[str] | None = None,
         highlight: bool = True,
         highlight_fragment_size: int = 256,
+        highlight_number_of_fragments: int = 5,
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         es_max_concurrency: int | None = None,
@@ -166,6 +168,7 @@ class ElasticsearchSource(DataSource):
             metadata_fields = metadata_fields or config.metadata_fields
             highlight = config.highlight
             highlight_fragment_size = config.highlight_fragment_size
+            highlight_number_of_fragments = config.highlight_number_of_fragments
             snippet_chars = config.snippet_chars
             request_timeout = request_timeout or config.request_timeout
             if es_max_concurrency is None:
@@ -189,6 +192,8 @@ class ElasticsearchSource(DataSource):
             raise ValueError("ElasticsearchSource requires hosts or client")
         if highlight_fragment_size <= 0:
             raise ValueError("highlight_fragment_size must be positive")
+        if highlight_number_of_fragments < 0:
+            raise ValueError("highlight_number_of_fragments must be non-negative")
         if snippet_chars <= 0:
             raise ValueError("snippet_chars must be positive")
         _validate_max_concurrency("es_max_concurrency", es_max_concurrency)
@@ -224,6 +229,7 @@ class ElasticsearchSource(DataSource):
         self.metadata_fields = list(metadata_fields or ["links"])
         self.highlight = highlight
         self.highlight_fragment_size = highlight_fragment_size
+        self.highlight_number_of_fragments = highlight_number_of_fragments
         self.snippet_chars = snippet_chars
         self.request_timeout = request_timeout
         self._es_semaphore = _build_semaphore(es_max_concurrency)
@@ -346,7 +352,10 @@ class ElasticsearchSource(DataSource):
         if self.highlight:
             body["highlight"] = {
                 "fields": {
-                    self.text_field: {"fragment_size": self.highlight_fragment_size},
+                    self.text_field: {
+                        "fragment_size": self.highlight_fragment_size,
+                        "number_of_fragments": self.highlight_number_of_fragments,
+                    },
                 }
             }
         return body
