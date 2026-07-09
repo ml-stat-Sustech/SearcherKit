@@ -461,7 +461,8 @@ async def _async_main(
     )
     async with tool:
         await tool.init()
-        return await tool.run(**arguments)
+        content, _extensions = await tool.run(**arguments)
+        return content
 
 
 def run(

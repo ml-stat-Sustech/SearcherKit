@@ -104,9 +104,11 @@ def test_tool_argument_mapping(tool_factory: ToolFactory) -> None:
         tool = tool_factory(test_name="argument-mapping")
 
         result = await tool.run(q="source-backed tools")
+        content, extensions = result
 
-        assert "SearchAgent Runtime" in result
-        assert "source-backed tools" in result
+        assert "SearchAgent Runtime" in content
+        assert "source-backed tools" in content
+        assert extensions == {"searched_ids": ["doc-1"]}
 
     asyncio.run(run())
 
@@ -122,8 +124,10 @@ def test_argument_mapping_translates_default_input_schema(tool_factory: ToolFact
         assert tool.inputSchema["required"] == ["q"]
 
         result = await tool.run(q="source-backed tools")
+        content, extensions = result
 
-        assert "SearchAgent Runtime" in result
+        assert "SearchAgent Runtime" in content
+        assert extensions == {"searched_ids": ["doc-1"]}
 
     asyncio.run(run())
 
@@ -164,7 +168,8 @@ def test_argument_mapping_key_is_left_to_runtime_schema_validation() -> None:
 
         result = await tool.run(query="source-backed tools")
 
-        assert result.startswith("[Tool] invalid type for tool call argument.")
+        assert result[0].startswith("[Tool] invalid type for tool call argument.")
+        assert result[1] == {}
 
     asyncio.run(run())
 

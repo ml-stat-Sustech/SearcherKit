@@ -276,7 +276,7 @@ class SearchAgent(BaseAgent):
     async def close(self) -> None:
         await self.close_tools()
 
-    async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
+    async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[tuple[str, dict[str, Any]]]:
         
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
@@ -319,7 +319,7 @@ class SearchAgent(BaseAgent):
             
         gathered = await asyncio.gather(*tool_call_coros, return_exceptions=True)
         first_exception: Exception | None = None
-        results: list[str] = []
+        results: list[tuple[str, dict[str, Any]]] = []
         for tc, result in zip(tool_call_list, gathered):
             if isinstance(result, Exception):
                 if first_exception is None:
@@ -332,18 +332,19 @@ class SearchAgent(BaseAgent):
                 )
                 continue
 
-            response_preview = _preview_payload(result)
+            content, extensions = result
+            response_preview = _preview_payload(content)
             logger.info(
                 "Tool response id=%s name=%s response=%s",
                 tc.id,
                 tc.name,
                 response_preview,
             )
-            results.append(result)
+            results.append((content, extensions))
         if first_exception is not None:
             raise first_exception
         return results
-    
+
     async def stop(self) -> bool:
         if self.no_more_tool_calls:
             logger.info(
@@ -475,9 +476,20 @@ class SearchAgent(BaseAgent):
                         # call tools from llm result (if any)
                         if new_call_result.tool_calls:
                             results = await self.call_tools(new_call_result.tool_calls)
+                            # collect tool call extra data (e.g. searched id)
+                            extensions: dict[str, Any] = {}
                             for tc, r in zip(new_call_result.tool_calls, results):
-                                tc.result = r
-                            new_tool_results = tool([copy.copy(tc) for tc in new_call_result.tool_calls])
+                                tc.result = r[0]
+                                tool_call_id = tc.id
+                                if tool_call_id is None:
+                                    continue
+                                for key, value in r[1].items():
+                                    keyed_values = extensions.setdefault(key, {})
+                                    keyed_values[tool_call_id] = value
+                            new_tool_results = tool(
+                                [copy.copy(tc) for tc in new_call_result.tool_calls],
+                                extensions=extensions or None,
+                            )
                         else:
                             self.no_more_tool_calls = True
 

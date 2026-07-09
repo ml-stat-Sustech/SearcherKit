@@ -200,9 +200,11 @@ def test_run(tool_factory: ToolFactory) -> None:
         tool = tool_factory(test_name="run")
 
         result = await tool.run(document_id="doc-1", goal="confirm runtime wiring")
+        content, extensions = result
 
-        assert "[SearchAgent Runtime](https://example.test/runtime)" in result
-        assert "pluggable runtime for source-backed tools" in result
+        assert "[SearchAgent Runtime](https://example.test/runtime)" in content
+        assert "pluggable runtime for source-backed tools" in content
+        assert extensions == {}
 
     asyncio.run(run())
 
@@ -231,16 +233,18 @@ def test_summary(tool_factory: ToolFactory) -> None:
             result = await tool.run(document_id="doc-1", goal="confirm runtime wiring")
 
         assert len(route.calls) == 1, result
+        content, extensions = result
         prompt = captured_payload["messages"][0]["content"]
         assert "confirm runtime wiring" in prompt
         assert "SearchAgent provides a pluggable runtime for source-backed tools." in prompt
-        assert result == (
+        assert content == (
             "The useful information for query confirm runtime wiring as follows:\n\n"
             "Evidence in page:\n"
             f"{SUMMARY_EVIDENCE}\n\n"
             "Summary:\n"
             f"{SUMMARY_TEXT}"
         )
+        assert extensions == {}
 
     asyncio.run(run())
 
@@ -259,8 +263,10 @@ def test_summary_retry_success(tool_factory: ToolFactory) -> None:
             result = await tool.run(document_id="doc-1", goal="confirm runtime wiring")
 
         assert len(route.calls) == 2
-        assert "after retry" in result
-        assert "ok" in result
+        content, extensions = result
+        assert "after retry" in content
+        assert "ok" in content
+        assert extensions == {}
 
     asyncio.run(run())
 

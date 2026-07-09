@@ -178,7 +178,7 @@ class BaseTool(abc.ABC):
     async def close(self) -> None:
         """Release tool resources."""
 
-    async def run(self, **kwargs: Any) -> str:
+    async def run(self, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         """Execute the tool with the provided arguments."""
         try:
             validate(instance=kwargs, schema=self.inputSchema)
@@ -193,15 +193,21 @@ class BaseTool(abc.ABC):
             return (
                 f"[Tool] invalid type for tool call argument.\n"
                 f"Problem:{exc!r}\n\n"
-                f"Argument type should be:\n{json.dumps(self.inputSchema)}"
+                f"Argument type should be:\n{json.dumps(self.inputSchema)}",
+                {},
             )
         mapped_kwargs = map_arguments(kwargs, self.argument_mapping)
         tool_result = await self._run(**mapped_kwargs)
+        if isinstance(tool_result, str):
+            content = tool_result
+            extensions: dict[str, Any] = {}
+        else:
+            content, extensions = tool_result
         if self.summarizer:
             goal = mapped_kwargs.get(self.summary_goal_key, "")
-            evidence, summary = await self.summarizer.summarize(goal=goal, content=tool_result)
-            tool_result = self.format_summary(goal=goal, evidence=evidence, summary=summary)
-        return tool_result
+            evidence, summary = await self.summarizer.summarize(goal=goal, content=content)
+            content = self.format_summary(goal=goal, evidence=evidence, summary=summary)
+        return content, extensions
 
     def get_default_description(self) -> str | None:
         return inspect.getdoc(self._run) or inspect.getdoc(type(self))
@@ -218,7 +224,7 @@ class BaseTool(abc.ABC):
         )
 
     @abc.abstractmethod
-    async def _run(self, **kwargs: Any) -> str:
+    async def _run(self, **kwargs: Any) -> str | tuple[str, dict[str, Any]]:
         """Subclasses implement actual tool execution."""
         raise NotImplementedError
 

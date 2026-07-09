@@ -138,9 +138,22 @@ def test_multi_source_search_run(tool_factory: SearchFactory) -> None:
             source=summary_name,
         )
 
-        assert "Runtime source explains pluggable source-backed execution." in runtime_result
-        assert "Summary source explains evidence extraction." not in runtime_result
-        assert "Summary source explains evidence extraction." in summary_result
+        runtime_content, runtime_extensions = runtime_result
+        summary_content, summary_extensions = summary_result
+        assert (
+            "Runtime source explains pluggable source-backed execution."
+            in runtime_content
+        )
+        assert (
+            "Summary source explains evidence extraction."
+            not in runtime_content
+        )
+        assert (
+            "Summary source explains evidence extraction."
+            in summary_content
+        )
+        assert runtime_extensions == {"searched_ids": ["runtime-doc"]}
+        assert summary_extensions == {"searched_ids": ["summary-doc"]}
 
     asyncio.run(run())
 
@@ -183,10 +196,17 @@ def test_multi_source_visit_run(tool_factory: VisitFactory) -> None:
             goal="confirm summary",
         )
 
-        assert "[Runtime Source](https://example.test/runtime)" in runtime_result
-        assert "Runtime source explains pluggable source-backed execution." in runtime_result
-        assert "[Summary Source](https://example.test/summary)" in summary_result
-        assert "Metadata: {'kind': 'summary'}" in summary_result
+        runtime_content, runtime_extensions = runtime_result
+        summary_content, summary_extensions = summary_result
+        assert "[Runtime Source](https://example.test/runtime)" in runtime_content
+        assert (
+            "Runtime source explains pluggable source-backed execution."
+            in runtime_content
+        )
+        assert "[Summary Source](https://example.test/summary)" in summary_content
+        assert "Metadata: {'kind': 'summary'}" in summary_content
+        assert runtime_extensions == {}
+        assert summary_extensions == {}
 
     asyncio.run(run())
 

@@ -200,10 +200,12 @@ def test_run(tool_factory: ToolFactory) -> None:
         tool = tool_factory(test_name="run")
 
         result = await tool.run(query="SearchAgent runtime summary", top_k=1)
+        content, extensions = result
 
-        assert "1. [SearchAgent Runtime](https://example.test/runtime)" in result
-        assert "pluggable runtime for source-backed tools" in result
-        assert "Summary Tools" not in result
+        assert "1. [SearchAgent Runtime](https://example.test/runtime)" in content
+        assert "pluggable runtime for source-backed tools" in content
+        assert "Summary Tools" not in content
+        assert extensions == {"searched_ids": ["doc-1"]}
 
     asyncio.run(run())
 
@@ -219,18 +221,20 @@ def test_summary(tool_factory: ToolFactory) -> None:
             result = await tool.run(query="SearchAgent runtime", top_k=1)
 
         assert len(route.calls) == 1, result
+        content, extensions = result
         assert captured_payload["model"] == "fake-summary-model"
         assert captured_payload["response_format"] == {"type": "json_object"}
         prompt = captured_payload["messages"][0]["content"]
         assert "SearchAgent runtime" in prompt
         assert "SearchAgent provides a pluggable runtime for source-backed tools." in prompt
-        assert result == (
+        assert content == (
             "The useful information for query SearchAgent runtime as follows:\n\n"
             "Evidence in page:\n"
             f"{SUMMARY_EVIDENCE}\n\n"
             "Summary:\n"
             f"{SUMMARY_TEXT}"
         )
+        assert extensions == {"searched_ids": ["doc-1"]}
 
     asyncio.run(run())
 
@@ -249,8 +253,10 @@ def test_summary_retry_success(tool_factory: ToolFactory) -> None:
             result = await tool.run(query="SearchAgent runtime", top_k=1)
 
         assert len(route.calls) == 2
-        assert "after retry" in result
-        assert "ok" in result
+        content, extensions = result
+        assert "after retry" in content
+        assert "ok" in content
+        assert extensions == {"searched_ids": ["doc-1"]}
 
     asyncio.run(run())
 

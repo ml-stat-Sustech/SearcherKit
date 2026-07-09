@@ -5,6 +5,7 @@ Agent implementation example. React Agent that returns when no more tool calls a
 from __future__ import annotations
 
 import asyncio
+import copy
 from typing import Iterable, Any, TYPE_CHECKING
 
 from searchagent.common.messages import tool, system, user, ChatMessage, ToolCall
@@ -36,11 +37,11 @@ class ReactAgent(BaseAgent):
         logger.info("Initializing tools count=%s tools=%s", len(tools), [t.name for t in tools])
         await asyncio.gather(*[t.init() for t in tools])
 
-    async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
+    async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[tuple[str, dict[str, Any]]]:
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         return await asyncio.gather(*[self.tool_dict[tc.name].run(**tc.arguments) for tc in tool_call_list])
-    
+
     async def stop(self, history: list[ChatMessage]) -> bool:
         if history[-1].role == "assistant": # no more tool responses
             return True
@@ -76,7 +77,21 @@ class ReactAgent(BaseAgent):
             if call_res.tool_calls:
                 results = await self.call_tools(call_res.tool_calls)
                 if results:
-                    history.append(tool(results))
+                    extensions: dict[str, Any] = {}
+                    for tc, result in zip(call_res.tool_calls, results):
+                        tc.result = result[0]
+                        tool_call_id = tc.id
+                        if tool_call_id is None:
+                            continue
+                        for key, value in result[1].items():
+                            keyed_values = extensions.setdefault(key, {})
+                            keyed_values[tool_call_id] = value
+                    history.append(
+                        tool(
+                            [copy.copy(tc) for tc in call_res.tool_calls],
+                            extensions=extensions or None,
+                        )
+                    )
             
             if await self.stop(history):
                 break

@@ -94,7 +94,7 @@ class SearchTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, *, query: str, top_k: int = 5) -> str:
+    async def _run(self, *, query: str, top_k: int = 5) -> tuple[str, dict[str, object]]:
         """Search the configured data source."""
         try:
             results = await self.source.search(query, top_k=top_k)
@@ -103,7 +103,9 @@ class SearchTool(BaseTool):
         text = _format_results(results)
         if self.response_char_limit is not None:
             text = _limit_response(text, self.response_char_limit)
-        return text
+        return text, {
+            "searched_ids": [result.document.id for result in results],
+        }
 
     async def close(self) -> None:
         await self.source.close()
