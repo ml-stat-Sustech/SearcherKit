@@ -3,28 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, overload
+from typing import overload
 
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import DataSource, Document, SourceError, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
-
-VISIT_DESCRIPTION = """
-Fetch a document from one of the configured data sources.
-Choose source to fetch from the list.
-{sources}
-"""
-
-VISIT_INPUT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "document_id": {"type": "string"},
-        "goal": {"type": "string"},
-        "source": {"type": "string"},
-    },
-    "required": ["document_id", "source"],
-    "additionalProperties": False,
-}
 
 
 def _format_document(document: Document) -> str:
@@ -57,6 +40,7 @@ class MultiSourceVisitTool(BaseTool):
         name: str = "visit",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
+        argument_mapping: Mapping[str, str] | None = None,
         response_char_limit: int | None = None,
     ) -> None: ...
 
@@ -67,6 +51,7 @@ class MultiSourceVisitTool(BaseTool):
         name: str = "visit",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
+        argument_mapping: Mapping[str, str] | None = None,
         response_char_limit: int | None = None,
         config: ToolConfig | None = None,
     ) -> None:
@@ -81,6 +66,7 @@ class MultiSourceVisitTool(BaseTool):
                 name=config.name,
                 description=config.description,
                 inputSchema=config.inputSchema or inputSchema,
+                argument_mapping=config.argument_mapping or argument_mapping,
                 response_char_limit=config.response_char_limit,
             )
             return
@@ -88,14 +74,15 @@ class MultiSourceVisitTool(BaseTool):
         if not source_map:
             raise ValueError("MultiSourceVisitTool requires a dict of sources")
         source_names = sorted(source_map.keys())
-        rendered_description = description or VISIT_DESCRIPTION.format(
-            sources="\n".join(name for name in source_names)
-        )
         super().__init__(
             name=name,
-            description=rendered_description,
-            inputSchema=inputSchema or VISIT_INPUT_SCHEMA,
+            description=description,
+            inputSchema=inputSchema,
+            argument_mapping=argument_mapping,
         )
+        if description is None and self.description:
+            sources = "\n".join(name for name in source_names)
+            self.description = f"{self.description}\nChoose source to fetch from the list.\n{sources}"
         self.source_map = source_map
         self.response_char_limit = (
             config.response_char_limit if config is not None else response_char_limit
@@ -103,19 +90,22 @@ class MultiSourceVisitTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, **kwargs: Any) -> str:
-        document_id = str(kwargs["document_id"])
-        raw_goal = kwargs.get("goal")
-        goal = str(raw_goal) if raw_goal is not None else None
-        source_name = str(kwargs["source"])
-        source = self.source_map.get(source_name)
-        if source is None:
+    async def _run(
+        self,
+        *,
+        document_id: str,
+        source: str,
+        goal: str | None = None,
+    ) -> str:
+        """Fetch a document from one of the configured data sources."""
+        selected_source = self.source_map.get(source)
+        if selected_source is None:
             available_sources = ", ".join(sorted(self.source_map.keys()))
             raise RecoverableError(
-                f"unknown source {source_name!r}; available sources: {available_sources}"
+                f"unknown source {source!r}; available sources: {available_sources}"
             )
         try:
-            document = await source.fetch(document_id, goal=goal)
+            document = await selected_source.fetch(document_id, goal=goal)
         except SourceError as e:
             raise RecoverableError(str(e)) from e
         except KeyError as e:

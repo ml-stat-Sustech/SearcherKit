@@ -1,26 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, overload
-import json
+from typing import Mapping, overload
 
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import DataSource, Document, SourceError, build_source
-from searchagent.tools.base import BaseTool, SummarizerConfig, ToolConfig
+from searchagent.tools.base import BaseTool, ToolConfig
 from searchagent.tools.summarizer import Summarizer
-
-VISIT_DESCRIPTION = """
-Get the content of a document.
-"""
-
-VISIT_INPUT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "document_id": {"type": "string"},
-        "goal": {"type": "string"},
-    },
-    "required": ["document_id"],
-    "additionalProperties": False,
-}
 
 
 def _limit_response(text: str, limit: int) -> str:
@@ -51,6 +36,7 @@ class VisitTool(BaseTool):
         name: str = "visit",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
+        argument_mapping: Mapping[str, str] | None = None,
         response_char_limit: int | None = None,
         summarizer: Summarizer | None = None,
         summary_goal_key = "goal",
@@ -63,6 +49,7 @@ class VisitTool(BaseTool):
         name: str = "visit",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
+        argument_mapping: Mapping[str, str] | None = None,
         response_char_limit: int | None = None,
         summarizer: Summarizer | None = None,
         summary_goal_key = "goal",
@@ -77,18 +64,20 @@ class VisitTool(BaseTool):
                 build_source(config.source[0]),
                 name = config.name,
                 description=config.description,
-                inputSchema=inputSchema,
+                inputSchema=config.inputSchema or inputSchema,
+                argument_mapping=config.argument_mapping or argument_mapping,
                 response_char_limit=config.response_char_limit,
                 summarizer=Summarizer(config = config.summarizer) if config.summarizer else None,
-                summary_goal_key=summary_goal_key
+                summary_goal_key=config.summary_goal_key
             )
             return
         if source is None:
             raise ValueError("VisitTool requires a source")
         super().__init__(
             name=name,
-            description=description or VISIT_DESCRIPTION,
-            inputSchema=inputSchema or VISIT_INPUT_SCHEMA,
+            description=description,
+            inputSchema=inputSchema,
+            argument_mapping=argument_mapping,
             summarizer=summarizer,
             summary_goal_key=summary_goal_key
         )
@@ -99,10 +88,8 @@ class VisitTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, **kwargs: Any) -> str:
-        document_id = str(kwargs["document_id"])
-        raw_goal = kwargs.get("goal")
-        goal = str(raw_goal) if raw_goal is not None else None
+    async def _run(self, *, document_id: str, goal: str | None = None) -> str:
+        """Get the content of a document."""
         try:
             document = await self.source.fetch(document_id, goal=goal)
         except SourceError as e:

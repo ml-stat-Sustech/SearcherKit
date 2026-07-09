@@ -18,7 +18,7 @@ from fastmcp.exceptions import ToolError
 
 from searchagent.common.log import get_logger, setup_logger
 from searchagent.common.errors import FatalError, RecoverableError
-from searchagent.tools.base import BaseTool, ToolConfig
+from searchagent.tools.base import BaseTool, ToolConfig, map_to_model_visible_schema
 
 if TYPE_CHECKING:
     from fastmcp.client.client import CallToolResult
@@ -48,6 +48,22 @@ class BaseMCPTool(BaseTool):
     _client_pool: dict[tuple[str, str, str], _PooledClient] = {}
     _pool_lock: asyncio.Lock = asyncio.Lock()
 
+    def get_default_description(self) -> str | None:
+        logger.warning(
+            "MCP tool %r has no configured description; metadata will be applied after init() runs",
+            self.name,
+        )
+        return None
+
+    def _resolve_input_schema(self, configured_schema: Mapping[str, Any] | None) -> Mapping[str, Any]:
+        if configured_schema is not None:
+            return configured_schema
+        logger.warning(
+            "MCP tool %r has no configured inputSchema; metadata will be applied after init() runs",
+            self.name,
+        )
+        return {}
+
     @overload
     def __init__(self, *, config: ToolConfig) -> None: ...
 
@@ -64,6 +80,7 @@ class BaseMCPTool(BaseTool):
         transport: Literal["sse", "streamable-http"] = "streamable-http",
         max_concurrency: int | None = None,
         raise_on_fatal: bool = True,
+        argument_mapping: Mapping[str, str] | None = None,
         raise_argument_validation_error: bool = False,
     ) -> None: ...
 
@@ -79,10 +96,15 @@ class BaseMCPTool(BaseTool):
         transport: Literal["sse", "streamable-http"] = "streamable-http",
         max_concurrency: int | None = None,
         raise_on_fatal: bool = True,
+        argument_mapping: Mapping[str, str] | None = None,
         raise_argument_validation_error: bool = False,
         config: ToolConfig | None = None,
         **kwargs: Any,
     ) -> None:
+        self._input_schema_overridden_by_config = (
+            (config is not None and config.inputSchema is not None)
+            or (config is None and inputSchema is not None)
+        )
         if config is not None:
             resolved_mcp_tool_name = config.mcp_tool_name or config.name
             if not resolved_mcp_tool_name:
@@ -107,6 +129,7 @@ class BaseMCPTool(BaseTool):
                 name,
                 description,
                 inputSchema,
+                argument_mapping=argument_mapping,
                 raise_argument_validation_error=raise_argument_validation_error,
             )
             self.mcp_tool_name = mcp_tool_name
@@ -247,9 +270,15 @@ class BaseMCPTool(BaseTool):
             or getattr(info, "schema", None)
         )
         if description is not None:
-            self.description = str(description)
+            if self.description is None:
+                self.description = str(description)
         if schema is not None:
-            self.inputSchema = self._coerce_schema(schema)
+            coerced_schema = self._coerce_schema(schema)
+            if coerced_schema is not None and not self._input_schema_overridden_by_config:
+                self.inputSchema = map_to_model_visible_schema(
+                    coerced_schema,
+                    self.argument_mapping,
+                )
 
     @staticmethod
     def _coerce_schema(value: Any) -> Mapping[str, Any] | None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import inspect
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -8,6 +9,7 @@ from typing import Any, overload
 
 from jsonschema import validate, ValidationError
 
+from searchagent.common.json_schema import schema_from_signature
 from searchagent.common.retry import RetryConfig
 from searchagent.tools.summarizer import Summarizer
 from searchagent.common.log import get_logger
@@ -40,6 +42,7 @@ class ToolConfig:
     name: str = ""
     description: str | None = None
     inputSchema: dict[str, Any] | None = None
+    argument_mapping: dict[str, str] = field(default_factory=dict)
     raise_argument_validation_error: bool = False
 
     # MCP connection
@@ -71,7 +74,8 @@ class ToolConfig:
 class BaseTool(abc.ABC):
     name: str
     description: str | None
-    inputSchema: Mapping[str, Any] | None
+    inputSchema: Mapping[str, Any]
+    argument_mapping: Mapping[str, str]
     raise_argument_validation_error: bool
 
     @overload
@@ -84,6 +88,7 @@ class BaseTool(abc.ABC):
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         *,
+        argument_mapping: Mapping[str, str] | None = None,
         raise_argument_validation_error: bool = False,
         summarizer: Summarizer | None = None,
         summary_goal_key = "query",
@@ -96,6 +101,7 @@ class BaseTool(abc.ABC):
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
         *,
+        argument_mapping: Mapping[str, str] | None = None,
         raise_argument_validation_error: bool = False,
         summarizer: Summarizer | None = None,
         config: ToolConfig | None = None,
@@ -107,8 +113,10 @@ class BaseTool(abc.ABC):
             if not config.name:
                 raise ValueError("tool config requires a model-visible name")
             self.name = config.name
-            self.description = config.description
-            self.inputSchema = config.inputSchema
+            self.description = config.description or self.get_default_description()
+            self.argument_mapping = dict(config.argument_mapping)
+            self._uses_default_input_schema = config.inputSchema is None
+            self.inputSchema = self._resolve_input_schema(config.inputSchema)
             self.raise_argument_validation_error = config.raise_argument_validation_error
             if config.summarizer is not None:
                 self._configure_summarizer(config=config.summarizer)
@@ -117,8 +125,10 @@ class BaseTool(abc.ABC):
             if not name:
                 raise ValueError("tool requires a model-visible name")
             self.name = name
-            self.description = description
-            self.inputSchema = inputSchema
+            self.description = description or self.get_default_description()
+            self.argument_mapping = dict(argument_mapping or {})
+            self._uses_default_input_schema = inputSchema is None
+            self.inputSchema = self._resolve_input_schema(inputSchema)
             self.raise_argument_validation_error = raise_argument_validation_error
             if summarizer is not None:
                 self._configure_summarizer(summarizer=summarizer)
@@ -170,8 +180,6 @@ class BaseTool(abc.ABC):
 
     async def run(self, **kwargs: Any) -> str:
         """Execute the tool with the provided arguments."""
-        if self.inputSchema is None:
-            return await self._run(**kwargs)
         try:
             validate(instance=kwargs, schema=self.inputSchema)
         except ValidationError as exc:
@@ -187,12 +195,27 @@ class BaseTool(abc.ABC):
                 f"Problem:{exc!r}\n\n"
                 f"Argument type should be:\n{json.dumps(self.inputSchema)}"
             )
-        tool_result = await self._run(**kwargs)
+        mapped_kwargs = map_arguments(kwargs, self.argument_mapping)
+        tool_result = await self._run(**mapped_kwargs)
         if self.summarizer:
-            goal = kwargs.get(self.summary_goal_key, "")
+            goal = mapped_kwargs.get(self.summary_goal_key, "")
             evidence, summary = await self.summarizer.summarize(goal=goal, content=tool_result)
             tool_result = self.format_summary(goal=goal, evidence=evidence, summary=summary)
         return tool_result
+
+    def get_default_description(self) -> str | None:
+        return inspect.getdoc(self._run) or inspect.getdoc(type(self))
+
+    def _resolve_input_schema(self, configured_schema: Mapping[str, Any] | None) -> Mapping[str, Any]:
+        if configured_schema is not None:
+            return configured_schema
+        default_schema = schema_from_signature(self._run)
+        if default_schema is None:
+            return {}
+        return map_to_model_visible_schema(
+            default_schema,
+            self.argument_mapping,
+        )
 
     @abc.abstractmethod
     async def _run(self, **kwargs: Any) -> str:
@@ -201,6 +224,72 @@ class BaseTool(abc.ABC):
 
     def as_openai_tool(self) -> Mapping[str, Any]:
         return to_openai_tool(self.name, self.description, self.inputSchema)
+
+
+def map_arguments(
+    arguments: Mapping[str, Any],
+    argument_mapping: Mapping[str, str],
+) -> dict[str, Any]:
+    """Translate model-visible argument names to implementation argument names."""
+    mapped: dict[str, Any] = {}
+    for name, value in arguments.items():
+        implementation_name = argument_mapping.get(name, name)
+        if implementation_name == "":
+            raise ValueError(
+                f"argument_mapping for {name!r} must name an implementation argument"
+            )
+        if implementation_name in mapped:
+            raise ValueError(
+                "argument_mapping maps multiple model-visible arguments "
+                f"to implementation argument {implementation_name!r}"
+            )
+        mapped[implementation_name] = value
+    return mapped
+
+
+def map_to_model_visible_schema(
+    schema: Mapping[str, Any],
+    argument_mapping: Mapping[str, str],
+) -> Mapping[str, Any]:
+    """Translate implementation argument names in a default schema to model-visible names."""
+    if not argument_mapping:
+        return schema
+    properties = schema.get("properties", {})
+    if not isinstance(properties, Mapping):
+        return schema
+
+    model_properties = dict(properties)
+    required = schema.get("required")
+    required_set = set(required) if isinstance(required, list) else None
+
+    for model_name, implementation_name in argument_mapping.items():
+        if implementation_name == "":
+            raise ValueError(
+                f"argument_mapping for {model_name!r} must name an implementation argument"
+            )
+        if implementation_name not in properties:
+            raise ValueError(
+                f"argument_mapping target {implementation_name!r} is not present "
+                "in the default input schema"
+            )
+
+        property_schema = model_properties.pop(implementation_name)
+        if model_name in model_properties:
+            raise ValueError(
+                f"argument_mapping maps implementation argument {implementation_name!r} "
+                f"to model-visible argument {model_name!r}, which already exists"
+            )
+        model_properties[model_name] = property_schema
+
+        if required_set is not None and implementation_name in required_set:
+            required_set.remove(implementation_name)
+            required_set.add(model_name)
+
+    model_schema = dict(schema)
+    model_schema["properties"] = model_properties
+    if required_set is not None:
+        model_schema["required"] = list(required_set)
+    return model_schema
 
 
 def to_openai_tool(

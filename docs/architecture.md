@@ -50,6 +50,19 @@ For tools, `type` selects the implementation and `name` is the model-visible
 function name. This keeps MCP-backed tools from colliding with built-in
 `search` and `visit` implementations.
 
+For native tools, SearchAgent derives the default model-visible input schema
+from the tool's `_run` signature. Tool entries may override that schema when
+they need a smaller or differently named model-visible interface.
+When model-visible argument names differ from implementation argument names,
+`argument_mapping` translates from the model-visible name to the implementation
+name. Hidden implementation arguments must be optional in the derived
+implementation schema; SearchAgent does not inject separate argument defaults.
+For each exposed argument, SearchAgent validates that the model-visible JSON
+Schema is a subset of the mapped implementation argument schema, so local
+configuration may narrow the accepted values but cannot broaden them.
+For MCP tools, the remote MCP schema fills the same role as the native `_run`
+signature.
+
 ```yaml
 agent:
   sources:
@@ -64,6 +77,15 @@ agent:
       name: search
       source:
         - memory
+      inputSchema:
+        type: object
+        properties:
+          q:
+            type: string
+        required: [q]
+        additionalProperties: false
+      argument_mapping:
+        q: query
     - type: visit
       name: visit
       source:

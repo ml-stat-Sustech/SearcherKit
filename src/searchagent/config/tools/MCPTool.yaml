@@ -9,5 +9,7 @@ transport: "streamable-http"
 endpoint: http://127.0.0.1:8100/mcp
 auth_header: ""
 max_concurrency: null
+inputSchema: null
+argument_mapping: {}
 response_char_limit: null
 raise_on_fatal: true

@@ -51,33 +51,14 @@ agent:
     - type: search
       name: search
       description: Search the configured data source.
-      inputSchema:
-        type: object
-        properties:
-          query:
-            type: string
-          top_k:
-            type: integer
-            minimum: 1
-        required:
-          - query
-        additionalProperties: false
+      inputSchema: null
       source:
         - memory
       response_char_limit: null
     - type: visit
       name: visit
       description: Fetch a document from the configured data source.
-      inputSchema:
-        type: object
-        properties:
-          document_id:
-            type: string
-          goal:
-            type: string
-        required:
-          - document_id
-        additionalProperties: false
+      inputSchema: null
       source:
         - memory
       response_char_limit: null

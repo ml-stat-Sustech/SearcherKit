@@ -2,28 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
-from typing import Any, overload
+from typing import overload
 
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import DataSource, SearchResult, SourceError, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
 from searchagent.tools.summarizer import Summarizer
-
-SEARCH_DESCRIPTION = """
-Search the configured data source.
-"""
-
-SEARCH_INPUT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "query": {"type": "string"},
-        "top_k": {"type": "integer", "minimum": 1},
-    },
-    "required": ["query"],
-    "additionalProperties": False,
-}
 
 def _format_results(results: list[SearchResult]) -> str:
     text = ""
@@ -57,6 +42,7 @@ class SearchTool(BaseTool):
         name: str = "search",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
+        argument_mapping: Mapping[str, str] | None = None,
         response_char_limit: int | None = None,
         summarizer: Summarizer | None = None,
         summary_goal_key = "query",
@@ -69,6 +55,7 @@ class SearchTool(BaseTool):
         name: str = "search",
         description: str | None = None,
         inputSchema: Mapping[str, Any] | None = None,
+        argument_mapping: Mapping[str, str] | None = None,
         response_char_limit: int | None = None,
         summarizer: Summarizer | None = None,
         summary_goal_key = "query",
@@ -83,7 +70,8 @@ class SearchTool(BaseTool):
                 build_source(config.source[0]),
                 name = config.name,
                 description=config.description,
-                inputSchema=inputSchema,
+                inputSchema=config.inputSchema or inputSchema,
+                argument_mapping=config.argument_mapping or argument_mapping,
                 response_char_limit=config.response_char_limit,
                 summarizer=Summarizer(config=config.summarizer) if config.summarizer else None,
                 summary_goal_key=config.summary_goal_key,
@@ -93,8 +81,9 @@ class SearchTool(BaseTool):
             raise ValueError("SearchTool requires a source")
         super().__init__(
             name=name,
-            description=description or SEARCH_DESCRIPTION,
-            inputSchema=inputSchema or SEARCH_INPUT_SCHEMA,
+            description=description,
+            inputSchema=inputSchema,
+            argument_mapping=argument_mapping,
             summarizer=summarizer,
             summary_goal_key=summary_goal_key,
         )
@@ -105,9 +94,8 @@ class SearchTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, **kwargs: Any) -> str:
-        query = str(kwargs["query"])
-        top_k = int(kwargs.get("top_k", 5))
+    async def _run(self, *, query: str, top_k: int = 5) -> str:
+        """Search the configured data source."""
         try:
             results = await self.source.search(query, top_k=top_k)
         except SourceError as e:

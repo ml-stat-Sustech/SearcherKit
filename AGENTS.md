@@ -52,8 +52,6 @@ Implementation priorities:
 src/searchagent/
 |-- __main__.py              # thin `python -m searchagent` entry, delegates to CLI
 |-- __init__.py
-|-- errors.py                # project-level exception taxonomy
-|-- log.py                   # logging, trace logging, log context
 |-- agent/
 |   |-- base.py              # agent protocol/base types
 |   |-- search_agent.py      # SearchAgent and SearchAgentConfig
@@ -69,17 +67,24 @@ src/searchagent/
 |-- common/
 |   |-- config.py            # import/instantiate helpers
 |   |-- dataloader.py        # generic dataloader
+|   |-- errors.py            # project-level exception taxonomy
+|   |-- json_schema.py       # JSON Schema helpers for tool interfaces
+|   |-- log.py               # logging, trace logging, log context
 |   |-- messages.py          # provider-agnostic message structures
-|   `-- retry.py             # retry config and wrappers
+|   |-- retry.py             # retry config and wrappers
+|   `-- utils.py
 |-- config/
 |   |-- config.yaml          # packaged default run config
 |   |-- searchagent.yaml     # example config
 |   |-- agent/               # agent config groups
 |   |-- common/              # retry/dataloader config groups
+|   |-- examples/
 |   |-- llm/                 # provider/parser config groups
+|   |-- plugins/
 |   |-- runtime/
 |   |-- sources/
-|   `-- tools/
+|   |-- tools/
+|   `-- training/
 |-- llm/
 |   |-- base.py              # Client/ClientConfig/get_client/provider configs
 |   |-- openai.py            # OpenAI-compatible client
@@ -91,18 +96,18 @@ src/searchagent/
 |   `-- parsers/
 |       |-- base.py          # Parser/ParserConfig/ParsingError/get_parser
 |       |-- qwen.py          # QwenParser
+|       |-- upstream.py      # provider-native tool-call parser
 |       |-- websailor.py     # WebSailorParser
 |       `-- webexplorer.py   # WebExplorerParser
 |-- plugins/
 |   |-- indexing.py          # shared Elasticsearch indexing helpers
+|   |-- conversion/          # dataset/trace format conversion
 |   |-- local_wiki/          # wiki source/preprocess/deploy
 |   `-- browsecomp_plus/     # BrowseComp Plus source/preprocess/deploy
 |-- runtime/
-|   |-- agent_runner.py      # lower-level single agent execution helper
 |   |-- batch.py             # async batch execution utilities
 |   |-- runner.py            # AgentRunner and RunConfig
 |   |-- evaluate.py          # LLM judge evaluation
-|   |-- errors.py            # runtime-specific exceptions
 |   |-- startup.py           # optional pre-run checks/startup
 |   |-- checkpoint.py
 |   |-- trace.py
@@ -111,12 +116,19 @@ src/searchagent/
 |   |-- base.py              # Source interface and SearchResult
 |   |-- elasticsearch.py     # Elasticsearch-backed source
 |   |-- factory.py           # source construction from config/plain params
-|   `-- memory.py            # in-memory source for tests/simple runs
+|   |-- local_file.py        # local file source
+|   |-- memory.py            # in-memory source for tests/simple runs
+|   `-- web.py               # HTTP/web document source
+|-- training/                # SFT/RL training integrations
 `-- tools/
     |-- base.py              # Tool interface and tool-call structures
     |-- factory.py           # tool construction from config/plain params
     |-- mcp.py               # MCP-backed tool adapter
-    `-- search.py            # source-backed search/visit tools
+    |-- multi_source_search.py
+    |-- multi_source_visit.py
+    |-- search.py            # source-backed search tool
+    |-- summarizer.py        # optional tool-output summarization
+    `-- visit.py             # source-backed visit tool
 
 recipe/
 |-- webexplorer/
@@ -127,15 +139,14 @@ recipe/
 
 ## Module Responsibilities
 - `agent/`: agent reasoning, tool dispatch, context limits, final-answer control.
-- Top-level `__main__.py`, `errors.py`, and `log.py` are intentionally kept at
-  package root because they are package-wide entry, error, and observability
-  surfaces. Do not bury them in a feature subpackage unless the whole public
-  boundary changes.
+- Top-level `__main__.py` is intentionally kept at package root as the package
+  entry point. Package-wide errors and observability live in `common/errors.py`
+  and `common/log.py`.
 - `cli/`: stable user-facing entry. It parses arguments, composes config, and
   calls existing runtime/plugin implementations. It must not duplicate indexing
   or benchmark logic.
 - `common/`: cross-module utilities and data structures such as messages,
-  config instantiation, retry, and dataloaders.
+  config instantiation, retry, errors, logging, and dataloaders.
 - `config/`: packaged defaults and reusable Hydra config groups. Do not put
   benchmark/paper-specific recipes here.
 - `llm/`: LLM provider adapters. Add each provider as a dedicated module and
@@ -194,16 +205,27 @@ python -m searchagent inspect --config-path recipe\websailor --config-name websa
 ## Suggested Verification
 Use targeted checks:
 ```powershell
-python -m compileall -q src\searchagent recipe tests\test_config_instantiation.py
+python -m compileall -q src\searchagent recipe tests
 python -m searchagent --help
 python -m searchagent inspect --config-path recipe\webexplorer --config-name webexplorer
 python -m searchagent inspect --config-path recipe\websailor --config-name websailor
-python -m pytest tests\test_config_instantiation.py tests\test_source_tools.py tests\test_plugins_sources.py tests\test_elasticsearch_source.py
+python -m pytest tests\cli\test_inspect.py tests\common\test_dataloader.py tests\tools\test_base.py tests\tools\test_multi_source_tools.py
+python -m pytest tests\sources\test_memory.py tests\sources\test_local_file.py
+python -m pytest tests\plugins\test_conversion.py tests\plugins\test_local_wiki.py tests\plugins\test_browsecomp_plus.py
+uv run pytest tests\tools\test_search.py tests\tools\test_visit.py tests\sources\test_web.py
 ```
+
+For tests that use real or mocked HTTP/network transports, use `uv run` even
+when `.venv` exists, per the project command rule above. Examples include
+`tests\cli\test_run.py`, `tests\tools\test_search.py`,
+`tests\tools\test_visit.py`, `tests\sources\test_web.py`,
+`tests\sources\test_elasticsearch.py`, `tests\llm\test_openai.py`, and
+`tests\llm\test_anthropic.py`. `tests\sources\test_elasticsearch.py` also
+requires the `elasticsearch-source` extra.
 
 Search for stale paths:
 ```powershell
-rg --pcre2 "webagent|WebAgent|searchagent\.llm\.client\b|searchagent\.llm\.parser(?!s)|integrations" src recipe tests docs README.md pyproject.toml
+rg --pcre2 "WebAgent|searchagent\.llm\.client\b|searchagent\.llm\.parser(?!s)|integrations" src recipe tests docs README.md pyproject.toml
 ```
 
 Pytest cache permission warnings may appear in this workspace; they are not
