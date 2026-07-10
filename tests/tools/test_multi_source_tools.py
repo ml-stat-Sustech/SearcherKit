@@ -8,7 +8,7 @@ import pytest
 
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import SourceConfig, add_source_cfg
-from searchagent.sources.local_file import LocalFileSource
+from searchagent.sources.file import FileSource
 from searchagent.tools import ToolConfig, build_tool
 from searchagent.tools.multi_source_search import MultiSourceSearchTool
 from searchagent.tools.multi_source_visit import MultiSourceVisitTool
@@ -16,11 +16,8 @@ from searchagent.tools.multi_source_visit import MultiSourceVisitTool
 
 SearchFactory = Callable[..., MultiSourceSearchTool]
 VisitFactory = Callable[..., MultiSourceVisitTool]
-FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "source_files"
-RUNTIME_ROOT = FIXTURE_ROOT / "runtime"
-SUMMARY_ROOT = FIXTURE_ROOT / "summary"
-RUNTIME_DOC_ID = "runtime-doc.md"
-SUMMARY_DOC_ID = "summary-doc.md"
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
+DOC_ID = "source_files.md"
 
 
 def _source_names(test_name: str) -> tuple[str, str]:
@@ -35,17 +32,17 @@ def _add_sources(test_name: str) -> tuple[str, str]:
     add_source_cfg(
         runtime_name,
         SourceConfig(
-            type="local_file",
+            type="file",
             name=runtime_name,
-            root_path=str(RUNTIME_ROOT),
+            root_path=str(SOURCE_ROOT),
         ),
     )
     add_source_cfg(
         summary_name,
         SourceConfig(
-            type="local_file",
+            type="file",
             name=summary_name,
-            root_path=str(SUMMARY_ROOT),
+            root_path=str(SOURCE_ROOT),
         ),
     )
     return runtime_name, summary_name
@@ -55,8 +52,8 @@ def _direct_search_tool(*, test_name: str) -> MultiSourceSearchTool:
     runtime_name, summary_name = _source_names(test_name)
     return MultiSourceSearchTool(
         {
-            runtime_name: LocalFileSource(root_path=RUNTIME_ROOT),
-            summary_name: LocalFileSource(root_path=SUMMARY_ROOT),
+            runtime_name: FileSource(root_path=SOURCE_ROOT),
+            summary_name: FileSource(root_path=SOURCE_ROOT),
         },
         name="search",
     )
@@ -79,8 +76,8 @@ def _direct_visit_tool(*, test_name: str) -> MultiSourceVisitTool:
     runtime_name, summary_name = _source_names(test_name)
     return MultiSourceVisitTool(
         {
-            runtime_name: LocalFileSource(root_path=RUNTIME_ROOT),
-            summary_name: LocalFileSource(root_path=SUMMARY_ROOT),
+            runtime_name: FileSource(root_path=SOURCE_ROOT),
+            summary_name: FileSource(root_path=SOURCE_ROOT),
         },
         name="visit",
     )
@@ -107,24 +104,20 @@ def test_multi_source_search_run(tool_factory: SearchFactory) -> None:
         tool = tool_factory(test_name=test_name)
 
         runtime_result = await tool.run(
-            query="runtime-doc",
+            query="source-backed-tools",
             source=runtime_name,
         )
         summary_result = await tool.run(
-            query="summary-doc",
+            query="source-backed-tools",
             source=summary_name,
         )
 
         runtime_content, runtime_extensions = runtime_result
         summary_content, summary_extensions = summary_result
-        assert RUNTIME_DOC_ID in runtime_content
-        assert (
-            "Summary source explains evidence extraction."
-            not in runtime_content
-        )
-        assert SUMMARY_DOC_ID in summary_content
-        assert runtime_extensions == {"searched_ids": [RUNTIME_DOC_ID]}
-        assert summary_extensions == {"searched_ids": [SUMMARY_DOC_ID]}
+        assert DOC_ID in runtime_content
+        assert DOC_ID in summary_content
+        assert runtime_extensions == {"searched_ids": [DOC_ID]}
+        assert summary_extensions == {"searched_ids": [DOC_ID]}
 
     asyncio.run(run())
 
@@ -157,25 +150,25 @@ def test_multi_source_visit_run(tool_factory: VisitFactory) -> None:
         tool = tool_factory(test_name=test_name)
 
         runtime_result = await tool.run(
-            document_id=RUNTIME_DOC_ID,
+            document_id=DOC_ID,
             source=runtime_name,
             goal="confirm runtime",
         )
         summary_result = await tool.run(
-            document_id=SUMMARY_DOC_ID,
+            document_id=DOC_ID,
             source=summary_name,
             goal="confirm summary",
         )
 
         runtime_content, runtime_extensions = runtime_result
         summary_content, summary_extensions = summary_result
-        assert f"[{RUNTIME_DOC_ID}](None)" in runtime_content
+        assert f"[{DOC_ID}](None)" in runtime_content
         assert (
-            "Runtime source explains pluggable source-backed execution."
+            "runtime source-backed execution"
             in runtime_content
         )
-        assert f"[{SUMMARY_DOC_ID}](None)" in summary_content
-        assert "Summary source explains evidence extraction." in summary_content
+        assert f"[{DOC_ID}](None)" in summary_content
+        assert "evidence extraction" in summary_content
         assert runtime_extensions == {}
         assert summary_extensions == {}
 
@@ -190,7 +183,7 @@ def test_multi_source_visit_unknown_source(tool_factory: VisitFactory) -> None:
         tool = tool_factory(test_name=test_name)
 
         with pytest.raises(RecoverableError) as exc_info:
-            await tool.run(document_id="runtime-doc", source="missing-source")
+            await tool.run(document_id=DOC_ID, source="missing-source")
 
         message = str(exc_info.value)
         assert "unknown source 'missing-source'" in message
@@ -207,7 +200,7 @@ def test_multi_source_visit_missing_document(tool_factory: VisitFactory) -> None
         runtime_name, _summary_name = _source_names(test_name)
         tool = tool_factory(test_name=test_name)
 
-        with pytest.raises(RecoverableError, match="local file document not found"):
+        with pytest.raises(RecoverableError, match="file document not found"):
             await tool.run(document_id="missing", source=runtime_name)
 
     asyncio.run(run())

@@ -12,6 +12,10 @@ cd searchagent
 uv sync
 ```
 
+The built-in `file` source uses `rg` for full-text search. Install
+[ripgrep](https://github.com/BurntSushi/ripgrep) and make sure `rg` is on
+`PATH` before using file-backed search tools.
+
 Optional backend dependencies are split by plugin:
 
 ```bash
@@ -205,7 +209,7 @@ Native source-backed tools are wired by source name:
 ```yaml
 agent:
   sources:
-    - type: local_file
+    - type: file
       name: local_docs
       root_path: /path/to/docs
   tools:

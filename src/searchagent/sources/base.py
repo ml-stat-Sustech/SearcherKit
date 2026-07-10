@@ -99,7 +99,6 @@ class SourceConfig:
     web_max_concurrency: int | None = None
     web_retry_config: RetryConfig | None = None
 
-    # -- Local file ----------------------------------------------------------
+    # -- File ----------------------------------------------------------
     root_path: str | None = None
-    local_file_encoding: str = "utf-8"
-    local_file_errors: str = "replace"
+    file_encoding: str = "utf-8"

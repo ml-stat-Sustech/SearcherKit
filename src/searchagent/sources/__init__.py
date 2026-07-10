@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .base import DataSource, Document, SearchResult, SourceConfig, SourceError
 from .factory import build_source, add_source_cfg
-from .local_file import LocalFileSource
+from .file import FileSource
 
 __all__ = [
     "DataSource",
@@ -12,7 +12,7 @@ __all__ = [
     "SearchResult",
     "SourceConfig",
     "SourceError",
-    "LocalFileSource",
+    "FileSource",
     "build_source",
     "add_source_cfg",
 ]

@@ -14,8 +14,8 @@ agent:
   # Sources define how SearchAgent connects to searchable data backends.
   # Native tools reference named sources through `source: [<name>]`.
   sources:
-    - type: local_file
-      name: local_file_1
+    - type: file
+      name: file_1
       root_path: /path/to/files
 
   # Tools expose agent-callable actions. `type` chooses the implementation;
@@ -24,11 +24,11 @@ agent:
     - type: search
       name: search
       source:
-        - local_file_1
+        - file_1
     - type: visit
       name: visit
       source:
-        - local_file_1
+        - file_1
       summary_goal_key: goal
 
   system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."

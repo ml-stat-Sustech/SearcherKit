@@ -14,7 +14,7 @@ import respx
 from searchagent.common.retry import RetryConfig, RetryPolicy
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import SourceConfig, add_source_cfg
-from searchagent.sources.local_file import LocalFileSource
+from searchagent.sources.file import FileSource
 from searchagent.tools import SummarizerConfig, ToolConfig, build_tool
 from searchagent.tools.summarizer import Summarizer
 from searchagent.tools.visit import VisitTool
@@ -25,8 +25,8 @@ SUMMARY_EVIDENCE = "Visit evidence"
 SUMMARY_TEXT = "Visit summary"
 
 ToolFactory = Callable[..., VisitTool]
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "source_files" / "tools"
-RUNTIME_DOC_ID = "searchagent-runtime-source-backed-tools.md"
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
+DOC_ID = "source_files.md"
 
 
 def _summary_response(*, evidence: str, summary: str) -> httpx.Response:
@@ -106,10 +106,10 @@ def _source_name(test_name: str) -> str:
     return f"tools-visit-{test_name}"
 
 
-def _add_local_file_source(name: str) -> None:
+def _add_file_source(name: str) -> None:
     add_source_cfg(
         name,
-        SourceConfig(type="local_file", name=name, root_path=str(SOURCE_ROOT)),
+        SourceConfig(type="file", name=name, root_path=str(SOURCE_ROOT)),
     )
 
 
@@ -143,7 +143,7 @@ def _direct_tool(
         )
 
     return VisitTool(
-        LocalFileSource(root_path=SOURCE_ROOT),
+        FileSource(root_path=SOURCE_ROOT),
         name="visit",
         summarizer=summarizer,
     )
@@ -156,7 +156,7 @@ def _config_tool(
     retry_config: RetryConfig | None = None,
 ) -> VisitTool:
     source_name = _source_name(test_name)
-    _add_local_file_source(source_name)
+    _add_file_source(source_name)
     tool = build_tool(
             ToolConfig(
                 type="visit",
@@ -185,10 +185,10 @@ def test_run(tool_factory: ToolFactory) -> None:
     async def run() -> None:
         tool = tool_factory(test_name="run")
 
-        result = await tool.run(document_id=RUNTIME_DOC_ID, goal="confirm runtime wiring")
+        result = await tool.run(document_id=DOC_ID, goal="confirm runtime wiring")
         content, extensions = result
 
-        assert f"[{RUNTIME_DOC_ID}](None)" in content
+        assert f"[{DOC_ID}](None)" in content
         assert "pluggable runtime for source-backed tools" in content
         assert extensions == {}
 
@@ -202,7 +202,7 @@ def test_missing_document_surfaces_recoverable_error(
     async def run() -> None:
         tool = tool_factory(test_name="missing-document")
 
-        with pytest.raises(RecoverableError, match="local file document not found"):
+        with pytest.raises(RecoverableError, match="file document not found"):
             await tool.run(document_id="missing", goal="confirm runtime wiring")
 
     asyncio.run(run())
@@ -216,7 +216,7 @@ def test_summary(tool_factory: ToolFactory) -> None:
             tool = tool_factory(test_name="summary", with_summary=True)
             assert tool.summary_enabled
 
-            result = await tool.run(document_id=RUNTIME_DOC_ID, goal="confirm runtime wiring")
+            result = await tool.run(document_id=DOC_ID, goal="confirm runtime wiring")
 
         assert len(route.calls) == 1, result
         content, extensions = result
@@ -246,7 +246,7 @@ def test_summary_retry_success(tool_factory: ToolFactory) -> None:
             )
             assert tool.summary_enabled
 
-            result = await tool.run(document_id=RUNTIME_DOC_ID, goal="confirm runtime wiring")
+            result = await tool.run(document_id=DOC_ID, goal="confirm runtime wiring")
 
         assert len(route.calls) == 2
         content, extensions = result
@@ -272,7 +272,7 @@ def test_summary_retry_failure(tool_factory: ToolFactory) -> None:
             assert tool.summary_enabled
 
             with pytest.raises(RecoverableError):
-                await tool.run(document_id=RUNTIME_DOC_ID, goal="confirm runtime wiring")
+                    await tool.run(document_id=DOC_ID, goal="confirm runtime wiring")
 
         assert len(route.calls) == 2
 

@@ -18,7 +18,7 @@ src/searchagent/
 ## Layering
 
 `sources` define how SearchAgent connects to data. A source can be an offline
-web index, vector database, local file corpus, SQL database, or a remote search
+web index, vector database, file corpus, SQL database, or a remote search
 service. Each source implements `DataSource.search()` and `DataSource.fetch()`.
 
 `tools` define what the agent can call. The native `SearchTool` and `VisitTool`
@@ -66,7 +66,7 @@ signature.
 ```yaml
 agent:
   sources:
-    - type: local_file
+    - type: file
       name: local_docs
       root_path: /path/to/docs
   tools:
