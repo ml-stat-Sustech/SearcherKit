@@ -2813,19 +2813,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ollama"
-version = "0.6.2"
-source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pydantic" },
-]
-sdist = { url = "http://mirrors.aliyun.com/pypi/packages/fc/72/5f12423b6b39ca8430fbe56f77fcf4ef60f63067c7c4a2e30e200ed9ec16/ollama-0.6.2.tar.gz", hash = "sha256:936d55daa684f474364c098611c933626f8d6c7d67065c5b7ae0c477b508b07f" }
-wheels = [
-    { url = "http://mirrors.aliyun.com/pypi/packages/c4/ab/d6722beeb2d10f7a3b9ff49375708904fde18f82b5609a0bc4aeb5996a4d/ollama-0.6.2-py3-none-any.whl", hash = "sha256:3ad7daab28e5a973445c36a73882a3ef698c2ebb00e21e308652741577509f7d" },
-]
-
-[[package]]
 name = "omegaconf"
 version = "2.3.0"
 source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
@@ -4553,9 +4540,6 @@ indexing = [
     { name = "sentence-transformers" },
     { name = "torch" },
 ]
-ollama = [
-    { name = "ollama" },
-]
 vllm = [
     { name = "ray" },
     { name = "vllm" },
@@ -4584,7 +4568,6 @@ requires-dist = [
     { name = "json-repair", specifier = ">=0.54.2" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "mwparserfromhell", marker = "extra == 'indexing'", specifier = ">=0.6" },
-    { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.4.0" },
     { name = "openai", specifier = ">=2.24.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "ray", marker = "extra == 'vllm'", specifier = ">=2.9.0" },
@@ -4594,7 +4577,7 @@ requires-dist = [
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
     { name = "vllm", marker = "extra == 'vllm'", specifier = ">=0.6.0" },
 ]
-provides-extras = ["vllm", "elasticsearch-source", "faiss", "chroma", "ollama", "anthropic", "indexing"]
+provides-extras = ["vllm", "elasticsearch-source", "faiss", "chroma", "anthropic", "indexing"]
 
 [package.metadata.requires-dev]
 dev = [

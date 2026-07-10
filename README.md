@@ -196,7 +196,7 @@ src/searchagent/
 - `searchagent.tools.SearchTool` and `searchagent.tools.VisitTool`: expose a
   configured source to the agent as `search` and `visit`.
 - `searchagent.llm`: add provider adapters for OpenAI-compatible servers, vLLM,
-  Ollama, local Transformers, or commercial APIs.
+  or commercial APIs.
 - `searchagent.plugins`: keep optional concrete backends out of the runtime
   core.
 

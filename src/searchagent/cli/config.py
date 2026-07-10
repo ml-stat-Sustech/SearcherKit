@@ -16,10 +16,7 @@ from searchagent.common.retry import RetryConfig
 from searchagent.llm.base import (
     AnthropicConfig,
     ClientConfig,
-    DashScopeConfig,
-    OllamaConfig,
     OpenAIConfig,
-    TransformersConfig,
     VllmConfig,
 )
 from searchagent.llm.parsers import ParserConfig, QwenParserConfig
@@ -46,20 +43,14 @@ def register_config_store() -> None:
     cs.store(group="agent", name="SearchAgent", node=SearchAgentConfig)
     cs.store(group="llm", name="OpenAIClient", node=ClientConfig)
     cs.store(group="llm", name="AnthropicClient", node=ClientConfig)
-    cs.store(group="llm", name="DashScopeClient", node=ClientConfig)
     cs.store(group="llm", name="VllmClient", node=ClientConfig)
-    cs.store(group="llm", name="OllamaClient", node=ClientConfig)
-    cs.store(group="llm", name="TransformersClient", node=ClientConfig)
     cs.store(group="llm", name="QwenParser", node=ParserConfig)
     cs.store(group="llm", name="UpstreamParser", node=ParserConfig)
     cs.store(group="common", name="RetryPolicy", node=RetryConfig)
     cs.store(group="common", name="GenericDataLoader", node=DataConfig)
     cs.store(name="__openai_config__", node=OpenAIConfig)
     cs.store(name="__anthropic_config__", node=AnthropicConfig)
-    cs.store(name="__dashscope_config__", node=DashScopeConfig)
     cs.store(name="__vllm_config__", node=VllmConfig)
-    cs.store(name="__ollama_config__", node=OllamaConfig)
-    cs.store(name="__transformers_config__", node=TransformersConfig)
     cs.store(name="__qwen_parser_config__", node=QwenParserConfig)
     cs.store(name="__tool_config__", node=ToolConfig())
     cs.store(name="__summarizer_config__", node=SummarizerConfig())
