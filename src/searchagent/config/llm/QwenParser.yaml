@@ -1,6 +1,0 @@
-# QwenParser configuration
-# Class: searchagent.llm.parsers.qwen.QwenParser
-type: qwen
-target: null
-qwen:
-  drop_thinking: true

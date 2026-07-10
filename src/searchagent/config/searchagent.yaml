@@ -1,14 +1,9 @@
 # Full config example for a Qwen-backed SearchAgent
 
 defaults:
-  - agent@agent: SearchAgent
-  - llm@agent.llm_client: OpenAIClient
-  - llm@agent.parser: QwenParser
-  - common@retry_policy: RetryPolicy
-  - common@dataloader: GenericDataLoader
   - _self_
 
-retry_policy:
+task_retry_policy:
   max_tries: 3
 
 agent:
@@ -18,12 +13,6 @@ agent:
     default_kwargs:
       temperature: 1.0
       top_p: 1.0
-      # presence_penalty: 1.5
-      # extra_body: 
-      #   top_k: 20
-      # stop:
-      #   - "<tool_response>"
-      #   - "\n<tool_response>"
     openai:
       api_key: "a"
       base_url: 
@@ -108,22 +97,12 @@ agent:
   max_tokens_prompt_margin: 8192
   llm_retry_config:
     max_tries: 5
-    max_time: null
     exceptions:
       - pkg://searchagent.llm.parsers:ParsingError
-    giveup: null
-    jitter: pkg://backoff:full_jitter
-    factor: 1.0
-    base: 2.0
   tool_retry_config:
     max_tries: 5
-    max_time: null
     exceptions:
       - pkg://searchagent.common.errors:RecoverableError
-    giveup: null
-    jitter: pkg://backoff:full_jitter
-    factor: 1.0
-    base: 2.0
 
 dataloader:
   source: /home/jovyan1/browsecomp_plus_decrypted_qa.jsonl

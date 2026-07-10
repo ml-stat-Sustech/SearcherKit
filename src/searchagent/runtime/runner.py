@@ -38,7 +38,7 @@ class RunConfig:
     max_concurrency: int | None = None
     dataloader: DataConfig | None = None
     output_path: str | None = None
-    retry_policy: RetryConfig | None = None
+    task_retry_policy: RetryConfig | None = None
     checkpoint: CheckpointConfig = field(default_factory=CheckpointConfig)
     overwrite_output: bool = False
     logging: dict[str, Any] | None = None
@@ -95,7 +95,7 @@ class AgentRunner:
         self,
         query: str,
         extra: dict[str, Any] | None = None,
-        retry_policy: RetryPolicy | None = None,
+        task_retry_policy: RetryPolicy | None = None,
     ) -> asyncio.Task[tuple[list[ChatMessage], dict[str, Any]]]:
         logger.info("Received request query=%r has_extra=%s", _preview_query(query), bool(extra))
 
@@ -112,11 +112,11 @@ class AgentRunner:
                 )
                 return history, agent.timing_report
 
-        if retry_policy:
+        if task_retry_policy:
             return asyncio.create_task(
                 retry_async(
                     _run,
-                    policy=retry_policy,
+                    policy=task_retry_policy,
                     op_name="runner.submit",
                     log=logger,
                 )
@@ -128,7 +128,7 @@ class AgentRunner:
         queries: Iterable[str],
         *,
         extras: Iterable[dict[str, Any] | None] | None = None,
-        retry_policy: RetryPolicy | None = None,
+        task_retry_policy: RetryPolicy | None = None,
     ) -> list[asyncio.Task[tuple[list[ChatMessage], dict[str, Any]]]]:
         query_list = list(queries)
         if extras is None:
@@ -140,7 +140,7 @@ class AgentRunner:
 
         logger.info("Submitting batch requests count=%s", len(query_list))
         tasks = [
-            self.submit(query, extra=extra, retry_policy=retry_policy)
+            self.submit(query, extra=extra, task_retry_policy=task_retry_policy)
             for query, extra in zip(query_list, extra_list)
         ]
         return tasks
@@ -151,7 +151,7 @@ class AgentRunner:
         cfg: RunConfig | None = None,
         dataloader: Iterable[tuple[str, dict[str, Any] | None, Any | None]] | None = None,
         output_path: str | Path | None = None,
-        retry_policy: RetryPolicy | None = None,
+        task_retry_policy: RetryPolicy | None = None,
         checkpoint: CheckpointConfig | dict[str, Any] | None = None,
         overwrite_output: bool | None = None,
     ) -> dict[str, Any]:
@@ -161,7 +161,7 @@ class AgentRunner:
         Inputs can be provided either through `cfg` or through explicit parameters.
         The effective runtime values are resolved from the union of both sources:
         `dataloader` and `output_path` are required after merging, while
-        `retry_policy` and `overwrite_output` are optional. When both `cfg` and
+        `task_retry_policy` and `overwrite_output` are optional. When both `cfg` and
         explicit parameters provide the same field, `cfg` takes precedence. This
         matches the intended usage where `cfg` defines the active experiment setup
         and explicit parameters are mainly for secondary plugins or custom
@@ -169,15 +169,15 @@ class AgentRunner:
 
         Args:
             cfg: Optional config object. If present, `cfg.dataloader`,
-                `cfg.output_path`, `cfg.retry_policy`, and
+                `cfg.output_path`, `cfg.task_retry_policy`, and
                 `cfg.overwrite_output` are used to fill runtime values, with
                 `dataloader` and `output_path` treated as required.
             dataloader: Optional iterable yielding `(prompt, extra, answer)` tuples.
                 Used directly unless `cfg.dataloader` is provided.
             output_path: Optional output directory for trajectory files and
                 `summary.json`. Used unless `cfg.output_path` is provided.
-            retry_policy: Optional retry policy for each agent execution. Used
-                unless `cfg.retry_policy` is provided, in which case the policy is
+            task_retry_policy: Optional retry policy for each agent task. Used
+                unless `cfg.task_retry_policy` is provided, in which case the policy is
                 instantiated from config.
             checkpoint: Optional checkpoint config. Used unless `cfg.checkpoint`
                 is provided.
@@ -205,9 +205,9 @@ class AgentRunner:
             if cfg_output_path is not None:
                 cfg_values["output_path"] = cfg_output_path
 
-            cfg_retry_policy = cfg.retry_policy
-            if cfg_retry_policy is not None:
-                cfg_values["retry_policy"] = RetryPolicy(config=cfg_retry_policy)
+            cfg_task_retry_policy = cfg.task_retry_policy
+            if cfg_task_retry_policy is not None:
+                cfg_values["task_retry_policy"] = RetryPolicy(config=cfg_task_retry_policy)
                 
 
             cfg_overwrite_output = cfg.overwrite_output
@@ -228,7 +228,7 @@ class AgentRunner:
         explicit_values = {
             "dataloader": dataloader,
             "output_path": output_path,
-            "retry_policy": retry_policy,
+            "task_retry_policy": task_retry_policy,
             "checkpoint": base_checkpoint,
             "overwrite_output": overwrite_output,
             "logging": None,
@@ -261,7 +261,7 @@ class AgentRunner:
             )
 
         dataloader = resolved_values["dataloader"]
-        resolved_retry_policy = resolved_values["retry_policy"]
+        resolved_task_retry_policy = resolved_values["task_retry_policy"]
         resolved_overwrite_output = bool(resolved_values["overwrite_output"])
         output_dir = Path(resolved_values["output_path"])
         history_dir = output_dir / "history"
@@ -322,7 +322,7 @@ class AgentRunner:
                         history, timing = await self.submit(
                             prompt,
                             extra=extra,
-                            retry_policy=resolved_retry_policy,
+                            task_retry_policy=resolved_task_retry_policy,
                         )
                         stats = _history_stats(history)
                         timing_dict = timing

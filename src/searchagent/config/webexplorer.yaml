@@ -5,14 +5,9 @@
 # code. It uses SearchAgent's native source-backed `search` and `visit` tools.
 
 defaults:
-  - agent@agent: SearchAgent
-  - llm@agent.llm_client: OpenAIClient
-  - llm@agent.parser: QwenParser
-  - common@retry_policy: RetryPolicy
-  - common@dataloader: GenericDataLoader
   - _self_
 
-retry_policy:
+task_retry_policy:
   max_tries: 3
 
 agent:
@@ -34,6 +29,7 @@ agent:
   parser:
     type: webexplorer
     target: pkg://searchagent.llm.parsers.webexplorer:WebExplorerParser
+    qwen: null
   sources:
     - type: elasticsearch
       name: bcp

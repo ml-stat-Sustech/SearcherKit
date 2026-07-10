@@ -133,8 +133,8 @@ Run the packaged default config:
 searchagent run
 ```
 
-This default config uses the in-memory example source under
-`src/searchagent/config/examples/data/` and writes outputs to
+This default config uses the packaged in-memory questions file at
+`src/searchagent/config/memory_questions.jsonl` and writes outputs to
 `outputs/agent_history`. It still needs a reachable LLM endpoint and API key.
 Edit `src/searchagent/config/config.yaml` or pass Hydra-style overrides to point
 the run at your own model endpoint, data file, or output directory:

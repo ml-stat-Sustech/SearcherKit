@@ -24,7 +24,7 @@ class RetryConfig:
     giveup: str | None = None
     jitter: str | None = "pkg://backoff:full_jitter"
     factor: float = 1.0
-    base: float = 1.0
+    base: float = 2.0
 
 
 @dataclass(slots=True)
@@ -35,7 +35,7 @@ class RetryPolicy:
     max_time: float | None = None
     exceptions: Any = None
     giveup: Any = None
-    jitter: Any = None
+    jitter: Any = backoff.full_jitter
     factor: float = 1.0
     base: float = 2.0
 

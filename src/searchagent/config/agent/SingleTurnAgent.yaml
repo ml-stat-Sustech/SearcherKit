@@ -1,7 +1,0 @@
-# SingleTurnAgent configuration
-# Class: searchagent.agent.single_turn_agent.SingleTurnAgent
-
-target: pkg://searchagent.agent.single_turn_agent:SingleTurnAgent
-llm_client: null
-parser: null
-system_prompt: ""

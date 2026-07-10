@@ -1,12 +1,7 @@
 defaults:
-  - agent@agent: SearchAgent
-  - llm@agent.llm_client: OpenAIClient
-  - llm@agent.parser: QwenParser
-  - common@retry_policy: RetryPolicy
-  - common@dataloader: GenericDataLoader
   - _self_
 
-retry_policy:
+task_retry_policy:
   max_tries: 1
 
 agent:

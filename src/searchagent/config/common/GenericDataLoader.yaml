@@ -1,9 +1,0 @@
-# GenericDataLoader configuration
-# Class: searchagent.common.dataloader.GenericDataLoader
-
-target: pkg://searchagent.common.dataloader:GenericDataLoader
-source: ""
-fmt: jsonl
-input_key: prompt
-answer_key: answer
-max_items: null

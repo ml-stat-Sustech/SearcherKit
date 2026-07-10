@@ -1,3 +1,0 @@
-{"question": "What native tools expose a configured DataSource?", "answer": "search and visit"}
-{"question": "Which source searches document indexes backed by Elasticsearch?", "answer": "ElasticsearchSource"}
-

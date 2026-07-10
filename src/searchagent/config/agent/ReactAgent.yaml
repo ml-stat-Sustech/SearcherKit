@@ -1,8 +1,0 @@
-# ReactAgent configuration
-# Class: searchagent.agent.react_agent.ReactAgent
-
-target: pkg://searchagent.agent.react_agent:ReactAgent
-llm_client: null
-parser: null
-tools: null
-system_prompt: ""

@@ -4,13 +4,9 @@
 # prompt layout with Alibaba DeepResearch WebSailor more closely.
 
 defaults:
-  - agent@agent: SearchAgent
-  - llm@agent.llm_client: OpenAIClient
-  - common@retry_policy: RetryPolicy
-  - common@dataloader: GenericDataLoader
   - _self_
 
-retry_policy:
+task_retry_policy:
   max_tries: 3
 
 agent:
@@ -31,6 +27,7 @@ agent:
   parser:
     type: websailor
     target: pkg://searchagent.llm.parsers.websailor:WebSailorParser
+    qwen: null
   sources:
     - type: elasticsearch
       name: bcp

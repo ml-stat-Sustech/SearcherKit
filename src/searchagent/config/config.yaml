@@ -3,129 +3,44 @@
 defaults:
   - _self_
 
-retry_policy:
-  max_tries: 3
-  max_time: null
-  exceptions:
-    - pkg://searchagent.common.errors:RecoverableError
-  giveup: null
-  jitter: pkg://backoff:full_jitter
-  factor: 1.0
-  base: 2.0
-
 agent:
   llm_client:
-    type: openai
     model: Qwen3-8B
-    retry_policy: null
-    default_kwargs:
-      temperature: 0.2
-      max_tokens: 1024
     openai:
       api_key: YOUR_API_KEY
-      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      concurrency_limit: 8
-      extra_client_kwargs: null
-
-  parser:
-    type: qwen
-    qwen:
-      drop_thinking: true
+      base_url: http://base_url.com/
+      concurrency_limit: 128
 
   # Sources define how SearchAgent connects to searchable data backends.
   # Native tools reference named sources through `source: [<name>]`.
   sources:
-    - type: memory
-      name: memory
-      documents:
-        - id: doc-1
-          title: SearchAgent native tools
-          text: SearchAgent can expose any configured DataSource through native search and visit tools.
-        - id: doc-2
-          title: BrowseComp Plus indexes
-          text: BrowseComp Plus corpora are commonly queried through ElasticsearchSource with url-based visit ids.
+    - type: local_file
+      name: local_file_1
+      root_path: /path/to/files
 
   # Tools expose agent-callable actions. `type` chooses the implementation;
   # `name` is the function name visible to the model.
   tools:
     - type: search
       name: search
-      description: Search the configured data source.
-      inputSchema: null
       source:
-        - memory
-      response_char_limit: null
+        - local_file_1
     - type: visit
       name: visit
-      description: Fetch a document from the configured data source.
-      inputSchema: null
       source:
-        - memory
-      response_char_limit: null
+        - local_file_1
+      summary_goal_key: goal
 
   system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."
-  query_prompt: null
-  max_turn: 10
-  max_turn_prompt: null
-  max_tokens: 1024
-  max_tokens_prompt: null
-  max_tokens_prompt_margin: 128
 
   llm_retry_config:
-    max_tries: 3
-    max_time: 30
     exceptions:
       - pkg://searchagent.llm.parsers:ParsingError
-    giveup: null
-    jitter: pkg://backoff:full_jitter
-    factor: 1.0
-    base: 2.0
-
-  tool_retry_config:
-    max_tries: 3
-    max_time: 30
-    exceptions:
-      - pkg://searchagent.common.errors:RecoverableError
-    giveup: null
-    jitter: pkg://backoff:full_jitter
-    factor: 1.0
-    base: 2.0
 
 dataloader:
-  target: pkg://searchagent.common.dataloader:GenericDataLoader
-  source: src/searchagent/config/examples/data/memory_questions.jsonl
-  fmt: jsonl
-  input_key: question
-  answer_key: answer
-  max_items: null
+  source: /path/to/questions.jsonl
 
-auto_startup:
-  enabled: false
-  elasticsearch:
-    enabled: false
-    corpus_type: wiki  # wiki | bcp
-    host: "http://192.168.77.12:9200"
-    index_name: "wiki20251001_qwen3-embedding-0.6b"
-    include_vector: true
-    embedding_dim: 1024
-    model_name: "Qwen3-Embedding-0.6B"
-    prompt_strategy: "none"
-    wiki_dump_path: null
-    bcp_dataset_path: "Tevatron/browsecomp-plus-corpus"
-    cpu_batch_size: 200
-    gpu_batch_size: 20
-    startup_timeout_s: 6000.0
-    options: {}
-    env: {}
 output_path: outputs/agent_history
-overwrite_output: false
-max_concurrency: null
-
-checkpoint:
-  enabled: true
-  dir: null
-  resume: true
-  filename: manifest.json
 
 logging:
   global_file: ${output_path}/run.log

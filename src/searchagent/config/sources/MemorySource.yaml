@@ -1,5 +1,0 @@
-# MemorySource configuration
-# Class: searchagent.sources.MemorySource
-name: memory
-type: memory
-documents: []

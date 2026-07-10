@@ -16,7 +16,7 @@ from searchagent.common.messages import ChatMessage, ToolCall, tool, system, use
 from searchagent.common.messages import Tool as ToolMsgType
 from searchagent.tools import BaseTool, ToolConfig, build_tool
 from searchagent.sources import DataSource, SourceConfig, add_source_cfg
-from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser, QwenParserConfig
+from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser
 from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
 from searchagent.common.errors import LLMError
@@ -51,10 +51,7 @@ class SearchAgentConfig:
         model="",
         openai=OpenAIConfig(),
     ))
-    parser: ParserConfig = field(default_factory=lambda: ParserConfig(
-        type="qwen",
-        qwen=QwenParserConfig(),
-    ))
+    parser: ParserConfig = field(default_factory=lambda: ParserConfig(type="upstream"))
     sources: list[SourceConfig] = field(default_factory=list)
     tools: list[ToolConfig] = field(default_factory=list)
     system_prompt: str | None = None
@@ -67,8 +64,8 @@ class SearchAgentConfig:
     run_timeout_seconds: float | None = None
     run_timeout_prompt: str | None = None
     run_timeout_prompt_margin_seconds: float | None = None
-    llm_retry_config: RetryConfig | None = None
-    tool_retry_config: RetryConfig | None = None
+    llm_retry_config: RetryConfig | None = field(default_factory=RetryConfig)
+    tool_retry_config: RetryConfig | None = field(default_factory=RetryConfig)
 
 class SearchAgent(BaseAgent):
     """
