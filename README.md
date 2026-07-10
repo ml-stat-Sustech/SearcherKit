@@ -205,21 +205,18 @@ Native source-backed tools are wired by source name:
 ```yaml
 agent:
   sources:
-    - type: memory
-      name: memory
-      documents:
-        - id: doc-1
-          title: Example
-          text: Example document body
+    - type: local_file
+      name: local_docs
+      root_path: /path/to/docs
   tools:
     - type: search
       name: search
       source:
-        - memory
+        - local_docs
     - type: visit
       name: visit
       source:
-        - memory
+        - local_docs
     - type: mcp
       name: web_search
       mcp_tool_name: search

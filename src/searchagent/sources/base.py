@@ -99,9 +99,6 @@ class SourceConfig:
     web_max_concurrency: int | None = None
     web_retry_config: RetryConfig | None = None
 
-    # -- Memory --------------------------------------------------------------
-    documents: list[Document] | None = None
-
     # -- Local file ----------------------------------------------------------
     root_path: str | None = None
     local_file_encoding: str = "utf-8"

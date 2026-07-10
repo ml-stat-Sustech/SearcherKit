@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -12,8 +13,8 @@ import respx
 
 from searchagent.common.retry import RetryConfig, RetryPolicy
 from searchagent.common.errors import RecoverableError
-from searchagent.sources import Document, SourceConfig, add_source_cfg
-from searchagent.sources.memory import MemorySource
+from searchagent.sources import SourceConfig, add_source_cfg
+from searchagent.sources.local_file import LocalFileSource
 from searchagent.tools import SummarizerConfig, ToolConfig, build_tool
 from searchagent.tools.search import SearchTool
 from searchagent.tools.summarizer import Summarizer
@@ -24,6 +25,8 @@ SUMMARY_EVIDENCE = "SearchAgent evidence"
 SUMMARY_TEXT = "SearchAgent summary"
 
 ToolFactory = Callable[..., SearchTool]
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "source_files" / "tools"
+RUNTIME_DOC_ID = "searchagent-runtime-source-backed-tools.md"
 
 
 def _summary_response(*, evidence: str, summary: str) -> httpx.Response:
@@ -99,31 +102,14 @@ def _summary_context(
         yield route
 
 
-def _documents() -> list[Document]:
-    return [
-        Document(
-            id="doc-1",
-            title="SearchAgent Runtime",
-            text="SearchAgent provides a pluggable runtime for source-backed tools.",
-            url="https://example.test/runtime",
-        ),
-        Document(
-            id="doc-2",
-            title="Summary Tools",
-            text="Summary tools produce evidence and concise answers from search output.",
-            url="https://example.test/summary",
-        ),
-    ]
-
-
 def _source_name(test_name: str) -> str:
     return f"tools-search-{test_name}"
 
 
-def _add_memory_source(name: str) -> None:
+def _add_local_file_source(name: str) -> None:
     add_source_cfg(
         name,
-        SourceConfig(type="memory", name=name, documents=_documents()),
+        SourceConfig(type="local_file", name=name, root_path=str(SOURCE_ROOT)),
     )
 
 
@@ -157,7 +143,7 @@ def _direct_tool(
         )
 
     return SearchTool(
-        MemorySource(documents=_documents()),
+        LocalFileSource(root_path=SOURCE_ROOT),
         name="search",
         summarizer=summarizer,
     )
@@ -170,7 +156,7 @@ def _config_tool(
     retry_config: RetryConfig | None = None,
 ) -> SearchTool:
     source_name = _source_name(test_name)
-    _add_memory_source(source_name)
+    _add_local_file_source(source_name)
     tool = build_tool(
             ToolConfig(
                 type="search",
@@ -199,13 +185,12 @@ def test_run(tool_factory: ToolFactory) -> None:
     async def run() -> None:
         tool = tool_factory(test_name="run")
 
-        result = await tool.run(query="SearchAgent runtime summary", top_k=1)
+        result = await tool.run(query="searchagent-runtime", top_k=1)
         content, extensions = result
 
-        assert "1. [SearchAgent Runtime](https://example.test/runtime)" in content
-        assert "pluggable runtime for source-backed tools" in content
+        assert f"1. [{RUNTIME_DOC_ID}](None)" in content
         assert "Summary Tools" not in content
-        assert extensions == {"searched_ids": ["doc-1"]}
+        assert extensions == {"searched_ids": [RUNTIME_DOC_ID]}
 
     asyncio.run(run())
 
@@ -218,23 +203,23 @@ def test_summary(tool_factory: ToolFactory) -> None:
             tool = tool_factory(test_name="summary", with_summary=True)
             assert tool.summary_enabled
 
-            result = await tool.run(query="SearchAgent runtime", top_k=1)
+            result = await tool.run(query="searchagent-runtime", top_k=1)
 
         assert len(route.calls) == 1, result
         content, extensions = result
         assert captured_payload["model"] == "fake-summary-model"
         assert captured_payload["response_format"] == {"type": "json_object"}
         prompt = captured_payload["messages"][0]["content"]
-        assert "SearchAgent runtime" in prompt
-        assert "SearchAgent provides a pluggable runtime for source-backed tools." in prompt
+        assert "searchagent-runtime" in prompt
+        assert RUNTIME_DOC_ID in prompt
         assert content == (
-            "The useful information for query SearchAgent runtime as follows:\n\n"
+            "The useful information for query searchagent-runtime as follows:\n\n"
             "Evidence in page:\n"
             f"{SUMMARY_EVIDENCE}\n\n"
             "Summary:\n"
             f"{SUMMARY_TEXT}"
         )
-        assert extensions == {"searched_ids": ["doc-1"]}
+        assert extensions == {"searched_ids": [RUNTIME_DOC_ID]}
 
     asyncio.run(run())
 
@@ -250,13 +235,13 @@ def test_summary_retry_success(tool_factory: ToolFactory) -> None:
             )
             assert tool.summary_enabled
 
-            result = await tool.run(query="SearchAgent runtime", top_k=1)
+            result = await tool.run(query="searchagent-runtime", top_k=1)
 
         assert len(route.calls) == 2
         content, extensions = result
         assert "after retry" in content
         assert "ok" in content
-        assert extensions == {"searched_ids": ["doc-1"]}
+        assert extensions == {"searched_ids": [RUNTIME_DOC_ID]}
 
     asyncio.run(run())
 
@@ -276,7 +261,7 @@ def test_summary_retry_failure(tool_factory: ToolFactory) -> None:
             assert tool.summary_enabled
 
             with pytest.raises(RecoverableError):
-                await tool.run(query="SearchAgent runtime", top_k=1)
+                await tool.run(query="searchagent-runtime", top_k=1)
 
         assert len(route.calls) == 2
 

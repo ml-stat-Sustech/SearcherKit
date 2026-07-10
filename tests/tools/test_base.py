@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from searchagent.sources import Document, SourceConfig, add_source_cfg
-from searchagent.sources.memory import MemorySource
+from searchagent.sources import SourceConfig, add_source_cfg
+from searchagent.sources.local_file import LocalFileSource
 from searchagent.common.json_schema import schema_from_signature
 from searchagent.tools import ToolConfig, build_tool
 from searchagent.tools.base import map_arguments, map_to_model_visible_schema
@@ -15,17 +16,8 @@ from searchagent.tools.search import SearchTool
 
 
 ToolFactory = Callable[..., SearchTool]
-
-
-def _documents() -> list[Document]:
-    return [
-        Document(
-            id="doc-1",
-            title="SearchAgent Runtime",
-            text="SearchAgent provides source-backed tools.",
-            url="https://example.test/runtime",
-        ),
-    ]
+SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "source_files" / "tools"
+RUNTIME_DOC_ID = "searchagent-runtime-source-backed-tools.md"
 
 
 def _custom_search_schema() -> dict[str, Any]:
@@ -43,16 +35,16 @@ def _source_name(test_name: str) -> str:
     return f"tools-base-{test_name}"
 
 
-def _add_memory_source(name: str) -> None:
+def _add_local_file_source(name: str) -> None:
     add_source_cfg(
         name,
-        SourceConfig(type="memory", name=name, documents=_documents()),
+        SourceConfig(type="local_file", name=name, root_path=str(SOURCE_ROOT)),
     )
 
 
 def _direct_tool(*, test_name: str) -> SearchTool:
     return SearchTool(
-        MemorySource(documents=_documents()),
+        LocalFileSource(root_path=SOURCE_ROOT),
         name="search",
         inputSchema=_custom_search_schema(),
         argument_mapping={"q": "query"},
@@ -61,7 +53,7 @@ def _direct_tool(*, test_name: str) -> SearchTool:
 
 def _config_tool(*, test_name: str) -> SearchTool:
     source_name = _source_name(test_name)
-    _add_memory_source(source_name)
+    _add_local_file_source(source_name)
     tool = build_tool(
         ToolConfig(
             type="search",
@@ -77,7 +69,7 @@ def _config_tool(*, test_name: str) -> SearchTool:
 
 def _direct_default_mapping_tool(*, test_name: str) -> SearchTool:
     return SearchTool(
-        MemorySource(documents=_documents()),
+        LocalFileSource(root_path=SOURCE_ROOT),
         name="search",
         argument_mapping={"q": "query"},
     )
@@ -85,7 +77,7 @@ def _direct_default_mapping_tool(*, test_name: str) -> SearchTool:
 
 def _config_default_mapping_tool(*, test_name: str) -> SearchTool:
     source_name = _source_name(test_name)
-    _add_memory_source(source_name)
+    _add_local_file_source(source_name)
     tool = build_tool(
         ToolConfig(
             type="search",
@@ -103,12 +95,11 @@ def test_tool_argument_mapping(tool_factory: ToolFactory) -> None:
     async def run() -> None:
         tool = tool_factory(test_name="argument-mapping")
 
-        result = await tool.run(q="source-backed tools")
+        result = await tool.run(q="source-backed-tools")
         content, extensions = result
 
-        assert "SearchAgent Runtime" in content
-        assert "source-backed tools" in content
-        assert extensions == {"searched_ids": ["doc-1"]}
+        assert RUNTIME_DOC_ID in content
+        assert extensions == {"searched_ids": [RUNTIME_DOC_ID]}
 
     asyncio.run(run())
 
@@ -123,18 +114,18 @@ def test_argument_mapping_translates_default_input_schema(tool_factory: ToolFact
         assert tool.inputSchema["properties"]["top_k"]["type"] == "integer"
         assert tool.inputSchema["required"] == ["q"]
 
-        result = await tool.run(q="source-backed tools")
+        result = await tool.run(q="source-backed-tools")
         content, extensions = result
 
-        assert "SearchAgent Runtime" in content
-        assert extensions == {"searched_ids": ["doc-1"]}
+        assert RUNTIME_DOC_ID in content
+        assert extensions == {"searched_ids": [RUNTIME_DOC_ID]}
 
     asyncio.run(run())
 
 
 def test_input_schema_is_derived_from_run_signature() -> None:
     tool = SearchTool(
-        MemorySource(documents=_documents()),
+        LocalFileSource(root_path=SOURCE_ROOT),
         name="search",
     )
 
@@ -160,13 +151,13 @@ def test_schema_from_signature_supports_optional_types() -> None:
 def test_argument_mapping_key_is_left_to_runtime_schema_validation() -> None:
     async def run() -> None:
         tool = SearchTool(
-            MemorySource(documents=_documents()),
+            LocalFileSource(root_path=SOURCE_ROOT),
             name="search",
             inputSchema=_custom_search_schema(),
             argument_mapping={"query": "query"},
         )
 
-        result = await tool.run(query="source-backed tools")
+        result = await tool.run(query="source-backed-tools")
 
         assert result[0].startswith("[Tool] invalid type for tool call argument.")
         assert result[1] == {}
@@ -177,7 +168,7 @@ def test_argument_mapping_key_is_left_to_runtime_schema_validation() -> None:
 def test_argument_mapping_target_must_be_named() -> None:
     async def run() -> None:
         tool = SearchTool(
-            MemorySource(documents=_documents()),
+            LocalFileSource(root_path=SOURCE_ROOT),
             name="search",
             inputSchema=_custom_search_schema(),
             argument_mapping={"q": ""},
@@ -202,7 +193,7 @@ def test_argument_mapping_rejects_collisions() -> None:
 
     async def run() -> None:
         tool = SearchTool(
-            MemorySource(documents=_documents()),
+            LocalFileSource(root_path=SOURCE_ROOT),
             name="search",
             inputSchema=schema,
             argument_mapping={"q": "query"},
@@ -270,7 +261,7 @@ def test_input_schema_override_is_not_matched_against_run_signature() -> None:
     }
 
     tool = SearchTool(
-        MemorySource(documents=_documents()),
+        LocalFileSource(root_path=SOURCE_ROOT),
         name="search",
         inputSchema=schema,
     )

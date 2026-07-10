@@ -50,10 +50,6 @@ def build_source(name: str | None = None, *, config: SourceConfig | None = None)
         from .elasticsearch import ElasticsearchSource
 
         return ElasticsearchSource(config=config)
-    if source_type == "memory":
-        from .memory import MemorySource
-
-        return MemorySource(config=config)
     if source_type == "web":
         from .web import WebSource
 
