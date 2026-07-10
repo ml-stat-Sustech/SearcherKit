@@ -1,12 +1,10 @@
 import json
-from collections.abc import Callable
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
-import pytest
-
-from searchagent.plugins.conversion.main import load_config
-from searchagent.plugins.conversion.convert import convert_file
+from searchagent.plugins.conversion.main import main as conversion_main
 
 
 FIXTURE_DIR = Path("tests/fixtures/datasets")
@@ -18,40 +16,27 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
-def _convert_direct(output_path: Path, tmp_path: Path) -> dict[str, int]:
-    return convert_file(OPENSEEKER_PATH, output_path).to_dict()
+def _run_conversion_cli(args: list[str]) -> dict[str, int]:
+    stdout = StringIO()
+    with redirect_stdout(stdout):
+        status = conversion_main(args, prog="searchagent plugins convert")
+    assert status == 0
+    return json.loads(stdout.getvalue())
 
 
-def _convert_from_config(output_path: Path, tmp_path: Path) -> dict[str, int]:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    config_path = config_dir / "openseeker_ms_swift.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                f"input_path: {OPENSEEKER_PATH}",
-                f"output_path: {output_path}",
-                "max_records: 0",
-            ]
-        ),
-        encoding="utf-8",
+def _convert_from_cli(output_path: Path) -> dict[str, int]:
+    return _run_conversion_cli(
+        [
+            str(OPENSEEKER_PATH),
+            str(output_path),
+        ]
     )
-    config = load_config(config_path=config_dir)
-    return convert_file(
-        config.input_path,
-        config.output_path,
-        max_records=config.max_records,
-    ).to_dict()
 
 
-@pytest.mark.parametrize("convert", [_convert_direct, _convert_from_config])
-def test_openseeker_conversion_matches_ms_swift_fixture(
-    tmp_path: Path,
-    convert: Callable[[Path, Path], dict[str, int]],
-) -> None:
+def test_openseeker_conversion_matches_ms_swift_fixture(tmp_path: Path) -> None:
     output_path = tmp_path / "openseeker_ms_swift.jsonl"
 
-    stats = convert(output_path, tmp_path)
+    stats = _convert_from_cli(output_path)
 
     actual = _read_jsonl(output_path)
     expected = _read_jsonl(MS_SWIFT_PATH)
@@ -76,3 +61,21 @@ def test_openseeker_conversion_matches_ms_swift_fixture(
     assert second["messages"][-1]["content"].endswith(
         "The decoration described is the **Defense Distinguished Service Medal** of the United States.\n</answer>"
     )
+
+
+def test_conversion_cli_max_records(tmp_path: Path) -> None:
+    output_path = tmp_path / "limited.jsonl"
+
+    stats = _run_conversion_cli(
+        [
+            str(OPENSEEKER_PATH),
+            str(output_path),
+            "--max-records",
+            "1",
+        ]
+    )
+
+    actual = _read_jsonl(output_path)
+    assert stats == {"total": 1, "written": 1, "skipped": 0}
+    assert len(actual) == 1
+    assert actual[0]["id"] == "OpenSeeker:0"
