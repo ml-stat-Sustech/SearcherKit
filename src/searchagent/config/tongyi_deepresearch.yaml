@@ -9,16 +9,23 @@ task_retry_policy:
 agent:
   llm_client:
     type: openai
-    model: /home/jovyan1/searchagent/outputs/checkpoints/jovyan/webagent/qwen3_igpo_20260615_135454/default/epoch1epochstep104globalstep209
+    model: /home/jovyan/Tongyi-DeepResearch-30B-A3B
     default_kwargs:
-      temperature: 1.0
-      top_p: 1.0
+      temperature: 0.6
+      top_p: 0.95
+      presence_penalty: 1.1
+      stop:
+        - "\n<tool_response>"
+        - "<tool_response>"
     openai:
       api_key: "a"
       base_url: 
-        - http://127.0.0.1:6001/v1
         - http://127.0.0.1:6002/v1
         - http://127.0.0.1:6003/v1
+        - http://127.0.0.1:6004/v1
+        - http://127.0.0.1:6005/v1
+        - http://127.0.0.1:6006/v1
+        - http://127.0.0.1:6007/v1
       concurrency_limit: 512
       extra_client_kwargs: null
   parser:
@@ -28,7 +35,7 @@ agent:
   sources:
     - name: elasticsearch
       type: elasticsearch
-      hosts: ["http://10.32.33.135:9200"]
+      hosts: ["http://10.32.33.124:9200"]
       index: browsecomp_plus_qwen3-embedding-8b
       search_fields: ["title", "text"]
       es_max_concurrency: 1024
@@ -36,8 +43,9 @@ agent:
       title_field: title
       text_field: text
       url_field: url
+      fetch_field: url
       highlight: true
-      highlight_number_of_fragments: 1
+      highlight_number_of_fragments: 5
       snippet_chars: 8192
       vector_search_mode: hybrid
       embedding_prefix: |
@@ -60,13 +68,14 @@ agent:
             description: "Array of query strings. Include multiple complementary search queries in a single call."
         required:
           - query
-        additionalProperties: false
       source:
         - elasticsearch
       raise_argument_validation_error: false
     - type: visit
       name: visit
       description: "Visit webpage(s) and return the summary of the content."
+      source:
+        - elasticsearch
       inputSchema:
         type: object
         properties:
@@ -124,7 +133,7 @@ dataloader:
   max_items: null
 
 max_concurrency: 128
-output_path: outputs/rl_0625
+output_path: outputs/tongyi_deepresearch_bcp
 overwrite_output: false
 
 checkpoint:

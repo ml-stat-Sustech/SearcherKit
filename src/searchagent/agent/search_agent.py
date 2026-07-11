@@ -386,7 +386,7 @@ class SearchAgent(BaseAgent):
         if self.parser.uses_provider_tools:
             tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
         else:
-            tools = []
+            tools = None
         
         parsed = self.parser.to_model(history)
 
