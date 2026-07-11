@@ -36,7 +36,7 @@ def test_upstream_parser_round_trips_provider_tool_messages(parser: UpstreamPars
                 thinking="Use the tool.",
                 tool_calls=[ToolCall(id="call_lookup", name="lookup", arguments={"query": "next"})],
             ),
-            tool([ToolCall(id="call_lookup", name="lookup", arguments={}, result="Result.")]),
+            tool({"call_lookup": "Result."}),
         ]
     )
 

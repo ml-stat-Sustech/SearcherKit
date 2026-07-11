@@ -237,5 +237,5 @@ def test_run(
     assert record["history"][-1]["content"] == r"\boxed{SearchAgent}"
     tool_message = next(message for message in record["history"] if message["role"] == "tool")
     assert "SearchAgent supports pluggable search-agent runs." in (
-        tool_message["tool_responses"][0]["result"]
+        next(iter(tool_message["tool_responses"].values()))
     )

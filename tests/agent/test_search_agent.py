@@ -181,9 +181,9 @@ def test_tool_call_appends_tool_result() -> None:
         ]
         tool_message = history[3]
         assert isinstance(tool_message, ToolMessage)
-        assert tool_message.tool_responses[0].id == upstream_parsed_endpoint.TOOL_CALL["id"]
-        assert tool_message.tool_responses[0].name == upstream_parsed_endpoint.TOOL_NAME
-        assert tool_message.tool_responses[0].result == "lookup result for next"
+        assert tool_message.tool_responses == {
+            upstream_parsed_endpoint.TOOL_CALL["id"]: "lookup result for next"
+        }
         assert history[-1].content == upstream_parsed_endpoint.FINAL_CONTENT
 
     asyncio.run(run())
@@ -198,7 +198,7 @@ def test_unknown_tool_returns_error_response() -> None:
 
         tool_message = history[3]
         assert isinstance(tool_message, ToolMessage)
-        assert tool_message.tool_responses[0].result == "Error: Tool lookup not found"
+        assert tool_message.tool_responses[upstream_parsed_endpoint.TOOL_CALL["id"]] == "Error: Tool lookup not found"
 
     asyncio.run(run())
 
@@ -217,7 +217,7 @@ def test_max_turn_prompt_replaces_first_tool_result() -> None:
 
         tool_message = history[3]
         assert isinstance(tool_message, ToolMessage)
-        assert tool_message.tool_responses[0].result == "Answer now."
+        assert tool_message.tool_responses[upstream_parsed_endpoint.TOOL_CALL["id"]] == "Answer now."
         assert history[-1].content == upstream_parsed_endpoint.FINAL_CONTENT
 
     asyncio.run(run())
@@ -238,7 +238,7 @@ def test_max_tokens_prompt_replaces_first_tool_result() -> None:
 
         tool_message = history[3]
         assert isinstance(tool_message, ToolMessage)
-        assert tool_message.tool_responses[0].result == "Context answer now."
+        assert tool_message.tool_responses[upstream_parsed_endpoint.TOOL_CALL["id"]] == "Context answer now."
         assert history[-1].content == upstream_parsed_endpoint.FINAL_CONTENT
 
     asyncio.run(run())
@@ -309,7 +309,7 @@ def test_tool_retry_success() -> None:
         assert len(tool.calls) == 2
         tool_message = history[3]
         assert isinstance(tool_message, ToolMessage)
-        assert tool_message.tool_responses[0].result == "lookup result for next"
+        assert tool_message.tool_responses[upstream_parsed_endpoint.TOOL_CALL["id"]] == "lookup result for next"
 
     asyncio.run(run())
 

@@ -100,8 +100,8 @@ def count_truncated_tool_responses(history: Iterable[Any]) -> int:
 
     count = 0
     for message in history:
-        for tool_response in getattr(message, "tool_responses", None) or []:
-            result = str(getattr(tool_response, "result", "") or "")
+        for result in (getattr(message, "tool_responses", None) or {}).values():
+            result = str(result or "")
             if "[Truncated]" in result or "...(truncated)" in result or "(truncated)..." in result:
                 count += 1
     return count
@@ -112,11 +112,15 @@ def count_duplicate_tool_results(history: Iterable[Any]) -> int:
 
     seen: set[str] = set()
     duplicate_count = 0
+    tool_names_by_id: dict[str, str] = {}
     for message in history:
-        for tool_response in getattr(message, "tool_responses", None) or []:
-            if getattr(tool_response, "name", None) != "search":
+        for tool_call in getattr(message, "tool_calls", None) or []:
+            if tool_call.id is not None:
+                tool_names_by_id[tool_call.id] = tool_call.name
+        for tool_call_id, result in (getattr(message, "tool_responses", None) or {}).items():
+            if tool_names_by_id.get(tool_call_id) != "search":
                 continue
-            result = str(getattr(tool_response, "result", "") or "")
+            result = str(result or "")
             normalized = _normalize_tool_result(result)
             if not normalized:
                 continue

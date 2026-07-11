@@ -28,12 +28,12 @@ class UpstreamParser(Parser):
             elif message.role == "assistant":
                 out.append(self._assistant_to_model(message))
             elif message.role == "tool":
-                for resp in message.tool_responses:
+                for tool_call_id, response in message.tool_responses.items():
                     out.append(
                         {
                             "role": "tool",
-                            "tool_call_id": resp.id,
-                            "content": resp.result,
+                            "tool_call_id": tool_call_id,
+                            "content": response,
                         }
                     )
             else:

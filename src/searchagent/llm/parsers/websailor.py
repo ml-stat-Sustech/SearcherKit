@@ -74,8 +74,8 @@ class WebSailorParser(QwenParser):
                     {
                         "role": "user",
                         "content": "\n".join(
-                            f"<tool_response>{resp.result}</tool_response>"
-                            for resp in message.tool_responses
+                            f"<tool_response>{response}</tool_response>"
+                            for response in message.tool_responses.values()
                         ),
                     }
                 )

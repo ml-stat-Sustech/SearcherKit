@@ -11,7 +11,6 @@ class ToolCall:
     name: str
     arguments: Mapping[str, Any]
     id: str | None = None
-    result: str | None = None
     
 @dataclass(slots=True)
 class Tool:
@@ -46,7 +45,7 @@ class AssistantMessage:
 
 @dataclass(slots=True)
 class ToolMessage:
-    tool_responses: list[ToolCall]
+    tool_responses: dict[str, str]
     role: Literal["tool"] = "tool"
     extensions: dict[str, Any] | None = None
 
@@ -61,5 +60,5 @@ def user(text: str, extensions: dict[str, Any] | None = None) -> UserMessage:
 def assistant(text: str | None, thinking: str | None = None, tool_calls: list[ToolCall] | None = None, extensions: dict[str, Any] | None = None) -> AssistantMessage:
     return AssistantMessage(content=text, thinking=thinking, tool_calls=tool_calls, extensions=extensions)
 
-def tool(tool_responses: list[ToolCall], extensions: dict[str, Any] | None = None) -> ToolMessage:
+def tool(tool_responses: dict[str, str], extensions: dict[str, Any] | None = None) -> ToolMessage:
     return ToolMessage(tool_responses=tool_responses, extensions=extensions)
