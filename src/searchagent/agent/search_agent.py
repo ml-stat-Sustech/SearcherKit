@@ -291,8 +291,8 @@ class SearchAgent(BaseAgent):
                 tc.name,
                 _preview_payload(dict(tc.arguments)),
             )
-            async def return_error(name):
-                return f"Error: Tool {name} not found"
+            async def return_error(name: str) -> tuple[str, dict[str, Any]]:
+                return f"Error: Tool {name} not found", {}
             if tc.name not in self.tool_dict:
                 tool_call_coros.append(return_error(tc.name))
                 continue
