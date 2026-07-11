@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Mapping, overload
+import asyncio
 
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import DataSource, Document, SourceError, build_source
@@ -88,18 +89,24 @@ class VisitTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, *, document_id: str, goal: str | None = None) -> str:
+    async def _run(self, *, document_id: str | list[str], goal: str | None = None) -> str:
         """Get the content of a document."""
         try:
-            document = await self.source.fetch(document_id, goal=goal)
+            if isinstance(document_id, list):
+                documents = await asyncio.gather(*[self.source.fetch(did, goal=goal) for did in document_id])
+            else:
+                documents = [await self.source.fetch(document_id, goal=goal)]
         except SourceError as e:
             raise RecoverableError(str(e)) from e
         except KeyError as e:
             raise RecoverableError(f"Document not found: {document_id}") from e
-        text = _format_document(document)
-        if self.response_char_limit:
-            return _limit_response(text, self.response_char_limit)
-        return text
+        ret = []
+        for document in documents:
+            text = _format_document(document)
+            if self.response_char_limit:
+                return _limit_response(text, self.response_char_limit)
+            ret.append(text)
+        return "\n=======\n".join(ret)
 
     async def close(self) -> None:
         await self.source.close()

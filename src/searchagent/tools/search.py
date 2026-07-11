@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import overload
+import asyncio
 
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import DataSource, SearchResult, SourceError, build_source
@@ -94,17 +95,23 @@ class SearchTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, *, query: str, top_k: int = 5) -> tuple[str, dict[str, object]]:
+    async def _run(self, *, query: str | list[str], top_k: int = 10) -> tuple[str, dict[str, object]]:
         """Search the configured data source."""
         try:
-            results = await self.source.search(query, top_k=top_k)
+            if isinstance(query, list):
+                results = await asyncio.gather(*[self.source.search(q, top_k=top_k) for q in query], return_exceptions=False)
+            else:
+                results = [await self.source.search(query, top_k=top_k)] 
         except SourceError as e:
             raise RecoverableError(str(e)) from e
-        text = _format_results(results)
-        if self.response_char_limit is not None:
-            text = _limit_response(text, self.response_char_limit)
-        return text, {
-            "searched_ids": [result.document.id for result in results],
+        ret = []
+        for r in results:
+            text = _format_results(r)
+            if self.response_char_limit is not None:
+                text = _limit_response(text, self.response_char_limit)
+            ret.append(text)
+        return "\n=======\n".join(ret), {
+            "searched_ids": [r.document.id for result in results for r in result],
         }
 
     async def close(self) -> None:
