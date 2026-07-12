@@ -196,14 +196,18 @@ def test_run(tool_factory: ToolFactory) -> None:
 
 
 @pytest.mark.parametrize("tool_factory", [_direct_tool, _config_tool])
-def test_missing_document_surfaces_recoverable_error(
+def test_missing_document_returns_error_message(
     tool_factory: ToolFactory,
 ) -> None:
     async def run() -> None:
         tool = tool_factory(test_name="missing-document")
 
-        with pytest.raises(RecoverableError, match="file document not found"):
-            await tool.run(document_id="missing", goal="confirm runtime wiring")
+        content, extensions = await tool.run(
+            document_id="missing", goal="confirm runtime wiring"
+        )
+
+        assert content == "file document not found: 'missing'"
+        assert extensions == {}
 
     asyncio.run(run())
 

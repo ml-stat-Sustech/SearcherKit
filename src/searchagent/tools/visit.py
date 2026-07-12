@@ -97,9 +97,11 @@ class VisitTool(BaseTool):
             else:
                 documents = [await self.source.fetch(document_id, goal=goal)]
         except SourceError as e:
+            if "not found" in str(e).lower():
+                return str(e)
             raise RecoverableError(str(e)) from e
-        except KeyError as e:
-            raise RecoverableError(f"Document not found: {document_id}") from e
+        except KeyError:
+            return f"Document not found: {document_id}"
         ret = []
         for document in documents:
             text = _format_document(document)
