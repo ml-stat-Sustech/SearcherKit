@@ -18,7 +18,7 @@ from searchagent.common.log import get_logger, setup_logger
 from searchagent.agent import BaseAgent
 from searchagent.agent import SingleTurnAgent
 from searchagent.llm.openai import OpenAIClient
-from searchagent.llm.parsers import QwenParser
+from searchagent.llm.parsers import UpstreamParser
 from searchagent.common.retry import RetryPolicy, retry_async
 
 logger = get_logger(__name__)
@@ -63,13 +63,14 @@ Schema:
                     "chat_template_kwargs": {
                         "enable_thinking": False,
                     },
+                    "enable_thinking": False
                 },
             },
             retry_policy=RetryPolicy(
                 exceptions=(openai.RateLimitError, )
             )
         ),
-        parser=QwenParser(),
+        parser=UpstreamParser(),
         system_prompt=system_prompt
     )
 
