@@ -16,7 +16,6 @@ from .parsers import (
     ParsingError,
     TongyiDeepResearchParser,
     UpstreamParser,
-    WebExplorerParser,
     WebSailorParser,
     get_parser,
 )
@@ -36,7 +35,6 @@ __all__ = [
     "ParsingError",
     "TongyiDeepResearchParser",
     "UpstreamParser",
-    "WebExplorerParser",
     "WebSailorParser",
     "VllmClient",
     "VllmConfig",

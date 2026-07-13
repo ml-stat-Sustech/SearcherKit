@@ -8,7 +8,7 @@ defaults:
   - _self_
 
 task_retry_policy:
-  max_tries: 3
+  max_tries: 1
 
 agent:
   llm_client:
@@ -17,11 +17,16 @@ agent:
     default_kwargs:
       temperature: 0.6
       top_p: 0.95
-      max_tokens: 320000
+      max_tokens: 10000
     openai:
       api_key: "EMPTY"
       base_url: 
-        - http://127.0.0.1:8001/v1
+        - http://127.0.0.1:6002/v1
+        - http://127.0.0.1:6003/v1
+        - http://127.0.0.1:6004/v1
+        - http://127.0.0.1:6005/v1
+        - http://127.0.0.1:6006/v1
+        - http://127.0.0.1:6007/v1
       concurrency_limit: 512
       extra_client_kwargs: null
   parser:
@@ -51,23 +56,25 @@ agent:
   tools:
     - type: search
       name: search
-      description: "Performs batched web searches: supply an array 'query'; the tool retrieves the top 10 results for each query in one call."
+      description: "Web search tool that performs batched web searches: supply an array 'queries'; the tool retrieves search results for each query."
       inputSchema:
         type: object
         properties:
-          query:
+          queries:
             type: array
             items:
               type: string
-            description: "Array of query strings. Include multiple complementary search queries in a single call."
+            description: "Array of query strings. The queries will be sent to search engine. You will get the brief search results with (title, url, snippet)s for each query."
         required:
-          - query
+          - queries
       source:
         - elasticsearch
       raise_argument_validation_error: false
+      argument_mapping:
+        queries: query
     - type: visit
-      name: visit
-      description: "Visit webpage(s) and return the summary of the content."
+      name: browse
+      description: "Browse a webpage and extract relevant information based on a specific query."
       source:
         - elasticsearch
       inputSchema:
@@ -76,19 +83,16 @@ agent:
           url:
             type: 
               - string
-              - array
-            items: 
-              type: string
-            minItems: 1
             description: "The URL(s) of the webpage(s) to visit. Can be a single URL or an array of URLs."
-          goal:
+          query:
             type: string
-            description: "The goal of the visit for webpage(s)."
+            description: "The specific query to extract relevant information from the webpage."
         required:
           - url
-          - goal
+          - query
       argument_mapping:
         url: document_id
+        query: goal
       summary_goal_key: goal
       summarizer:
         model: /home/jovyan/Qwen3-8B-AWQ
@@ -105,25 +109,22 @@ agent:
           max_tries: 3
   system_prompt: |
     You are a helpful assistant.
-
-    Solve the user's question by iteratively using the available tools. Search
-    for promising sources first, then visit the most relevant URLs to answer
-    specific sub-questions. Do not rely on unsupported prior knowledge when the
-    tools can verify the answer.
-
-    When you have enough evidence, provide the final answer inside
-    <answer></answer> and stop calling tools.
   query_prompt: "{query}"
   max_turn: 100
   max_turn_prompt: |
-    You have reached the final step. You are forbidden to call any tools.
-    Based on all the information above, provide your final answer now in the format:
-    <answer>your answer</answer>
+    --- Final Step Reached ---
+    Now you reach the final step. 
+    You are forbidden to call any tools.
+    You must offer your final answer now.
   max_tokens: 110592
   max_tokens_prompt: |
-    You have reached the maximum context length. You are forbidden to call any tools.
-    Based on all the information above, provide your final answer now in the format:
-    <answer>your answer</answer>
+    --- Maximum Length Limit Reached ---
+    You have reached the maximum length limit. 
+    The response is truncated.
+    --- Final Step Reached ---
+    Now you reach the final step. 
+    You are forbidden to call any tools.
+    You must offer your final answer now.
   max_tokens_prompt_margin: 3072
   llm_retry_config:
     max_tries: 5
@@ -136,13 +137,13 @@ agent:
     giveup: null
 
 dataloader:
-  source: data/browsecomp_plus_decrypted_qa.jsonl
+  source: /home/jovyan1/browsecomp_plus_decrypted_qa.jsonl
   input_key: question
   answer_key: answer
   max_items: null
 
-max_concurrency: 16
-output_path: outputs/WebExplorer
+max_concurrency: 256
+output_path: outputs/WebExplorer_bcp
 overwrite_output: false
 
 logging:
