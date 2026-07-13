@@ -19,7 +19,7 @@ from searchagent.llm.base import (
     OpenAIConfig,
     VllmConfig,
 )
-from searchagent.llm.parsers import ParserConfig, QwenParserConfig
+from searchagent.llm.parsers import ParserConfig
 from searchagent.runtime.runner import RunConfig
 from searchagent.sources import SourceConfig
 from searchagent.tools.base import SummarizerConfig, ToolConfig
@@ -44,14 +44,13 @@ def register_config_store() -> None:
     cs.store(group="llm", name="OpenAIClient", node=ClientConfig)
     cs.store(group="llm", name="AnthropicClient", node=ClientConfig)
     cs.store(group="llm", name="VllmClient", node=ClientConfig)
-    cs.store(group="llm", name="QwenParser", node=ParserConfig)
+    cs.store(group="llm", name="TongyiDeepResearchParser", node=ParserConfig)
     cs.store(group="llm", name="UpstreamParser", node=ParserConfig)
     cs.store(group="common", name="RetryPolicy", node=RetryConfig)
     cs.store(group="common", name="GenericDataLoader", node=DataConfig)
     cs.store(name="__openai_config__", node=OpenAIConfig)
     cs.store(name="__anthropic_config__", node=AnthropicConfig)
     cs.store(name="__vllm_config__", node=VllmConfig)
-    cs.store(name="__qwen_parser_config__", node=QwenParserConfig)
     cs.store(name="__tool_config__", node=ToolConfig())
     cs.store(name="__summarizer_config__", node=SummarizerConfig())
     cs.store(name="__source_config__", node=SourceConfig())

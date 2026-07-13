@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from searchagent.llm.parsers.qwen import QwenParser
+from searchagent.llm.parsers.tongyi_deep_research import TongyiDeepResearchParser
 
 
-class WebExplorerParser(QwenParser):
+class WebExplorerParser(TongyiDeepResearchParser):
     """Qwen-compatible parser configured for WebExplorer recipes."""
 
     def __init__(self) -> None:
-        super().__init__(drop_thinking=False)
+        super().__init__()

@@ -29,9 +29,7 @@ agent:
       concurrency_limit: 512
       extra_client_kwargs: null
   parser:
-    type: qwen
-    qwen:
-      drop_thinking: false
+    type: tongyi_deep_research
   sources:
     - name: elasticsearch
       type: elasticsearch

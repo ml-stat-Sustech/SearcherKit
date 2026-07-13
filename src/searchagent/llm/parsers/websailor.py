@@ -7,10 +7,10 @@ from typing import Any, Iterable
 
 from searchagent.common.messages import ChatMessage
 from searchagent.common.messages import Tool as ToolMsgType
-from searchagent.llm.parsers.qwen import QwenParser
+from searchagent.llm.parsers.tongyi_deep_research import TongyiDeepResearchParser
 
 
-class WebSailorParser(QwenParser):
+class WebSailorParser(TongyiDeepResearchParser):
     """Qwen-compatible parser with WebSailor-style prompt assembly."""
 
     def __init__(
@@ -19,7 +19,7 @@ class WebSailorParser(QwenParser):
         first_user_prefix: str | None = None,
         user_role_prefix: str = "User: ",
     ) -> None:
-        super().__init__(drop_thinking=False)
+        super().__init__()
         self.first_user_prefix = first_user_prefix or self.default_first_user_prefix
         self.user_role_prefix = user_role_prefix
 

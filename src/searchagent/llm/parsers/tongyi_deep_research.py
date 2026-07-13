@@ -1,4 +1,4 @@
-"""Qwen chat-template parser."""
+"""Tongyi Deep Research chat-template parser."""
 
 from __future__ import annotations
 
@@ -16,33 +16,16 @@ from searchagent.tools import to_openai_tool
 logger = get_logger(__name__)
 
 
-class QwenParser(Parser):
-    """Parse `ChatMessage` objects to and from Qwen-style chat-template messages."""
+class TongyiDeepResearchParser(Parser):
+    """Parse `ChatMessage` objects to and from Tongyi Deep Research messages."""
+    @overload
+    def __init__(self) -> None: ...
 
     @overload
     def __init__(self, *, config: ParserConfig | Mapping[str, Any]) -> None: ...
 
-    @overload
-    def __init__(self, drop_thinking: bool = True) -> None: ...
-
-    def __init__(
-        self,
-        drop_thinking: bool = True,
-        *,
-        config: ParserConfig | Mapping[str, Any] | None = None,
-    ) -> None:
+    def __init__(self, *, config: ParserConfig | Mapping[str, Any] | None = None) -> None:
         super().__init__()
-        if config is not None:
-            qwen_config = config.get("qwen") if isinstance(config, Mapping) else config.qwen
-            if qwen_config is None:
-                raise ValueError("ParserConfig.qwen must be set for QwenParser")
-            self.drop_thinking = (
-                qwen_config.get("drop_thinking", True)
-                if isinstance(qwen_config, Mapping)
-                else qwen_config.drop_thinking
-            )
-        else:
-            self.drop_thinking = drop_thinking
 
     def to_model(self, messages: Iterable[ChatMessage]) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
@@ -74,7 +57,7 @@ class QwenParser(Parser):
     def _assistant_to_model(self, message: ChatMessage) -> dict[str, Any]:
         item: dict[str, Any] = {"role": "assistant"}
         parts: list[str] = []
-        if not self.drop_thinking and isinstance(message.thinking, str):
+        if isinstance(message.thinking, str):
             parts.append(f"<think>{message.thinking}</think>")
         if message.content is not None:
             parts.append(message.content)

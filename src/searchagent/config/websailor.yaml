@@ -27,7 +27,6 @@ agent:
   parser:
     type: websailor
     target: pkg://searchagent.llm.parsers.websailor:WebSailorParser
-    qwen: null
   sources:
     - type: elasticsearch
       name: bcp

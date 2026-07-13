@@ -29,7 +29,6 @@ agent:
   parser:
     type: webexplorer
     target: pkg://searchagent.llm.parsers.webexplorer:WebExplorerParser
-    qwen: null
   sources:
     - type: elasticsearch
       name: bcp

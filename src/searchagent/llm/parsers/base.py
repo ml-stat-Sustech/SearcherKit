@@ -12,15 +12,9 @@ from searchagent.common.errors import LLMError
 
 
 @dataclass
-class QwenParserConfig:
-    drop_thinking: bool = field(default=True)
-
-
-@dataclass
 class ParserConfig:
-    type: str = "qwen"
+    type: str = "upstream"
     target: str | None = None
-    qwen: QwenParserConfig | None = field(default=None)
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -52,15 +46,15 @@ def get_parser(config: ParserConfig | Mapping[str, Any]) -> Parser:
             raise TypeError(f"Parser target must construct a Parser, got {type(parser)}")
         return parser
 
-    parser_type = config.get("type", "qwen") if isinstance(config, Mapping) else config.type
+    parser_type = config.get("type", "tongyi_deep_research") if isinstance(config, Mapping) else config.type
     if "upstream" in parser_type.lower():
         from searchagent.llm.parsers.upstream import UpstreamParser
 
         return UpstreamParser()
-    if "qwen" in parser_type.lower():
-        from searchagent.llm.parsers.qwen import QwenParser
+    if "tongyi" in parser_type.lower() or "deepresearch" in parser_type.lower():
+        from searchagent.llm.parsers.tongyi_deep_research import TongyiDeepResearchParser
 
-        return QwenParser(config=config)
+        return TongyiDeepResearchParser(config=config)
     if "webexplorer" in parser_type.lower():
         from searchagent.llm.parsers.webexplorer import WebExplorerParser
 
