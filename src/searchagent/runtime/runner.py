@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 from typing import Any, Iterable, Sequence, TYPE_CHECKING
 
-from searchagent.agent.search_agent import SearchAgent, SearchAgentConfig
+from searchagent.agent import SearchAgent, SearchAgentConfig
 from searchagent.common.log import configure_run_logging, get_logger, log_context
 from searchagent.common.dataloader import DataConfig, DataItem, GenericDataLoader
 from searchagent.common.errors import SearchAgentError

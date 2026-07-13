@@ -12,7 +12,8 @@ from openai import APITimeoutError
 sys.path.append(str(Path(__file__).resolve().parents[1] / "llm"))
 from mock_endpoints import upstream_parsed_endpoint  # noqa: E402
 
-from searchagent.agent.search_agent import LLMContextError, SearchAgent, SearchAgentConfig
+from searchagent.agent import SearchAgent, SearchAgentConfig
+from searchagent.agent.search_agent import LLMContextError
 from searchagent.common.messages import ToolMessage
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm.base import ClientConfig, OpenAIConfig

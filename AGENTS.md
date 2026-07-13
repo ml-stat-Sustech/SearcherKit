@@ -14,6 +14,7 @@
   environment exists. This includes real network calls, localhost services,
   proxies, and HTTP mocking/interception tools such as `respx` or mock
   transports.
+- Always check `great-docs.yml` in any code changes for documentation configuration and consistency.
 
 ## Testing Rules
 - New tests should cover three concerns when they apply: config initialization,

@@ -1,0 +1,116 @@
+---
+title: Start to Search
+---
+
+## Overview
+
+A SearchAgent run loads questions, builds one agent per task, calls tools until the
+model produces a final response or reaches a configured limit, and writes each full
+trajectory to disk.
+
+## Prerequisites
+
+You need an LLM endpoint compatible with the selected client and parser. You also need
+at least one retrieval source:
+
+- **Local files:** install `ripgrep` and point a `file` source at a directory.
+- **Elasticsearch:** start Elasticsearch `<9.0.0`, create an index, and install the
+  optional dependency with `uv sync --extra elasticsearch-source`.
+- **Embedding retrieval:** populate the index's vector field and provide an
+  OpenAI-compatible embedding endpoint.
+
+Use `searchagent plugins deploy local-wiki --help` or
+`searchagent plugins deploy browsecomp-plus --help` for the bundled indexing flows.
+
+## Configure the agent
+
+Start from `src/searchagent/config/config.yaml` or one of the packaged model configs:
+
+| Config | Parser | Tool interface |
+| --- | --- | --- |
+| `webexplorer.yaml` | `upstream` | Batched `search(queries)` and `browse(url, query)` |
+| `websailor.yaml` | `websailor` | Batched `search(query)` and `visit(url, goal)` |
+| `tongyi_deepresearch.yaml` | `tongyi_deep_research` | Batched `search(query)` and `visit(url, goal)` |
+
+These files contain deployment-specific model paths, endpoints, index names, and high
+concurrency defaults. Copy one and replace those values for your environment or use hydra-style command-line overrides. The essential fields are the client, parser, sources,
+tools, data, and output directory.
+
+```yaml
+agent:
+  llm_client:
+    type: openai
+    model: Qwen3-8B
+    openai:
+      api_key: EMPTY
+      base_url: http://127.0.0.1:8001/v1
+  parser:
+    type: upstream
+  sources:
+    - type: file
+      name: docs
+      root_path: ./docs
+  tools:
+    - type: search
+      name: search
+      source: [docs]
+    - type: visit
+      name: visit
+      source: [docs]
+  system_prompt: >-
+    Use the tools to verify the answer. Put the final answer in
+    <answer></answer> tags.
+  max_turn: 20
+  max_tokens: 32768
+
+dataloader:
+  source: data/questions.jsonl
+  input_key: question
+  answer_key: answer
+
+max_concurrency: 16
+output_path: outputs/demo
+```
+
+`max_turn`, `max_tokens`, and optional timeout settings bound each trajectory. Their
+corresponding reminder prompts ask the model to stop using tools and produce a final
+answer near the limit.
+
+## Validate
+
+Inspect the composed config before starting expensive inference:
+
+```bash
+searchagent inspect --config-name config
+```
+
+Use Hydra-style overrides for environment-specific values:
+
+```bash
+searchagent run --config-name webexplorer \
+  agent.llm_client.model=WebExplorer-8B \
+  agent.llm_client.openai.base_url=http://127.0.0.1:8001/v1 \
+  agent.sources.0.hosts=http://127.0.0.1:9200 \
+  dataloader.source=data/questions.jsonl \
+  output_path=outputs/webexplorer
+```
+
+Packaged configs are resolved from `src/searchagent/config`. For a config elsewhere,
+pass its directory with `--config-path` and its filename without `.yaml` with
+`--config-name`.
+
+## Logging
+
+```yaml
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
+```
+
+The global log shows batch progress and failures. Per-trace logs isolate model and tool
+events for one sample, which is usually the fastest way to diagnose a bad trajectory.

@@ -1,318 +1,236 @@
 # SearchAgent
 
-SearchAgent is a pluggable agent runtime for search-heavy tasks. It is designed
-to work with different offline web/document sources, LLM providers, tool
-servers, and evaluation recipes.
+> Build, evaluate, and train search agents without locking your research to a
+> single model, corpus, tool protocol, or training framework.
 
-## Install
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Hydra](https://img.shields.io/badge/config-Hydra-89b8cd.svg)](https://hydra.cc/)
+[![License](https://img.shields.io/badge/license-see%20repository-lightgrey.svg)](#license)
+
+SearchAgent is a modular runtime for search-intensive agents. It brings agent
+rollouts, heterogeneous search sources, tool execution, model adapters,
+benchmark recipes, evaluation, and RL training integration into one coherent
+stack.
+
+Use it to reproduce deep-search systems, compare models on the same retrieval
+environment, connect private corpora, or generate trajectories for SFT and RL.
+The runtime stays independent of any single provider or training framework, so
+experiments remain reusable as the ecosystem changes.
+
+## Why SearchAgent?
+
+- **Training-ready agent runtime** — integrate search rollouts with AReaL and
+  Slime while retaining control over LLM calls, exceptions, retries, and final
+  answer generation.
+- **One tool protocol, many backends** — run the same agent against memory,
+  local files, web pages, Elasticsearch, MCP servers, or custom sources.
+- **Model and parser independence** — keep provider API calls separate from
+  Qwen, WebSailor, WebExplorer, and provider-native tool-call formats.
+- **Research-grade batch execution** — native concurrency, stable session-to-
+  endpoint affinity, checkpointing, global logs, and per-sample traces.
+- **Reproducible experiments** — compose agents, models, sources, tools, and
+  benchmark recipes with Hydra, then validate the final config before launch.
+- **Designed to be extended** — add a source, tool, provider, parser, plugin,
+  or recipe without rewriting the agent loop.
+
+## Training integrations
+
+SearchAgent is built to serve as the rollout and tool-use layer around modern
+post-training systems.
+
+| Algorithm | AReaL result | Slime result |
+| --- | :---: | :---: |
+| GRPO | `<RESULT>` | `<RESULT>` |
+| IGPO | `<RESULT>` | `<RESULT>` |
+
+The integration surface is intentionally explicit: training systems can hook
+LLM generation while SearchAgent owns message state, tool dispatch, recoverable
+errors, retry policy, turn limits, and context-limit finalization.
+
+Explore the training guides:
+
+- [RL with AReaL](user-guide/training/rl-areal.qmd)
+- [RL with Slime](user-guide/training/rl-slime.qmd)
+- [Supervised fine-tuning](user-guide/training/sft.qmd)
+
+LLM client hook and exception-control example:
+
+```python
+# <CODE EXAMPLE>
+```
+
+## From question to grounded answer
+
+```text
+Question
+   │
+   ▼
+Agent loop ─────► LLM client ─────► Parser
+   ▲                                  │
+   │                                  ▼
+   └──── Tool result ◄──── Search / Visit / MCP
+                              │
+                              ▼
+                  File · Web · Elasticsearch · Custom
+```
+
+Providers call model APIs. Parsers normalize model-specific output. Sources
+own retrieval. Tools expose source capabilities to the agent. This separation
+makes every layer independently replaceable and testable.
+
+## Quick start
+
+SearchAgent requires Python 3.12 or newer.
 
 ```bash
-git clone https://github.com/ml-stat-Sustech//searchagent.git
+git clone https://github.com/ml-stat-Sustech/searchagent.git
 cd searchagent
 uv sync
 ```
 
-The built-in `file` source uses `rg` for full-text search. Install
-[ripgrep](https://github.com/BurntSushi/ripgrep) and make sure `rg` is on
-`PATH` before using file-backed search tools.
-
-Optional backend dependencies are split by plugin:
+Inspect a bundled research recipe before running it:
 
 ```bash
-uv sync --extra elasticsearch-source
-uv sync --extra vllm
-uv sync --extra indexing
+uv run searchagent inspect \
+  --config-path recipe/webexplorer \
+  --config-name webexplorer
 ```
 
-After installing the package, use the short `searchagent ...` command through
-the console script. The module form works too:
+Run the agent against your model endpoint:
 
 ```bash
-python -m searchagent --help
-```
-
-## Quick Start
-
-Before running, deploy the following services
-- elasticsearch **< 9.0.0**
-- embedding model
-- LLM model
-
-### Elasticsearch
-
-Use docker:
-```bash
-local_path=/path/to/es/data
-docker run \
-  --name es-wiki \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  -v ${local_path}:/usr/share/elasticsearch/data \
-  -d elasticsearch:8.19.5
-
-curl http://127.0.0.1:9200
-```
-
-Without docker:
-
-- [Download](https://www.elastic.co/downloads/past-releases/elasticsearch-8-19-16)
-
-- [Offical Doc](https://www.elastic.co/downloads/elasticsearch)
-
-### Embedding Model
-
-For deploying a local embedding model, we recommend using [Text Embeddings Inference](https://github.com/huggingface/text-embeddings-inference), A blazing fast inference solution for text embeddings models.
-
-### LLM Model
-
-We recommend using [vLLM](https://github.com/vllm-project/vllm) or [SGLang](https://github.com/sgl-project/sglang) to deploy your model. 
-
-For better KV Cache hit rate, we recommand replace data parallel config with dedicated server setup. 
-
-For example, for a `dp=2, tp=2` setup, start 2 seperate servers with `dp=1, tp=2`.
-
-Pass the corresponding endpoint URLs in a list to the agent config:
-
-```yaml
-agent:
-  llm_client:
-    openai:
-      base_url:
-        - http://127.0.0.1:8001
-        - http://127.0.0.1:8002
-```
-
-The agent runner will bind each session to a single endpoint to maximize cache hits.
-
-### Deploy embedding database as search source
-```bash
-searchagent plugins deploy browsecomp-plus \
-  --dataset_path Tevatron/browsecomp-plus-corpus \
-  --es_host http://127.0.0.1:9200 \
-  --index_name browsecomp_plus_qwen3 \
-  --dense-vector \
-  --model_name /models/Qwen3-Embedding-8B \
-  --embedding_dim 4096 \
-  --prompt_strategy qwen3 \
-  --overwrite
-```
-
-### Start the agent with a bundled recipe:
-
-```bash
-searchagent run --config-path searchagent
-```
-
-## Usages
-
-First verify that the CLI is installed and can see the top-level commands:
-
-```bash
-searchagent --help
-```
-
-Validate config fields against structured types before running:
-
-```bash
-searchagent inspect --config-path recipe/webexplorer --config-name webexplorer
-searchagent inspect --config-path recipe/websailor --config-name websailor
-```
-
-The validator recursively compares every key in the composed config against the
-corresponding dataclass fields (`RunConfig`, `SearchAgentConfig`, `ClientConfig`,
-`SourceConfig`, `ToolConfig`, etc.) and reports:
-
-- **ERROR** — unexpected field in config (not in target dataclass) or required field missing (no default value in target dataclass)
-
-Hydra-style overrides are supported:
-
-```bash
-searchagent inspect --config-path recipe/webexplorer --config-name webexplorer agent.max_turn=50
-```
-
-Run the packaged default config:
-
-```bash
-searchagent run
-```
-
-This default config uses the packaged in-memory questions file at
-`src/searchagent/config/memory_questions.jsonl` and writes outputs to
-`outputs/agent_history`. It still needs a reachable LLM endpoint and API key.
-Edit `src/searchagent/config/config.yaml` or pass Hydra-style overrides to point
-the run at your own model endpoint, data file, or output directory:
-
-```bash
-searchagent run \
+uv run searchagent run \
+  --config-path recipe/webexplorer \
+  --config-name webexplorer \
   agent.llm_client.model=Qwen3-8B \
   agent.llm_client.openai.base_url=http://127.0.0.1:8001/v1 \
-  agent.llm_client.openai.api_key=EMPTY \
-  output_path=outputs/demo
+  agent.llm_client.openai.api_key=EMPTY
 ```
 
-Run a benchmark recipe:
+The complete setup guide covers Elasticsearch, embedding services, multiple
+LLM endpoints, evaluation, logging, and Windows/PowerShell commands:
+[SearchAgent Guide](user-guide/index.qmd).
 
-```bash
-searchagent run --config-path recipe/webexplorer --config-name webexplorer
-searchagent run --config-path recipe/websailor --config-name websailor
-```
+## Bring your own search environment
 
-On Windows PowerShell, the same recipe commands can be written with backslashes:
-
-```powershell
-searchagent run --config-path recipe\webexplorer --config-name webexplorer
-searchagent inspect --config-path recipe\websailor --config-name websailor
-```
-
-Evaluate saved run outputs with the LLM judge:
-
-```bash
-searchagent evaluate outputs/WebExplorer outputs/WebExplorer_eval --max-concurrency 32
-```
-
-List bundled plugins:
-
-```bash
-searchagent plugins list
-```
-
-## Project Layout
-
-```text
-src/searchagent/
-|-- agent/          # agent loops and orchestration
-|-- common/         # messages, retry, config, dataloader utilities
-|-- config/         # Hydra config templates
-|-- plugins/        # optional concrete backends, such as local_wiki
-|-- llm/            # LLM protocols, clients, and parsers
-|-- runtime/        # batch runner, startup, evaluation, logging
-|-- sources/        # data source contracts and adapters
-`-- tools/          # agent-callable search, visit, and MCP tools
-```
-
-## Extension Points
-
-- `searchagent.sources.DataSource`: implement this to support a new data source
-  such as Elasticsearch, FAISS, Chroma, SQLite, local wiki, or a custom corpus.
-- `searchagent.sources.build_source`: build a data source from a Hydra or
-  plain Python config.
-- `searchagent.tools.SearchTool` and `searchagent.tools.VisitTool`: expose a
-  configured source to the agent as `search` and `visit`.
-- `searchagent.llm`: add provider adapters for OpenAI-compatible servers, vLLM,
-  or commercial APIs.
-- `searchagent.plugins`: keep optional concrete backends out of the runtime
-  core.
-
-Native source-backed tools are wired by source name:
-
-```yaml
-agent:
-  sources:
-    - type: file
-      name: local_docs
-      root_path: /path/to/docs
-  tools:
-    - type: search
-      name: search
-      source:
-        - local_docs
-    - type: visit
-      name: visit
-      source:
-        - local_docs
-    - type: mcp
-      name: web_search
-      mcp_tool_name: search
-      endpoint: http://127.0.0.1:8100/mcp
-```
-
-Elasticsearch-backed corpora use the same tool path:
+Sources and tools are wired by name, so an agent recipe can move between local
+documents and production indexes without changing the agent implementation.
 
 ```yaml
 agent:
   sources:
     - type: elasticsearch
-      name: bcp
+      name: knowledge_base
       hosts: http://127.0.0.1:9200
-      index: browsecomp_hybrid
+      index: documents
       search_fields: [title, text]
       document_id_field: url
-      fetch_field: url
-      snippet_chars: 512
-      metadata_fields: [links]
+
   tools:
     - type: search
       name: search
-      source:
-        - bcp
+      source: [knowledge_base]
     - type: visit
       name: visit
-      source:
-        - bcp
+      source: [knowledge_base]
 ```
 
-See `docs/architecture.md` for the intended layering.
-
-## Plugin Corpus Deployment
-
-Plugins provide corpus readers, preprocessors, and Elasticsearch deployment
-entry points for benchmark backends.
-
-Wiki dump to Elasticsearch:
+Built-in plugin workflows can prepare and deploy benchmark corpora:
 
 ```bash
-searchagent plugins deploy local-wiki \
-  --wiki_dump_path /data/enwiki-pages-articles.xml.bz2 \
-  --es_host http://127.0.0.1:9200 \
-  --index_name wiki_qwen3 \
-  --dense-vector \
-  --model_name /models/Qwen3-Embedding-0.6B \
-  --embedding_dim 1024 \
-  --prompt_strategy qwen3 \
-  --overwrite
+uv run searchagent plugins list
+uv run searchagent plugins deploy local-wiki --help
+uv run searchagent plugins deploy browsecomp-plus --help
 ```
 
-BrowseComp Plus to Elasticsearch:
+See [Source and Tool](user-guide/inference/source-tool.qmd) for the
+runtime model and extension points.
 
-```bash
-searchagent plugins deploy browsecomp-plus \
-  --dataset_path Tevatron/browsecomp-plus-corpus \
-  --es_host http://127.0.0.1:9200 \
-  --index_name browsecomp_plus_qwen3 \
-  --dense-vector \
-  --model_name /models/Qwen3-Embedding-8B \
-  --embedding_dim 4096 \
-  --prompt_strategy qwen3 \
-  --overwrite
+## Model and benchmark results
+
+SearchAgent evaluates both general-purpose LLMs and models trained specifically
+for deep research across web-search and wiki-QA environments.
+
+| Category | Benchmarks / models |
+| --- | --- |
+| Web search | BCP, BrowseComp, BrowseComp zh |
+| Wiki QA | GAIA, HotpotQA, DeepSearchQA |
+| General models | Qwen, Gemma, GPT, DeepSeek, Claude |
+| Search models | Tongyi-DeepResearch, OpenResearcher, Openseeker, DR-Venus, WebExplorer, SlimSearcher |
+
+| Model | BCP | BrowseComp | BrowseComp zh | GAIA | HotpotQA | DeepSearchQA |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `<MODEL>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `<MODEL>`¹ | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+
+¹ Reported by the original paper. Unmarked rows are SearchAgent reproductions.
+Each reproduction is accompanied by its runnable code and configuration.
+
+<details>
+<summary>Model compatibility code example</summary>
+
+```python
+# <CODE EXAMPLE>
 ```
 
-The direct module entry points are still available when you want to bypass the
-top-level CLI dispatcher:
+</details>
 
-```bash
-python -m searchagent.plugins.local_wiki.deploy_elasticsearch --help
-python -m searchagent.plugins.browsecomp_plus.deploy_elasticsearch --help
-```
-
-## Logging
-
-Per-run logging defaults to:
-
-- `output_path/run.log` for global run-level logs
-- `output_path/traces/*.log` for per-sample trace logs
-
-Trace behavior is configured in YAML:
+<details>
+<summary>Model compatibility config example</summary>
 
 ```yaml
-logging:
-  global_file: ${output_path}/run.log
-  trace:
-    enabled: true
-    dir: ${output_path}/traces
-    format: text
-    level: DEBUG
-    filename_template: "{sample_id}_{trace_id}.log"
+# <CONFIG EXAMPLE>
 ```
 
-Set `logging.trace.format: json` to emit structured JSON traces.
+</details>
+
+## Architecture at a glance
+
+```text
+src/searchagent/
+├── agent/       agent loops, tool dispatch, and final-answer control
+├── llm/         provider clients and model/training-format parsers
+├── sources/     memory, file, web, Elasticsearch, and custom retrieval
+├── tools/       search, visit, multi-source, summarizer, and MCP tools
+├── plugins/     corpus conversion, preprocessing, and deployment
+├── runtime/     batch execution, checkpoints, evaluation, and tracing
+├── config/      reusable Hydra config groups
+└── training/    SFT/RL integration points
+```
+
+Benchmark- and paper-specific configurations live in `recipe/`, keeping the
+core runtime reusable across experiments.
+
+## Examples and demos
+
+| Topic | Code | Config | Demo |
+| --- | --- | --- | --- |
+| RL training | `<CODE_LINK>` | `<CONFIG_LINK>` | — |
+| Model and tool compatibility | `<CODE_LINK>` | `<CONFIG_LINK>` | — |
+| Source and plugin development | `<CODE_LINK>` | `<CONFIG_LINK>` | `<VIDEO_LINK>` |
+| Secondary development | `<CODE_LINK>` | `<CONFIG_LINK>` | — |
+| TUI | `<CODE_LINK>` | `<CONFIG_LINK>` | `<VIDEO_LINK>` |
+
+## Documentation
+
+- [Full guide](user-guide/index.qmd)
+- [Parser and LLM adapters](user-guide/inference/parser-llm.qmd)
+- [Source and tool system](user-guide/inference/source-tool.qmd)
+- [Search execution flow](user-guide/inference/start-to-search.qmd)
+- [CLI reference](docs/cli/index.qmd)
+
+## Contributing
+
+SearchAgent is actively evolving. Reproduction reports, new model parsers,
+source adapters, benchmark recipes, training integrations, bug reports, and
+documentation improvements are welcome. Open an issue with the model,
+benchmark, and environment you want to support—or submit a focused pull
+request.
+
+If SearchAgent helps your research or makes your agent stack easier to reason
+about, consider starring the repository. It helps more search-agent builders
+find the project.
+
+## License
+
+See the repository license file for terms.

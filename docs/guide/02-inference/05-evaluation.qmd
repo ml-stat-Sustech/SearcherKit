@@ -1,0 +1,101 @@
+---
+title: Evaluation
+---
+
+## Overview
+
+`searchagent evaluate` applies an LLM judge to saved agent trajectories. It extracts
+the final answer, compares it with the reference answer, writes one judgment per
+sample, and produces aggregate accuracy statistics.
+
+## Prerequisites
+
+Pass the run's `history/` directory as input. Each JSON record must contain:
+
+- `input`: the original question;
+- `answer`: the reference answer;
+- `history`: a non-empty message list.
+
+The last history item should be an assistant message. If it is not, the sample is
+recorded as an incorrect `No valid response` without calling the judge.
+
+Configure the OpenAI-compatible judge endpoint:
+
+```bash
+export OPENAI_API_KEY=EMPTY
+export OPENAI_BASE_URL=http://127.0.0.1:8001/v1
+```
+
+## Answer extraction
+
+By default, the evaluator extracts the first answer inside `\boxed{...}`. If the
+pattern does not match, or the captured answer is empty, it sends the complete final
+assistant response to the judge.
+
+Use `--answer-pattern` for another final-answer format. The regular expression must
+contain a named `answer` group:
+
+```bash
+--answer-pattern '<answer>(?P<answer>.*?)</answer>'
+```
+
+Keep the extraction pattern consistent across compared runs. A mismatched pattern can
+change the text seen by the judge and make scores incomparable.
+
+## Run evaluation
+
+```bash
+searchagent evaluate \
+  outputs/websailor/history \
+  outputs/websailor_eval \
+  --max-concurrency 32
+```
+
+For `<answer>...</answer>` output:
+
+```bash
+searchagent evaluate \
+  outputs/webexplorer/history \
+  outputs/webexplorer_eval \
+  --answer-pattern '<answer>(?P<answer>.*?)</answer>' \
+  --max-concurrency 32
+```
+
+`--max-concurrency` limits simultaneous judge requests. Choose a value within the
+judge server's capacity; omit it to run all pending records concurrently.
+
+The evaluator retries invalid JSON and invalid judge schemas. The judge response must
+contain exactly these fields: `extracted_final_answer`, `correct_answer`, `reasoning`,
+`correct`, and `confidence`.
+
+## Resume behavior
+
+The output filename matches the input filename. Existing output files are skipped, so
+the same command can resume an interrupted evaluation. Remove an individual result
+file before rerunning that sample.
+
+Failed requests are logged and counted in `summary.json`; they do not prevent other
+samples from finishing.
+
+## Output
+
+```text
+outputs/websailor_eval/
+├── 000000.json
+├── 000001.json
+└── summary.json
+```
+
+Each sample result contains the question, evaluated response, reference answer,
+judge-extracted answer, reasoning, correctness, and confidence. The current serialized
+reasoning key is `judege_reasoning` for compatibility with the runtime output.
+
+`summary.json` includes:
+
+- `accuracy`, `correct`, and `incorrect` over valid result files;
+- `avg_confidence` reported by the judge;
+- `source_total`, `submitted`, and `skipped_existing`;
+- `invalid` result files and `failed_requests` from this invocation.
+
+LLM-judge scores are not ground truth. Inspect extraction failures, low-confidence
+decisions, and a sample of correct and incorrect judgments before comparing models.

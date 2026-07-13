@@ -1,0 +1,190 @@
+# Great Docs Configuration
+# See https://posit-dev.github.io/great-docs/user-guide/configuration.html
+
+# Module Name (optional)
+# ----------------------
+# Set this if your importable module name differs from the project name.
+# Example: project 'py-yaml12' with module name 'yaml12'
+# module: yaml12
+
+# Docstring Parser
+# ----------------
+# The docstring format used in your package (numpy, google, or sphinx)
+parser: google
+
+# Dynamic Introspection
+# ---------------------
+# Use runtime introspection for more accurate documentation (default: true)
+# Set to false if your package has cyclic alias issues (e.g., PyO3/Rust bindings)
+dynamic: true
+
+# User Guide
+# ----------
+# Great Docs copies these pages into the generated User Guide and builds its
+# navbar/sidebar entries from their front matter.
+user_guide: docs/guide
+
+# Custom Sections
+# ---------------
+# SearchAgent uses argparse rather than Click, so its CLI reference is a
+# hand-written custom section instead of Great Docs' automatic CLI section.
+sections:
+  - title: CLI
+    dir: docs/cli
+    index: false
+    navbar_after: User Guide
+
+# API Discovery Settings
+# ----------------------
+# Exclude items from auto-documentation
+# exclude:
+#   - InternalClass
+#   - helper_function
+
+# Logo & Favicon
+# ---------------
+# Point to a single logo file (replaces the text title in the navbar):
+# logo: assets/logo.svg
+#
+# For light/dark variants:
+# logo:
+#   light: assets/logo-light.svg
+#   dark: assets/logo-dark.svg
+#
+# To show the text title alongside the logo, add: show_title: true
+
+# Funding / Copyright Holder
+# --------------------------
+# Credit the organization that funds or holds copyright for this package.
+# Displays in sidebar and footer. Homepage and ROR provide links.
+# funding:
+#   name: "Posit Software, PBC"
+#   roles:
+#     - Copyright holder
+#     - funder
+#   homepage: https://posit.co
+#   ror: https://ror.org/03wc8by49
+
+inline_methods: true
+
+# API Reference Structure
+# -----------------------
+# Customize the sections below to organize your API documentation.
+# - Reorder items within a section to change their display order
+# - Move items between sections or create new sections
+# - Use 'members: false' to exclude methods from documentation
+# - Add 'desc:' to sections for descriptions
+
+reference:
+  - title: Classes
+    desc: Main classes provided by the package
+    contents:
+    - agent.SearchAgent
+    - agent.SingleTurnAgent
+    - llm.AnthropicClient
+    - llm.OpenAIClient
+    - llm.TongyiDeepResearchParser
+    - llm.UpstreamParser
+    - llm.WebSailorParser
+    - tools.MCPTool
+    - tools.SearchTool
+    - tools.VisitTool
+    - sources.FileSource
+    - common.dataloader.GenericDataLoader
+
+  - title: Config
+    desc: Config definitions
+    contents:
+      - runtime.runner.RunConfig
+      - agent.SearchAgentConfig
+      - llm.ClientConfig
+      - llm.OpenAIConfig
+      - llm.AnthropicConfig
+      - llm.VllmConfig
+      - llm.parsers.ParserConfig
+      - sources.SourceConfig
+      - tools.ToolConfig
+      - tools.SummarizerConfig
+      - common.retry.RetryConfig
+
+  - title: DataClasses
+    desc: DataClass definitions
+    contents:
+      - common.messages.ToolCall
+      - common.messages.Tool
+      - common.messages.SystemMessage
+      - common.messages.UserMessage
+      - common.messages.AssistantMessage
+      - common.messages.ToolMessage
+      - common.dataloader.DataConfig
+      - llm.LLMResult
+      - sources.Document
+      - sources.SearchResult
+
+  - title: Abstract Classes
+    desc: Abstract base classes
+    contents:
+      - agent.BaseAgent
+      - llm.Client
+      - llm.parsers.Parser
+      - sources.DataSource
+      - tools.BaseTool
+      - common.dataloader.BaseLoader
+
+  - title: Functions
+    desc: Utility functions
+    contents:
+      - llm.get_client
+      - llm.parsers.get_parser
+      - sources.build_source
+      - tools.build_tool
+      - common.config.instantiate
+      - common.config.import_from_path
+      - common.retry.retry_async
+      - common.retry.retry_sync
+      - common.messages.system
+      - common.messages.user
+      - common.messages.assistant
+      - common.messages.tool
+
+  - title: Errors
+    desc: Error types
+    contents:
+      - common.errors.SearchAgentError
+      - common.errors.RecoverableError
+      - common.errors.FatalError
+      - common.errors.LLMError
+      - agent.search_agent.LLMOutputError
+      - agent.search_agent.LLMContextError
+      - llm.parsers.base.ParsingError
+      - sources.base.SourceError
+
+# Site URL
+# --------
+# Canonical address of the deployed documentation site.
+# Required for subdirectory deployments, skills page install commands,
+# .well-known/ discovery, and sitemaps.
+# site_url: "https://your-org.github.io/your-package/"
+
+# Site Settings
+# -------------
+# site:
+#   theme: flatly              # Quarto theme (default: flatly)
+#   toc: true                  # Show table of contents (default: true)
+#   toc-depth: 2               # TOC heading depth (default: 2)
+#   toc-title: On this page    # TOC title (default: "On this page")
+
+# Jupyter Kernel
+# --------------
+# Jupyter kernel to use for executing code cells in .qmd files.
+# This is set at the project level so it applies to all pages, including
+# auto-generated API reference pages. Can be overridden in individual .qmd
+# file frontmatter if needed for special cases.
+# jupyter: python3
+
+# CLI Documentation
+# -----------------
+# Automatic CLI documentation is disabled because it requires Click command
+# objects. The hand-written CLI page is configured in `sections` above.
+cli:
+  enabled: false

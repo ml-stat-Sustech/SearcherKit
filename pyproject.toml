@@ -49,6 +49,7 @@ indexing = [
 [dependency-groups]
 dev = [
     "aioresponses>=0.7.8",
+    "great-docs>=0.15.0",
     "pytest>=9.0.2",
     "respx>=0.22.0",
 ]

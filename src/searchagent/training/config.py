@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from searchagent.agent.search_agent import SearchAgentConfig
+from searchagent.agent import SearchAgentConfig
 
 
 @dataclass

@@ -1,0 +1,117 @@
+---
+title: RL with AReaL
+---
+
+## Overview
+
+The AReaL integration runs SearchAgent inside an AReaL rollout workflow. SearchAgent
+owns the conversation, tool execution, limits, and trajectory metadata; AReaL owns
+distributed rollout scheduling, optimization, checkpoints, and experiment tracking.
+
+The repository provides separate GRPO and IGPO entry points:
+
+- `searchagent.training.areal.train_dist`
+- `searchagent.training.areal.train_igpo`
+
+## Prerequisites
+
+Install and validate [AReaL](https://github.com/inclusionAI/AReaL) using its official
+instructions. SearchAgent intentionally has lightweight runtime dependencies, so
+install SearchAgent into the working AReaL environment rather than installing the
+full AReaL stack into a general SearchAgent environment.
+
+The training cluster also needs:
+
+- a reachable dataset;
+- accessible search, embedding, and summarizer services;
+- the model and tokenizer paths on every required node;
+- Ray and AReaL name-resolution storage configured for the cluster.
+
+## Configure the workflow
+
+Start with `src/searchagent/config/training/train_areal.yaml`. Its `workflow.agent`
+section is a training-specific `SearchAgentConfig`:
+
+```yaml
+workflow:
+  answer_pattern: '\\boxed\{(?P<answer>[^}]*)\}'
+  agent:
+    llm_client:
+      type: openai
+      model: ${actor.path}
+    parser:
+      type: upstream
+    sources: []
+    tools: []
+    max_turn: 50
+    max_tokens: 40960
+    raise_repeat_tool_call: false
+```
+
+During rollout, `ARealClient` routes generation through AReaL instead of a standalone
+OpenAI server. `SearchAgentTraining` additionally detects multiple parallel tool calls
+and, when enabled, repeated calls with identical arguments.
+
+Keep `eval_workflow` separate when evaluation should use different limits, sources, or
+sampling behavior.
+
+## Run training
+
+Edit service and dataset paths in the config or override them at launch:
+
+```bash
+bash scripts/areal/train_dist_areal.sh \
+  actor.path=/models/Qwen3-8B \
+  train_dataset.path=/data/train.jsonl \
+  cluster.n_nodes=2
+```
+
+The scripts contain cluster-specific defaults and are templates, not portable
+one-command setups. Review GPU topology, backends, paths, concurrency, and batch size
+before launch.
+
+## Errors and reward assignment
+
+Inference normally retries transient failures and records a failed sample after the
+task policy is exhausted. Training must also assign a deterministic outcome to failed
+or malformed rollouts so group statistics remain valid.
+
+SearchAgent reward metadata separates:
+
+- answer quality (`outcome_score`) in f1 score;
+- context-length penalty (`overlong_penalty`);
+- truncation penalty;
+- tool-call count and repeated-query penalties.
+
+Fatal error, and/or any errors that would surface, including exhausted retries, are to interrupt the rollout process and cause RL engine to dump the task.
+
+## IGPO with AReaL
+
+IGPO is implemented as an AReaL-specific trainer and workflow. The entry point is
+`searchagent.training.areal.train_igpo`, which loads the IGPO trainer, carries the
+ground-truth answer through `ARealIGPOSearchAgentWorkflow`, and computes the actor-side
+IGPO objective with the FSDP actor implementation.
+
+Use the dedicated config and launcher:
+
+```bash
+bash scripts/areal/train_dist_areal_igpo.sh \
+  actor.path=/models/Qwen3-8B \
+  train_dataset.path=/data/train.jsonl \
+  cluster.n_nodes=2
+```
+
+IGPO needs reference answers in the training samples. In addition to the scalar
+outcome and format signals described below, the actor can use answer log-probabilities
+to form the IGPO advantage. Monitor answer-scoring throughput and the resulting IGPO
+advantage statistics separately from ordinary GRPO rewards.
+
+## Monitoring
+
+At minimum, track:
+
+- rollout completion and failure/error rate by exception type;
+- reward mean, variance, and group acceptance rate;
+- outcome, format, overlength, truncation, and search reward components;
+- tool calls, repeated queries, and context tokens per trajectory;
+- policy KL, clipping fraction, entropy, loss, and gradient norm.

@@ -76,7 +76,30 @@ class SearchAgent(BaseAgent):
     3. Execute requested tools and append tool outputs.
     4. Optionally inject reminder prompts near configured turn/token/time limits.
     5. Stop when no more tool calls are needed or turn budget is exhausted.
+
+    Args:
+        llm_client: LLM client used to generate assistant responses.
+        parser: Parser that converts between internal and model message formats.
+        tools: Iterable of tools used by agent.
+        system_prompt: Optional system prompt prepended to every run.
+        max_turn: Maximum number of tool-response turns before stopping.
+        max_turn_prompt: Optional user prompt injected near turn limit.
+        max_tokens: Expected model context limit used for token-budget checks.
+        max_tokens_prompt: Optional user prompt injected near token limit.
+        max_tokens_prompt_margin: Safety margin before `max_tokens` to trigger
+            the token-limit reminder prompt.
+        run_timeout_seconds: Optional wall-clock run budget in seconds. The
+            agent uses this for wrap-up prompting; callers may still enforce
+            a hard timeout around `run`.
+        run_timeout_prompt: Optional user prompt injected near run timeout.
+        run_timeout_prompt_margin_seconds: Remaining-time margin before
+            `run_timeout_seconds` to trigger the timeout reminder prompt.
+        llm_retry_policy: Retry policy for LLM parsing/call steps. If `None`,
+            retries are disabled.
+        tool_retry_policy: Retry policy for tool execution. If `None`, retries
+            are disabled.
     """
+    
     @overload
     def __init__(self, *, config: SearchAgentConfig): ...
 
@@ -97,31 +120,6 @@ class SearchAgent(BaseAgent):
                  run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None):
-        """
-        Initialize a SearchAgent instance.
-
-        Args:
-            llm_client: LLM client used to generate assistant responses.
-            parser: Parser that converts between internal and model message formats.
-            tools: Iterable of tools used by agent.
-            system_prompt: Optional system prompt prepended to every run.
-            max_turn: Maximum number of tool-response turns before stopping.
-            max_turn_prompt: Optional user prompt injected near turn limit.
-            max_tokens: Expected model context limit used for token-budget checks.
-            max_tokens_prompt: Optional user prompt injected near token limit.
-            max_tokens_prompt_margin: Safety margin before `max_tokens` to trigger
-                the token-limit reminder prompt.
-            run_timeout_seconds: Optional wall-clock run budget in seconds. The
-                agent uses this for wrap-up prompting; callers may still enforce
-                a hard timeout around `run`.
-            run_timeout_prompt: Optional user prompt injected near run timeout.
-            run_timeout_prompt_margin_seconds: Remaining-time margin before
-                `run_timeout_seconds` to trigger the timeout reminder prompt.
-            llm_retry_policy: Retry policy for LLM parsing/call steps. If `None`,
-                retries are disabled.
-            tool_retry_policy: Retry policy for tool execution. If `None`, retries
-                are disabled.
-        """
         ...
     
     def __init__(self, 
@@ -400,7 +398,7 @@ class SearchAgent(BaseAgent):
 
         return next(iter(self.parser.from_model([call_result_raw])))
 
-    async def run(self, query: str, session_id: int | None = None, extra: dict[str, Any] | None = None):
+    async def run(self, query: str, session_id: int | None = None, extra: dict[str, Any] | None = None) -> list[ChatMessage]:
         """
         Run the agent loop for a single user query.
 
@@ -409,8 +407,8 @@ class SearchAgent(BaseAgent):
             extra: Optional extension payload for future customization.
 
         Returns:
-            Full chat history generated during the run, including system/user,
-            assistant, and tool messages.
+            list[ChatMessage]: Full chat history generated during the run,
+                including system/user, assistant, and tool messages.
         """
         try:
             self._timing = LogTiming()

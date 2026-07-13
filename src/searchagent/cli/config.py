@@ -9,7 +9,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
 from omegaconf.errors import OmegaConfBaseException
 
-from searchagent.agent.search_agent import SearchAgentConfig
+from searchagent.agent import SearchAgentConfig
 from searchagent.common.dataloader import DataConfig
 from searchagent.common.errors import FatalError
 from searchagent.common.retry import RetryConfig

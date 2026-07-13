@@ -61,3 +61,12 @@ docs/assets/searchagent-execution-flow.svg
 docs/assets/searchagent-extension-points.svg
 docs/assets/searchagent-feature-map.svg
 docs/visual-overview.md
+
+# Great Docs build directory (ephemeral, do not commit)
+great-docs/
+
+# Great Docs versioned-build artifacts
+_great_docs_build/
+.great-docs-build/
+.great-docs-cache/
+.great-docs/
