@@ -188,3 +188,9 @@ reference:
 # objects. The hand-written CLI page is configured in `sections` above.
 cli:
   enabled: false
+
+skill:
+  enabled: false
+
+mcp:
+  enabled: false

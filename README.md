@@ -14,22 +14,16 @@ stack.
 
 Use it to reproduce deep-search systems, compare models on the same retrieval
 environment, connect private corpora, or generate trajectories for SFT and RL.
-The runtime stays independent of any single provider or training framework, so
-experiments remain reusable as the ecosystem changes.
-
-## Why SearchAgent?
 
 - **Training-ready agent runtime** — integrate search rollouts with AReaL and
   Slime while retaining control over LLM calls, exceptions, retries, and final
   answer generation.
 - **One tool protocol, many backends** — run the same agent against memory,
   local files, web pages, Elasticsearch, MCP servers, or custom sources.
-- **Model and parser independence** — keep provider API calls separate from
-  Qwen, WebSailor, WebExplorer, and provider-native tool-call formats.
-- **Research-grade batch execution** — native concurrency, stable session-to-
-  endpoint affinity, checkpointing, global logs, and per-sample traces.
-- **Reproducible experiments** — compose agents, models, sources, tools, and
-  benchmark recipes with Hydra, then validate the final config before launch.
+- **Tool parser independence** — Competable with different custom tool-use / searching formats like WebSailor, WebExplorer easy adaptation with new models.
+- **Efficient, traceable batch execution** — native concurrency, session-to-
+  endpoint affinity, global logs, and per-sample traces.
+- **Reproducible experiments with one hydra config** — compose agents, models, sources, tools, and benchmark recipes with hydra config.
 - **Designed to be extended** — add a source, tool, provider, parser, plugin,
   or recipe without rewriting the agent loop.
 
@@ -38,13 +32,16 @@ experiments remain reusable as the ecosystem changes.
 SearchAgent is built to serve as the rollout and tool-use layer around modern
 post-training systems.
 
+We've conduced preliminary experiments with `AReaL` and `Slime` with the ASearcher dataset. And evaluate with F1 scores on the BrowseComp-Plus benchmark.
+
+![IGPO Traning](docs/images/igpo_training.png)
+
 | Algorithm | AReaL result | Slime result |
 | --- | :---: | :---: |
-| GRPO | `<RESULT>` | `<RESULT>` |
-| IGPO | `<RESULT>` | `<RESULT>` |
+| GRPO | `0.3059` | `0.5392` |
+| IGPO | `0.3532` | `-` |
 
-The integration surface is intentionally explicit: training systems can hook
-LLM generation while SearchAgent owns message state, tool dispatch, recoverable
+Training systems can hook LLM generation as `Client` while SearchAgent owns message state, tool dispatch, recoverable
 errors, retry policy, turn limits, and context-limit finalization.
 
 Explore the training guides:
@@ -56,27 +53,145 @@ Explore the training guides:
 LLM client hook and exception-control example:
 
 ```python
-# <CODE EXAMPLE>
+from collections.abc import Iterable
+from typing import Any
+
+from searchagent.common.errors import LLMError, RecoverableError
+from searchagent.llm.base import ClientConfig, OpenAIConfig, get_client
+
+
+class RLClient:
+    """Client hooked to RL engine."""
+
+    def __init__(self, rl_engine) -> None:
+        self.engine = rl_engine
+
+    async def complete_with_usage(
+        self, messages: Iterable[dict[str, Any]], **kwargs: Any
+    ) -> tuple[dict[str, Any], Any]:
+        message, usage = await self.engine.generate(messages, **kwargs)
+        return message, usage
 ```
 
-## From question to grounded answer
+## Model and benchmark results
 
-```text
-Question
-   │
-   ▼
-Agent loop ─────► LLM client ─────► Parser
-   ▲                                  │
-   │                                  ▼
-   └──── Tool result ◄──── Search / Visit / MCP
-                              │
-                              ▼
-                  File · Web · Elasticsearch · Custom
+SearchAgent can be used to evaluate & reproduce deep research tasks across web-search and wiki-QA environments.
+
+<!-- | Category | Benchmarks / models |
+| --- | --- |
+| Web search | BCP, BrowseComp, BrowseComp zh |
+| Wiki QA | GAIA, HotpotQA, DeepSearchQA |
+| General models | Qwen, Gemma, GPT, DeepSeek, Claude |
+| Search models | Tongyi-DeepResearch, OpenResearcher, Openseeker, DR-Venus, WebExplorer, SlimSearcher | -->
+
+| Model | BrowseComp Plus | BrowseComp | BrowseComp zh | GAIA | HotpotQA | DeepSearchQA |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `Tongyi-DeepResearch` | `62.4%` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `WebExplorer` | `48.5%` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `SlimSearcher` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `DR-Venus` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `Openseeker` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+<!-- | `OpenResearcher` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | -->
+
+| Model | BrowseComp Plus | BrowseComp | BrowseComp zh | GAIA | HotpotQA | DeepSearchQA |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `Qwen3-8B` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `Gemma-4-12B` | `32.2%` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `DeepSeek-V4-flash` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `GPT5.5` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+| `Claude Opus 4.8` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
+
+
+To run new models, check the [Model and Parser](user-guide/inference/parser-llm.qmd) guide.
+
+<!-- <details>
+<summary>Model compatibility code example</summary>
+
+Define Parser
+
+```python
+from typing import Any
+
+from searchagent.common.messages import AssistantMessage
+from searchagent.llm import ParsingError, UpstreamParser
+
+
+class ToolPromptParser(UpstreamParser):
+    """Add continue to use tool to the end of each tool response."""
+
+    def to_model(self, messages: Iterable[ChatMessage]) -> Iterable[dict[str, Any]]:
+        parsed = super().parse(messages)
+        for message in parsed:
+            if message["role"] == AssistantMessage.ROLE and "tool_response" in message:
+                message["content"] += "\n\nContinue to use tool."
+        return parsed
 ```
 
-Providers call model APIs. Parsers normalize model-specific output. Sources
-own retrieval. Tools expose source capabilities to the agent. This separation
-makes every layer independently replaceable and testable.
+Connect the parser to the LLM client
+
+```python
+from searchagent.agent import SearchAgent
+from searchagent.llm import ClientConfig, OpenAIConfig, get_client
+
+
+client = get_client(
+    ClientConfig(
+        type="openai",
+        model="Qwen3-8B",
+        openai=OpenAIConfig(
+            base_url="http://127.0.0.1:8001/v1",
+            api_key="EMPTY",
+        ),
+    )
+)
+
+agent = SearchAgent(
+    llm_client=client,
+    parser=ToolPromptParser(),
+    tools=[],
+)
+```
+
+</details>
+
+<details>
+<summary>Model compatibility config example</summary>
+Define Parser
+
+```python
+from typing import Any
+
+from searchagent.common.messages import AssistantMessage
+from searchagent.llm import ParsingError, UpstreamParser
+
+
+class ToolPromptParser(UpstreamParser):
+    """Add continue to use tool to the end of each tool response."""
+
+    def to_model(self, messages: Iterable[ChatMessage]) -> Iterable[dict[str, Any]]:
+        parsed = super().parse(messages)
+        for message in parsed:
+            if message["role"] == AssistantMessage.ROLE and "tool_response" in message:
+                message["content"] += "\n\nContinue to use tool."
+        return parsed
+```
+
+Connect the parser to the LLM client
+```yaml
+agent:
+  llm_client:
+    type: openai
+    model: My-Tool-Calling-Model
+    openai:
+      base_url: http://127.0.0.1:8001/v1
+      api_key: EMPTY
+
+  parser:
+    type: custom
+    target: pkg://my_project.parsers:ToolPromptParser
+```
+
+</details> -->
 
 ## Quick start
 
@@ -84,15 +199,14 @@ SearchAgent requires Python 3.12 or newer.
 
 ```bash
 git clone https://github.com/ml-stat-Sustech/searchagent.git
-cd searchagent
-uv sync
+uv pip install -e searchagent
 ```
 
 Inspect a bundled research recipe before running it:
 
 ```bash
 uv run searchagent inspect \
-  --config-path recipe/webexplorer \
+  --config-path webexplorer \
   --config-name webexplorer
 ```
 
@@ -100,7 +214,7 @@ Run the agent against your model endpoint:
 
 ```bash
 uv run searchagent run \
-  --config-path recipe/webexplorer \
+  --config-path webexplorer \
   --config-name webexplorer \
   agent.llm_client.model=Qwen3-8B \
   agent.llm_client.openai.base_url=http://127.0.0.1:8001/v1 \
@@ -143,48 +257,9 @@ uv run searchagent plugins deploy local-wiki --help
 uv run searchagent plugins deploy browsecomp-plus --help
 ```
 
-See [Source and Tool](user-guide/inference/source-tool.qmd) for the
-runtime model and extension points.
+See [Source and Tool](user-guide/inference/source-tool.qmd) for more.
 
-## Model and benchmark results
-
-SearchAgent evaluates both general-purpose LLMs and models trained specifically
-for deep research across web-search and wiki-QA environments.
-
-| Category | Benchmarks / models |
-| --- | --- |
-| Web search | BCP, BrowseComp, BrowseComp zh |
-| Wiki QA | GAIA, HotpotQA, DeepSearchQA |
-| General models | Qwen, Gemma, GPT, DeepSeek, Claude |
-| Search models | Tongyi-DeepResearch, OpenResearcher, Openseeker, DR-Venus, WebExplorer, SlimSearcher |
-
-| Model | BCP | BrowseComp | BrowseComp zh | GAIA | HotpotQA | DeepSearchQA |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `<MODEL>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
-| `<MODEL>`¹ | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` | `<RESULT>` |
-
-¹ Reported by the original paper. Unmarked rows are SearchAgent reproductions.
-Each reproduction is accompanied by its runnable code and configuration.
-
-<details>
-<summary>Model compatibility code example</summary>
-
-```python
-# <CODE EXAMPLE>
-```
-
-</details>
-
-<details>
-<summary>Model compatibility config example</summary>
-
-```yaml
-# <CONFIG EXAMPLE>
-```
-
-</details>
-
-## Architecture at a glance
+## ArchitectureW
 
 ```text
 src/searchagent/
@@ -201,7 +276,26 @@ src/searchagent/
 Benchmark- and paper-specific configurations live in `recipe/`, keeping the
 core runtime reusable across experiments.
 
-## Examples and demos
+### From question to search-grounded answer
+
+```text
+Question
+   │
+   ▼
+Agent loop ─────► LLM client ─────► Parser
+   ▲                                  │
+   │                                  ▼
+   └──── Tool result ◄──── Search / Visit / MCP
+                              │
+                              ▼
+                  File · Web · Elasticsearch · Custom
+```
+
+Providers call model APIs. Parsers normalize model-specific output. Sources
+own retrieval. Tools expose source capabilities to the agent. This separation
+makes every layer independently replaceable and testable.
+
+<!-- ## Examples and demos
 
 | Topic | Code | Config | Demo |
 | --- | --- | --- | --- |
@@ -209,7 +303,7 @@ core runtime reusable across experiments.
 | Model and tool compatibility | `<CODE_LINK>` | `<CONFIG_LINK>` | — |
 | Source and plugin development | `<CODE_LINK>` | `<CONFIG_LINK>` | `<VIDEO_LINK>` |
 | Secondary development | `<CODE_LINK>` | `<CONFIG_LINK>` | — |
-| TUI | `<CODE_LINK>` | `<CONFIG_LINK>` | `<VIDEO_LINK>` |
+| TUI | `<CODE_LINK>` | `<CONFIG_LINK>` | `<VIDEO_LINK>` | -->
 
 ## Documentation
 
@@ -233,4 +327,4 @@ find the project.
 
 ## License
 
-See the repository license file for terms.
+**TODO**: Add license information.

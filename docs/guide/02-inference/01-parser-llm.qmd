@@ -52,6 +52,10 @@ agent:
     target: pkg://my_project.parsers:MyParser
 ```
 
+To define and configure your own parser, see
+[Custom parser](../04-developement/01-development.qmd#custom-parser) in the
+development guide.
+
 ## LLM client
 
 An LLM client owns API communication, request concurrency, usage data, and endpoint
@@ -74,6 +78,10 @@ agent:
 
 `default_kwargs` are included in every completion request. Provider-specific settings
 belong under the matching provider key, such as `openai` or `anthropic`.
+
+To add and use your own model provider, see
+[Custom LLM client](../04-developement/01-development.qmd#custom-llm-client) in
+the development guide.
 
 ## Retry policy
 

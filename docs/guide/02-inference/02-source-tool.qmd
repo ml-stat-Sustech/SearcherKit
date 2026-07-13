@@ -132,3 +132,8 @@ tools.
 For custom retrieval, subclass `DataSource` and use `type: custom` with a `target`.
 For custom model actions, subclass `BaseTool` and register the implementation with
 `register_tool()` before building the agent.
+
+For complete examples of defining and configuring these extensions, see
+[Custom source](../04-developement/01-development.qmd#custom-source) and
+[Custom tool](../04-developement/01-development.qmd#custom-tool) in the
+development guide.

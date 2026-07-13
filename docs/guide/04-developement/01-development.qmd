@@ -291,23 +291,3 @@ retry_config:
 After the final attempt fails, the last exception is raised to the caller. Catch only
 concrete transient exceptions; configuration errors, authentication failures, and
 programming errors should not be retried.
-
-## Testing and verification
-
-New integrations should cover:
-
-1. direct construction and the normal config/factory path;
-2. functional inputs, outputs, payloads, and error surfaces;
-3. transient failures for the first `n-1` attempts followed by success;
-4. all `n` attempts failing and surfacing the final error.
-
-After changing a config target, CLI command, recipe, or plugin entry point, run an
-import/help/compose check. Also search for stale imports and `pkg://` targets:
-
-```bash
-python -m compileall -q src/searchagent tests
-python -m searchagent --help
-python -m searchagent inspect --config-name config
-rg --pcre2 "searchagent\\.llm\\.client\\b|searchagent\\.llm\\.parser(?!s)|integrations" \
-  src tests docs README.md pyproject.toml
-```

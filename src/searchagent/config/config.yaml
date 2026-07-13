@@ -5,10 +5,10 @@ defaults:
 
 agent:
   llm_client:
-    model: Qwen3-8B
+    model: qwen3-8b
     openai:
-      api_key: YOUR_API_KEY
-      base_url: http://base_url.com/
+      api_key: REMOVED_REVOKED_SECRET
+      base_url: https://www.dmxapi.cn/v1
       concurrency_limit: 128
 
   # Sources define how SearchAgent connects to searchable data backends.
@@ -16,7 +16,7 @@ agent:
   sources:
     - type: file
       name: file_1
-      root_path: /path/to/files
+      root_path: /home/justin/searchagent
 
   # Tools expose agent-callable actions. `type` chooses the implementation;
   # `name` is the function name visible to the model.

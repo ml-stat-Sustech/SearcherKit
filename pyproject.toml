@@ -22,18 +22,8 @@ dependencies = [
 searchagent = "searchagent.cli.main:main"
 
 [project.optional-dependencies]
-vllm = [
-    "ray>=2.9.0",
-    "vllm>=0.6.0",
-]
 elasticsearch-source = [
     "elasticsearch<9.0.0",
-]
-faiss = [
-    "faiss-cpu>=1.8.0",
-]
-chroma = [
-    "chromadb>=0.5.0",
 ]
 anthropic = [
     "anthropic>=0.84.0",
