@@ -132,7 +132,6 @@ dataloader:
 
 max_concurrency: 256
 output_path: outputs/tongyi_deepresearch_bcp
-overwrite_output: false
 
 checkpoint:
   enabled: true

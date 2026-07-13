@@ -21,36 +21,90 @@ agent:
         - "<tool_response>"
     openai:
       api_key: "EMPTY"
-      base_url: http://127.0.0.1:6001/v1
+      base_url: 
+      - http://127.0.0.1:6001/v1
       concurrency_limit: 512
       extra_client_kwargs: null
   parser:
     type: websailor
-    target: pkg://searchagent.llm.parsers.websailor:WebSailorParser
   sources:
-    - type: elasticsearch
-      name: bcp
-      hosts: http://127.0.0.1:9200
-      index: browsecomp_hybrid
-      search_fields:
-        - title
-        - text
-      document_id_field: url
+    - name: elasticsearch
+      type: elasticsearch
+      hosts: ["http://10.32.33.124:9200"]
+      index: browsecomp_plus_qwen3-embedding-8b
+      search_fields: ["title", "text"]
+      es_max_concurrency: 1024
+      embedding_max_concurrency: 2048
+      title_field: title
+      text_field: text
+      url_field: url
       fetch_field: url
-      snippet_chars: 512
-      metadata_fields:
-        - links
+      highlight: true
+      highlight_number_of_fragments: 5
+      snippet_chars: 8192
+      vector_search_mode: hybrid
+      embedding_prefix: |
+        Instruct: Given a web search query, retrieve relevant passages that answer the query
+        Query:
+      embedding_model: /home/jovyan/Qwen3-Embedding-8B
+      embedding_api_key: api_key
+      embedding_base_url: http://127.0.0.1:8004
   tools:
     - type: search
       name: search
+      description: "Performs batched web searches: supply an array 'query'; the tool retrieves the top 10 results for each query in one call."
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: array
+            items:
+              type: string
+            description: "Array of query strings. Include multiple complementary search queries in a single call."
+        required:
+          - query
       source:
-        - bcp
-      response_char_limit: null
+        - elasticsearch
+      raise_argument_validation_error: false
     - type: visit
       name: visit
+      description: "Visit webpage(s) and return the summary of the content."
       source:
-        - bcp
-      response_char_limit: null
+        - elasticsearch
+      inputSchema:
+        type: object
+        properties:
+          url:
+            type: 
+              - string
+              - array
+            items: 
+              type: string
+            minItems: 1
+            description: "The URL(s) of the webpage(s) to visit. Can be a single URL or an array of URLs."
+          goal:
+            type: string
+            description: "The goal of the visit for webpage(s)."
+        required:
+          - url
+          - goal
+      argument_mapping:
+        url: document_id
+      summary_goal_key: goal
+      summarizer:
+        model: /home/jovyan/Qwen3-8B-AWQ
+        api_key: api_key
+        max_chars: 40000
+        base_url: http://127.0.0.1:6010/v1
+        max_concurrency: 1024
+        default_kwargs:
+          max_tokens: 1024
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
+        retry_config: 
+          max_tries: 3
+
   system_prompt: |
     You are a Web Information Seeking Master. Your task is to thoroughly seek the internet for information and provide accurate answers to questions. No matter how complex the query, you will not give up until you find the corresponding information.
 
@@ -77,18 +131,10 @@ agent:
     max_tries: 5
     exceptions:
       - pkg://searchagent.llm.parsers:ParsingError
-    giveup: null
-    jitter: pkg://backoff:full_jitter
-    factor: 1.0
-    base: 2.0
   tool_retry_config:
     max_tries: 5
     exceptions:
       - pkg://searchagent.common.errors:RecoverableError
-    giveup: null
-    jitter: pkg://backoff:full_jitter
-    factor: 1.0
-    base: 2.0
 
 dataloader:
   source: data/browsecomp_plus_decrypted_qa.jsonl
@@ -96,9 +142,8 @@ dataloader:
   answer_key: answer
   max_items: null
 
-max_concurrency: 32
+max_concurrency: 256
 output_path: outputs/WebSailor
-overwrite_output: false
 
 logging:
   global_file: ${output_path}/run.log

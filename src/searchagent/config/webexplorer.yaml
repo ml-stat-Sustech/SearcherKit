@@ -144,7 +144,6 @@ dataloader:
 
 max_concurrency: 256
 output_path: outputs/WebExplorer_bcp
-overwrite_output: false
 
 logging:
   global_file: ${output_path}/run.log
