@@ -3325,6 +3325,18 @@ wheels = [
 ]
 
 [[package]]
+name = "prompt-toolkit"
+version = "3.0.52"
+source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
+dependencies = [
+    { name = "wcwidth" },
+]
+sdist = { url = "http://mirrors.aliyun.com/pypi/packages/a1/96/06e01a7b38dce6fe1db213e061a4602dd6032a8a97ef6c1a862537732421/prompt_toolkit-3.0.52.tar.gz", hash = "sha256:28cde192929c8e7321de85de1ddbe736f1375148b02f2e17edd840042b1be855" }
+wheels = [
+    { url = "http://mirrors.aliyun.com/pypi/packages/84/03/0d3ce49e2505ae70cf43bc5bb3033955d2fc9f932163e84dc0779cc47f48/prompt_toolkit-3.0.52-py3-none-any.whl", hash = "sha256:9aac639a3bbd33284347de5ad8d68ecc044b91a762dc39b7c21095fcd6a19955" },
+]
+
+[[package]]
 name = "propcache"
 version = "0.4.1"
 source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
@@ -4540,6 +4552,9 @@ indexing = [
     { name = "sentence-transformers" },
     { name = "torch" },
 ]
+tui = [
+    { name = "prompt-toolkit" },
+]
 vllm = [
     { name = "ray" },
     { name = "vllm" },
@@ -4569,6 +4584,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "mwparserfromhell", marker = "extra == 'indexing'", specifier = ">=0.6" },
     { name = "openai", specifier = ">=2.24.0" },
+    { name = "prompt-toolkit", marker = "extra == 'tui'", specifier = ">=3.0.52" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "ray", marker = "extra == 'vllm'", specifier = ">=2.9.0" },
     { name = "sentence-transformers", marker = "extra == 'indexing'", specifier = ">=2.0.0" },
@@ -4577,7 +4593,7 @@ requires-dist = [
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
     { name = "vllm", marker = "extra == 'vllm'", specifier = ">=0.6.0" },
 ]
-provides-extras = ["vllm", "elasticsearch-source", "faiss", "chroma", "anthropic", "indexing"]
+provides-extras = ["vllm", "elasticsearch-source", "faiss", "chroma", "anthropic", "tui", "indexing"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -5376,6 +5392,15 @@ wheels = [
     { url = "http://mirrors.aliyun.com/pypi/packages/4f/55/2af26693fd15165c4ff7857e38330e1b61ab8c37d15dc79118cdba115b7a/watchfiles-1.1.1-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8c91ed27800188c2ae96d16e3149f199d62f86c7af5f5f4d2c61a3ed8cd3666c" },
     { url = "http://mirrors.aliyun.com/pypi/packages/66/1d/d0d200b10c9311ec25d2273f8aad8c3ef7cc7ea11808022501811208a750/watchfiles-1.1.1-cp314-cp314t-musllinux_1_1_aarch64.whl", hash = "sha256:311ff15a0bae3714ffb603e6ba6dbfba4065ab60865d15a6ec544133bdb21099" },
     { url = "http://mirrors.aliyun.com/pypi/packages/e3/bd/fa9bb053192491b3867ba07d2343d9f2252e00811567d30ae8d0f78136fe/watchfiles-1.1.1-cp314-cp314t-musllinux_1_1_x86_64.whl", hash = "sha256:a916a2932da8f8ab582f242c065f5c81bed3462849ca79ee357dd9551b0e9b01" },
+]
+
+[[package]]
+name = "wcwidth"
+version = "0.8.2"
+source = { registry = "http://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "http://mirrors.aliyun.com/pypi/packages/34/74/c6428f875774288bec1396f5bfcbc2d925700a4dad61727fd5f2b12f249d/wcwidth-0.8.2.tar.gz", hash = "sha256:91fbef97204b96a3d4d421609b80340b760cf33e26da123ff243d76b1fda8dda" }
+wheels = [
+    { url = "http://mirrors.aliyun.com/pypi/packages/96/42/3e5985a0a7e57de470b320c6d6a1a67c844f6737a587f3d44dd13d1819e7/wcwidth-0.8.2-py3-none-any.whl", hash = "sha256:d63947694a0539a1d51e01eda7caf800c291020e6cdd7e28ad7b14dd33ad4f85" },
 ]
 
 [[package]]

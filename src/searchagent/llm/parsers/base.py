@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Literal, Mapping, Protocol
 
 from searchagent.common.config import import_from_path
 from searchagent.common.messages import ChatMessage
@@ -22,10 +22,47 @@ class ParsingError(LLMError):
     """Raised when model message payload cannot be parsed into `ChatMessage`."""
 
 
+@dataclass(frozen=True, slots=True)
+class LiveDeltaPart:
+    """One parser-interpreted text fragment for Step-Level Live View."""
+
+    field: Literal["content", "thinking"]
+    text: str
+
+
+class LiveDeltaSplitter(Protocol):
+    """Parser-owned streaming text interpreter."""
+
+    def feed(self, text: str) -> list[LiveDeltaPart]:
+        """Interpret one raw provider content delta."""
+        ...
+
+    def flush(self) -> list[LiveDeltaPart]:
+        """Return any buffered live fragments at stream end."""
+        ...
+
+
+class PlainLiveDeltaSplitter:
+    """Default splitter for parsers whose streaming content has no template tags."""
+
+    def feed(self, text: str) -> list[LiveDeltaPart]:
+        if not text:
+            return []
+        return [LiveDeltaPart(field="content", text=text)]
+
+    def flush(self) -> list[LiveDeltaPart]:
+        return []
+
+
 class Parser(abc.ABC):
     @property
     def uses_provider_tools(self) -> bool:
         return False
+
+    def create_live_delta_splitter(self) -> LiveDeltaSplitter:
+        """Create a parser-owned interpreter for raw streaming content deltas."""
+
+        return PlainLiveDeltaSplitter()
 
     @abc.abstractmethod
     def from_model(self, messages: Iterable[dict[str, Any]]) -> Iterable[ChatMessage]:

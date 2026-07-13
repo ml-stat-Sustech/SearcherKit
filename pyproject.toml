@@ -38,6 +38,9 @@ chroma = [
 anthropic = [
     "anthropic>=0.84.0",
 ]
+tui = [
+    "prompt-toolkit>=3.0.52",
+]
 indexing = [
     "accelerate>=1.13.0",
     "elasticsearch<9.0.0",

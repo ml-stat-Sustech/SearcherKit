@@ -8,12 +8,88 @@ from typing import Any, Iterable, Mapping, overload
 
 from searchagent.common.messages import ChatMessage, ToolCall, assistant, system, user
 from searchagent.common.messages import Tool as ToolType
-from searchagent.common.utils import get_or_default
-from searchagent.llm.parsers.base import Parser, ParserConfig, ParsingError
 from searchagent.common.log import get_logger
+from searchagent.common.utils import get_or_default
+from searchagent.llm.parsers.base import LiveDeltaPart, LiveDeltaSplitter, Parser, ParserConfig, ParsingError
 from searchagent.tools import to_openai_tool
 
 logger = get_logger(__name__)
+
+class TongyiDeepRessearchLiveDeltaSplitter:
+    """Interpret Tongyi-DeepResearch-style chat-template tags in raw streaming content.
+
+    This splitter is for transient live display only. The complete assistant
+    message is still parsed by :meth:`QwenParser.from_model` for agent semantics.
+    """
+
+    _TAGS = (
+        "<think>",
+        "</think>",
+        "<tool_call>",
+        "</tool_call>",
+    )
+
+    def __init__(self) -> None:
+        self._buffer = ""
+        self._mode = "content"
+
+    def feed(self, text: str) -> list[LiveDeltaPart]:
+        self._buffer += text
+        out: list[LiveDeltaPart] = []
+        while self._buffer:
+            tag_start = self._buffer.find("<")
+            if tag_start > 0:
+                self._emit(out, self._buffer[:tag_start])
+                self._buffer = self._buffer[tag_start:]
+                continue
+            if tag_start == -1:
+                self._emit(out, self._buffer)
+                self._buffer = ""
+                break
+
+            matched = False
+            for tag in self._TAGS:
+                if self._buffer.startswith(tag):
+                    self._apply_tag(tag)
+                    self._buffer = self._buffer[len(tag):]
+                    matched = True
+                    break
+            if matched:
+                continue
+
+            if any(tag.startswith(self._buffer) for tag in self._TAGS):
+                break
+
+            self._emit(out, "<")
+            self._buffer = self._buffer[1:]
+        return out
+
+    def flush(self) -> list[LiveDeltaPart]:
+        if not self._buffer:
+            return []
+        out: list[LiveDeltaPart] = []
+        self._emit(out, self._buffer)
+        self._buffer = ""
+        return out
+
+    def _apply_tag(self, tag: str) -> None:
+        if tag == "<think>":
+            self._mode = "thinking"
+        elif tag == "</think>":
+            self._mode = "content"
+        elif tag == "<tool_call>":
+            self._mode = "suppressed"
+        elif tag == "</tool_call>":
+            self._mode = "content"
+
+    def _emit(self, out: list[LiveDeltaPart], text: str) -> None:
+        if not text or self._mode == "suppressed":
+            return
+        field = "thinking" if self._mode == "thinking" else "content"
+        if out and out[-1].field == field:
+            out[-1] = LiveDeltaPart(field=field, text=out[-1].text + text)
+            return
+        out.append(LiveDeltaPart(field=field, text=text))
 
 
 class TongyiDeepResearchParser(Parser):
@@ -26,6 +102,9 @@ class TongyiDeepResearchParser(Parser):
 
     def __init__(self, *, config: ParserConfig | Mapping[str, Any] | None = None) -> None:
         super().__init__()
+
+    def create_live_delta_splitter(self) -> LiveDeltaSplitter:
+        return TongyiDeepRessearchLiveDeltaSplitter()
 
     def to_model(self, messages: Iterable[ChatMessage]) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []

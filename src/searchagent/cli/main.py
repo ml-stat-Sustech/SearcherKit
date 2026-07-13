@@ -7,6 +7,7 @@ from typing import Sequence
 
 import uvloop
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="searchagent",
@@ -17,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("evaluate", help="Evaluate saved run records")
     subparsers.add_parser("plugins", help="List or run plugin utilities")
     subparsers.add_parser("inspect", help="Recursively validate config fields against structured types")
+    subparsers.add_parser("tui", help="Run ad hoc queries in a terminal UI")
     return parser
 
 
@@ -48,6 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from searchagent.cli.inspect import main as inspect_main
 
         return inspect_main(remaining)
+    if command == "tui":
+        from searchagent.interfaces.tui.cli import main as tui_main
+
+        return tui_main(remaining)
     parser = build_parser()
     parser.error(f"unknown command: {command}")
     return 2

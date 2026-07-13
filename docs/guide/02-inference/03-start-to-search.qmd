@@ -19,6 +19,12 @@ at least one retrieval source:
 - **Embedding retrieval:** populate the index's vector field and provide an
   OpenAI-compatible embedding endpoint.
 
+Install the optional terminal UI dependency for demo with TUI
+
+```bash
+uv sync --extra tui
+```
+
 Use `searchagent plugins deploy local-wiki --help` or
 `searchagent plugins deploy browsecomp-plus --help` for the bundled indexing flows.
 
@@ -114,3 +120,12 @@ logging:
 
 The global log shows batch progress and failures. Per-trace logs isolate model and tool
 events for one sample, which is usually the fastest way to diagnose a bad trajectory.
+
+## Interactive TUI
+
+Launch the TUI to watch the run in real time, inspect traces, and replay a sample with
+
+```bash
+searchagent tui --config-name webexplorer
+searchagent tui --config-name websailor
+```

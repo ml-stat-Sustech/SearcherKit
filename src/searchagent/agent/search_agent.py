@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import traceback
-import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Iterable, Any, TYPE_CHECKING, overload
 
@@ -19,8 +18,9 @@ from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_pars
 from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
 from searchagent.agent import BaseAgent
 from searchagent.common.errors import LLMError
-from searchagent.common.log import get_logger, log_context, LogTiming
+from searchagent.common.log import append_trace_interaction, get_logger, log_context, LogTiming
 from searchagent.common.retry import retry_async, RetryPolicy, RetryConfig
+from searchagent.common.live_events import LiveEvent, LiveEventSink, emit_live_event
 
 # TODO
 class LLMOutputError(LLMError):
@@ -42,6 +42,24 @@ def _preview_payload(value: Any, limit: int = 300) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
+
+
+def _usage_total_tokens(usage: Any | None) -> int:
+    """Read total token usage from OpenAI objects and provider mappings."""
+
+    if usage is None:
+        return -1
+    if isinstance(usage, Mapping):
+        value = usage.get("total_tokens")
+    else:
+        value = getattr(usage, "total_tokens", None)
+    if value is None:
+        return -1
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
 
 @dataclass
 class SearchAgentConfig:
@@ -65,6 +83,7 @@ class SearchAgentConfig:
     run_timeout_prompt_margin_seconds: float | None = None
     llm_retry_config: RetryConfig | None = field(default_factory=RetryConfig)
     tool_retry_config: RetryConfig | None = field(default_factory=RetryConfig)
+    stream_llm: bool = False
 
 class SearchAgent(BaseAgent):
     """
@@ -98,6 +117,8 @@ class SearchAgent(BaseAgent):
             retries are disabled.
         tool_retry_policy: Retry policy for tool execution. If `None`, retries
             are disabled.
+        stream_llm: Whether interactive runs with a live-event sink should use
+            the client's streaming completion interface.
     """
     
     @overload
@@ -119,7 +140,8 @@ class SearchAgent(BaseAgent):
                  run_timeout_prompt: str | None = None,
                  run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
-                 tool_retry_policy: RetryPolicy | None = None):
+                 tool_retry_policy: RetryPolicy | None = None,
+                 stream_llm: bool = False):
         ...
     
     def __init__(self, 
@@ -138,6 +160,7 @@ class SearchAgent(BaseAgent):
                  run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
+                 stream_llm: bool = False,
                  *,
                  config: SearchAgentConfig | None = None):
         if config:
@@ -169,6 +192,7 @@ class SearchAgent(BaseAgent):
                 run_timeout_prompt_margin_seconds=config.run_timeout_prompt_margin_seconds,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
+                stream_llm=config.stream_llm,
             )
             return
 
@@ -191,6 +215,7 @@ class SearchAgent(BaseAgent):
         self.run_timeout_seconds = run_timeout_seconds
         self.run_timeout_prompt = run_timeout_prompt
         self.run_timeout_prompt_margin_seconds = run_timeout_prompt_margin_seconds
+        self.stream_llm = stream_llm
         self.llm_retry_policy = llm_retry_policy
         self.tool_retry_policy = tool_retry_policy
         self.context_max_token_exceeded = False
@@ -198,6 +223,8 @@ class SearchAgent(BaseAgent):
         self.run_elapsed_seconds = 0.0
         self.run_timeout_remaining_seconds: float | None = None
         self.history = []
+        self.live_event_sink: LiveEventSink | None = None
+        self._timing = LogTiming()
 
     def _add_tool(self, tool: BaseTool) -> None:
         if tool.name in self.tool_dict:
@@ -271,33 +298,48 @@ class SearchAgent(BaseAgent):
         await self.close_tools()
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[tuple[str, dict[str, Any]]]:
-        
         tool_call_list = list(tool_calls)
         logger.info("Calling tools count=%s tools=%s", len(tool_call_list), [tc.name for tc in tool_call_list])
         tool_call_coros = []
+        live_turn = self.turn + 1
 
         async def _timed_run(tc_name: str, coro):
             with self._timing(f"tool.{tc_name}"):
                 result = await coro
             return result
 
+        async def _return_error(name: str) -> tuple[str, dict[str, Any]]:
+            return f"Error: Tool {name} not found", {}
+
         for tc in tool_call_list:
+            arguments = dict(tc.arguments)
             logger.info(
                 "Dispatching tool call id=%s name=%s args=%s",
                 tc.id,
                 tc.name,
-                _preview_payload(dict(tc.arguments)),
+                _preview_payload(arguments),
             )
-            async def return_error(name: str) -> tuple[str, dict[str, Any]]:
-                return f"Error: Tool {name} not found", {}
+            await emit_live_event(
+                self.live_event_sink,
+                LiveEvent(
+                    kind="tool_call_started",
+                    message=f"{tc.name}({_preview_payload(arguments)})",
+                    data={
+                        "id": tc.id,
+                        "name": tc.name,
+                        "arguments": arguments,
+                        "turn": live_turn,
+                    },
+                ),
+            )
             if tc.name not in self.tool_dict:
-                tool_call_coros.append(return_error(tc.name))
+                tool_call_coros.append(_return_error(tc.name))
                 continue
             
             if self.tool_retry_policy is None:
                 tool_call_coros.append(_timed_run(
                     tc.name,
-                    self.tool_dict[tc.name].run(**dict(tc.arguments)),
+                    self.tool_dict[tc.name].run(**arguments),
                 ))
             else:
                 tool_call_coros.append(_timed_run(
@@ -307,7 +349,7 @@ class SearchAgent(BaseAgent):
                         policy=self.tool_retry_policy,
                         op_name=f"tool.{tc.name}",
                         log=logger,
-                        **dict(tc.arguments),
+                        **arguments,
                     ),
                 ))
             
@@ -324,6 +366,33 @@ class SearchAgent(BaseAgent):
                     tc.name,
                     result,
                 )
+                append_trace_interaction(
+                    {
+                        "call_id": tc.id,
+                        "tool_name": tc.name,
+                        "arguments": dict(tc.arguments),
+                        "arguments_preview": _preview_payload(dict(tc.arguments)),
+                        "response_preview": None,
+                        "response_length": 0,
+                        "status": "failed",
+                        "error": str(result),
+                    }
+                )
+                await emit_live_event(
+                    self.live_event_sink,
+                    LiveEvent(
+                        kind="tool_result",
+                        message=f"{tc.name} failed: {result}",
+                        data={
+                            "id": tc.id,
+                            "name": tc.name,
+                            "arguments": dict(tc.arguments),
+                            "turn": live_turn,
+                            "status": "failed",
+                            "error": str(result),
+                        },
+                    ),
+                )
                 continue
 
             content, extensions = result
@@ -333,6 +402,35 @@ class SearchAgent(BaseAgent):
                 tc.id,
                 tc.name,
                 response_preview,
+            )
+            status = "error" if content.startswith("[Tool]") else "completed"
+            append_trace_interaction(
+                {
+                    "call_id": tc.id,
+                    "tool_name": tc.name,
+                    "arguments": dict(tc.arguments),
+                    "arguments_preview": _preview_payload(dict(tc.arguments)),
+                    "response_preview": response_preview,
+                    "response_length": len(content),
+                    "status": status,
+                    "extensions": extensions,
+                }
+            )
+            await emit_live_event(
+                self.live_event_sink,
+                LiveEvent(
+                    kind="tool_result",
+                    message=f"{tc.name} -> {response_preview}",
+                    data={
+                        "id": tc.id,
+                        "name": tc.name,
+                        "arguments": dict(tc.arguments),
+                        "turn": live_turn,
+                        "result": content,
+                        "extensions": extensions,
+                        "status": status,
+                    },
+                ),
             )
             results.append((content, extensions))
         if first_exception is not None:
@@ -398,7 +496,77 @@ class SearchAgent(BaseAgent):
 
         return next(iter(self.parser.from_model([call_result_raw])))
 
-    async def run(self, query: str, session_id: int | None = None, extra: dict[str, Any] | None = None) -> list[ChatMessage]:
+    async def stream_parse_and_call_llm(self, history: list[ChatMessage], *, turn: int):
+        if self.parser.uses_provider_tools:
+            tools = [tool.as_openai_tool() for tool in self.tool_dict.values()]
+        else:
+            tools = None
+
+        parsed = self.parser.to_model(history)
+        final_message: dict[str, Any] | None = None
+        usage: Any | None = None
+        accumulated_content = ""
+        accumulated_thinking = ""
+        live_delta_splitter = self.parser.create_live_delta_splitter()
+
+        with self._timing("llm_call"):
+            async for chunk in self.client.stream_complete_with_usage(
+                parsed,
+                tools=tools,
+                session_id=self.id,
+            ):
+                if chunk.content_delta:
+                    accumulated_content += chunk.content_delta
+                    for part in live_delta_splitter.feed(chunk.content_delta):
+                        await emit_live_event(
+                            self.live_event_sink,
+                            LiveEvent(
+                                kind="assistant_delta",
+                                message=part.text,
+                                data={"turn": turn, "field": part.field, "delta": part.text},
+                            ),
+                        )
+                if chunk.thinking_delta:
+                    accumulated_thinking += chunk.thinking_delta
+                    await emit_live_event(
+                        self.live_event_sink,
+                        LiveEvent(
+                            kind="assistant_delta",
+                            message=chunk.thinking_delta,
+                            data={"turn": turn, "field": "thinking", "delta": chunk.thinking_delta},
+                        ),
+                    )
+                if chunk.done:
+                    final_message = chunk.message
+                    usage = chunk.usage
+
+        for part in live_delta_splitter.flush():
+            await emit_live_event(
+                self.live_event_sink,
+                LiveEvent(
+                    kind="assistant_delta",
+                    message=part.text,
+                    data={"turn": turn, "field": part.field, "delta": part.text},
+                ),
+            )
+
+        if final_message is None:
+            final_message = {"role": "assistant", "content": accumulated_content or None}
+            if accumulated_thinking:
+                final_message["reasoning"] = accumulated_thinking
+                final_message["reasoning_content"] = accumulated_thinking
+
+        self.context_token_size = _usage_total_tokens(usage)
+        logger.debug("Streaming LLM turn completed total_tokens=%s", self.context_token_size)
+        return next(iter(self.parser.from_model([final_message])))
+
+    async def run(
+        self,
+        query: str,
+        session_id: int | None = None,
+        extra: dict[str, Any] | None = None,
+        live_event_sink: LiveEventSink | None = None,
+    ) -> list[ChatMessage]:
         """
         Run the agent loop for a single user query.
 
@@ -416,6 +584,7 @@ class SearchAgent(BaseAgent):
                 await self.init_tools()
                 self.reset()
                 self.id = session_id
+                self.live_event_sink = live_event_sink
                 self.history: list[ChatMessage] = [
                     system(
                         self.system_prompt,
@@ -425,13 +594,31 @@ class SearchAgent(BaseAgent):
                     user(self.query_prompt.format(query=query)),
                 ]
                 logger.info("Starting agent loop query=%r", query[:120])
+                await emit_live_event(
+                    live_event_sink,
+                    LiveEvent(
+                        kind="user_message",
+                        message=self.history[-1].content,
+                        data={"query": query, "extra": extra},
+                    ),
+                )
 
                 self.max_turn_reminder_prompted = False
                 self.max_token_reminder_prompted = False
                 while True:
                     with self._timing("turn"), log_context(turn=self.turn):
-
                         logger.debug("Calling LLM turn=%s history_messages=%s", self.turn, len(self.history))
+                        await emit_live_event(
+                            live_event_sink,
+                            LiveEvent(
+                                kind="assistant_turn_started",
+                                message=f"Assistant turn {self.turn + 1}",
+                                data={
+                                    "turn": self.turn + 1,
+                                    "history_messages": len(self.history),
+                                },
+                            ),
+                        )
 
                         # 1. Reset stop flags
                         self.context_max_token_exceeded = False
@@ -444,7 +631,26 @@ class SearchAgent(BaseAgent):
 
                         # 2. Execute agent turn and set stop flags
                         try:
-                            if self.llm_retry_policy is None:
+                            should_stream_llm = (
+                                self.stream_llm
+                                and live_event_sink is not None
+                                and callable(getattr(self.client, "stream_complete_with_usage", None))
+                            )
+                            if should_stream_llm and self.llm_retry_policy is None:
+                                new_call_result = await self.stream_parse_and_call_llm(
+                                    self.history,
+                                    turn=self.turn + 1,
+                                )
+                            elif should_stream_llm:
+                                new_call_result = await retry_async(
+                                    self.stream_parse_and_call_llm,
+                                    self.history,
+                                    policy=self.llm_retry_policy,
+                                    op_name="searchagent.stream_parse_and_call_llm",
+                                    log=logger,
+                                    turn=self.turn + 1,
+                                )
+                            elif self.llm_retry_policy is None:
                                 new_call_result = await self.parse_and_call_llm(self.history)
                             else:
                                 new_call_result = await retry_async(
@@ -458,8 +664,43 @@ class SearchAgent(BaseAgent):
                             if self._is_context_length_error(exc):
                                 logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
                                 raise LLMContextError from exc
-                            traceback.print_exc()
+                            logger.warning("LLM request failed: %s", exc)
                             raise
+
+                        await emit_live_event(
+                            live_event_sink,
+                            LiveEvent(
+                                kind="assistant_message",
+                                message=_preview_payload(
+                                    {
+                                        "thinking": new_call_result.thinking,
+                                        "content": new_call_result.content,
+                                        "tool_calls": [
+                                            {
+                                                "id": tc.id,
+                                                "name": tc.name,
+                                                "arguments": dict(tc.arguments),
+                                            }
+                                            for tc in new_call_result.tool_calls or []
+                                        ],
+                                    }
+                                ),
+                                data={
+                                    "role": "assistant",
+                                    "turn": self.turn + 1,
+                                    "content": new_call_result.content,
+                                    "thinking": new_call_result.thinking,
+                                    "tool_calls": [
+                                        {
+                                            "id": tc.id,
+                                            "name": tc.name,
+                                            "arguments": dict(tc.arguments),
+                                        }
+                                        for tc in new_call_result.tool_calls or []
+                                    ],
+                                },
+                            ),
+                        )
 
                         if self.turn >= self.max_turn - 1 and new_call_result.tool_calls:
                             self.turn_limit_exceeded = True
@@ -544,4 +785,5 @@ class SearchAgent(BaseAgent):
             logger.info("Reasoning completed agent=SearchAgent turns=%s messages=%s", self.turn, len(self.history))
             return self.history
         finally:
+            self.live_event_sink = None
             await self.close_tools()

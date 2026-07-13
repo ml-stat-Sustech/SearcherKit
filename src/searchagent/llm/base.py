@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable
 
 from searchagent.common.retry import RetryPolicy
 from searchagent.common.messages import ChatMessage
@@ -18,6 +18,22 @@ class LLMResult:
     message: ChatMessage
     usage: dict[str, Any] = field(default_factory=dict)
     raw: Any | None = None
+
+
+@dataclass(slots=True)
+class LLMStreamChunk:
+    """One chunk from a streaming LLM completion.
+
+    ``message`` is set on the terminal chunk and contains the complete
+    OpenAI-compatible assistant message shape expected by parsers.
+    """
+
+    content_delta: str = ""
+    thinking_delta: str = ""
+    raw_delta: Any | None = None
+    message: dict[str, Any] | None = None
+    usage: Any | None = None
+    done: bool = False
 
 
 @dataclass
@@ -70,6 +86,21 @@ class Client(abc.ABC):
         **kwargs: Any,
     ) -> tuple[dict[str, Any], "CompletionUsage | None"]:
         """Return one assistant message and provider usage metadata when available."""
+
+    async def stream_complete_with_usage(
+        self,
+        messages: Iterable[dict[str, Any]],
+        session_id: int | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[LLMStreamChunk]:
+        """Yield a streaming completion.
+
+        Providers that do not implement native streaming fall back to the existing
+        non-streaming call and emit a single terminal chunk. Batch execution keeps
+        using ``complete_with_usage`` directly.
+        """
+        message, usage = await self.complete_with_usage(messages, session_id=session_id, **kwargs)
+        yield LLMStreamChunk(message=message, usage=usage, done=True)
 
 
 LLMClient = Client
