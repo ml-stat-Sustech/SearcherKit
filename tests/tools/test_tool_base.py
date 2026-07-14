@@ -20,6 +20,20 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
 DOC_ID = "source_files.md"
 
 
+def _expected_search_extensions(query: str = "source-backed-tools") -> dict[str, object]:
+    return {
+        "searched_ids": [DOC_ID],
+        "documents": [
+            {
+                "id": DOC_ID,
+                "title": DOC_ID,
+                "url": None,
+                "query": query,
+            }
+        ],
+    }
+
+
 def _custom_search_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -99,7 +113,7 @@ def test_tool_argument_mapping(tool_factory: ToolFactory) -> None:
         content, extensions = result
 
         assert DOC_ID in content
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 
@@ -118,7 +132,7 @@ def test_argument_mapping_translates_default_input_schema(tool_factory: ToolFact
         content, extensions = result
 
         assert DOC_ID in content
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 

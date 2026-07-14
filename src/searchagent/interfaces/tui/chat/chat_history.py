@@ -214,6 +214,7 @@ class ChatHistory:
                 entry.meta = f"turn {data.get('turn')}"
             entry.result = str(result)
             entry.body = str(result)
+            entry.extensions = dict(data.get("extensions") or {})
             failed = status in {"failed", "error"}
             entry.status = "failed" if failed else "completed"
             entry.style = "class:error" if failed else "class:tool-result"

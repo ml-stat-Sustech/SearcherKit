@@ -29,6 +29,20 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
 DOC_ID = "source_files.md"
 
 
+def _expected_search_extensions(query: str = "source-backed-tools") -> dict[str, object]:
+    return {
+        "searched_ids": [DOC_ID],
+        "documents": [
+            {
+                "id": DOC_ID,
+                "title": DOC_ID,
+                "url": None,
+                "query": query,
+            }
+        ],
+    }
+
+
 def _summary_response(*, evidence: str, summary: str) -> httpx.Response:
     return httpx.Response(
         200,
@@ -190,7 +204,7 @@ def test_run(tool_factory: ToolFactory) -> None:
 
         assert f"1. [{DOC_ID}](None)" in content
         assert "Summary Tools" not in content
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 
@@ -219,7 +233,7 @@ def test_summary(tool_factory: ToolFactory) -> None:
             "Summary:\n"
             f"{SUMMARY_TEXT}"
         )
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 
@@ -241,7 +255,7 @@ def test_summary_retry_success(tool_factory: ToolFactory) -> None:
         content, extensions = result
         assert "after retry" in content
         assert "ok" in content
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 

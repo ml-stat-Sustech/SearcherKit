@@ -509,7 +509,19 @@ def test_tui_tool_detail_toggles_preview_and_full_result() -> None:
         LiveEvent(
             kind="tool_result",
             message="result",
-            data={"id": "call-1", "name": "search", "result": long_result, "status": "completed"},
+            data={
+                "id": "call-1",
+                "name": "search",
+                "result": long_result,
+                "status": "completed",
+                "extensions": {
+                    "searched_ids": ["doc-a", "doc-b"],
+                    "documents": [
+                        {"id": "doc-a", "title": "Doc A", "url": None, "query": "demo"},
+                        {"id": "doc-b", "title": "Doc B", "url": None, "query": "demo"},
+                    ],
+                },
+            },
         )
     )
 
@@ -518,14 +530,138 @@ def test_tui_tool_detail_toggles_preview_and_full_result() -> None:
     full_text = _render_text(app)
 
     assert "TOOL" in preview_text
-    assert "line-0" in preview_text
-    assert "line-4" in preview_text
-    assert "line-6" not in preview_text
-    assert "truncated; use /tool-detail" in preview_text
+    assert "├─ Doc A" in preview_text
+    assert "└─ Doc B" in preview_text
+    assert "line-0" not in preview_text
+    assert "use /tool-detail to expand details for 2 documents" in preview_text
     assert 'search "demo", 5' in preview_text
     assert "TOOL" in full_text
     assert "line-7" in full_text
     assert 'search "demo", 5' in full_text
+    assert "├─ Doc A" not in full_text
+
+
+def test_tui_collapses_search_results_to_document_summary() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+    search_result = (
+        "1. [02-rl-slime.qmd](None)\n"
+        "guide/03-training/02-rl-slime.qmd:2:title: RL with slime\n\n"
+        "2. [03-sft.qmd](None)\n"
+        "guide/03-training/03-sft.qmd:2:title: SFT\n\n"
+        "3. [None](https://example.com/doc)\n"
+        "snippet text\n"
+    )
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_call_started",
+            message="search",
+            data={"id": "call-1", "name": "search", "arguments": {"query": "slime", "top_k": 5}},
+        )
+    )
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_result",
+            message="result",
+            data={
+                "id": "call-1",
+                "name": "search",
+                "result": search_result,
+                "status": "completed",
+                "extensions": {
+                    "searched_ids": [
+                        "guide/03-training/02-rl-slime.qmd",
+                        "guide/03-training/03-sft.qmd",
+                        "https://example.com/doc",
+                    ],
+                    "documents": [
+                        {
+                            "id": "guide/03-training/02-rl-slime.qmd",
+                            "title": "02-rl-slime.qmd",
+                            "url": None,
+                            "query": "slime",
+                        },
+                        {
+                            "id": "guide/03-training/03-sft.qmd",
+                            "title": "03-sft.qmd",
+                            "url": None,
+                            "query": "slime",
+                        },
+                        {
+                            "id": "https://example.com/doc",
+                            "title": None,
+                            "url": "https://example.com/doc",
+                            "query": "slime",
+                        },
+                    ],
+                },
+            },
+        )
+    )
+
+    preview_text = _render_text(app)
+    app.view_state.show_tool_detail = True
+    full_text = _render_text(app)
+
+    assert "├─ 02-rl-slime.qmd" in preview_text
+    assert "├─ 03-sft.qmd" in preview_text
+    assert "└─ https://example.com/doc" in preview_text
+    assert "use /tool-detail to expand details for 3 documents" in preview_text
+    assert "guide/03-training/02-rl-slime.qmd:2:title" not in preview_text
+    assert "guide/03-training/02-rl-slime.qmd:2:title" in full_text
+    assert app.chat_history.entries()[0].extensions["documents"][0]["title"] == "02-rl-slime.qmd"
+
+
+def test_tui_collapses_summarized_search_to_document_count() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+    summary_result = (
+        "The useful information for query slime as follows:\n\n"
+        "Evidence in page:\n"
+        "evidence\n\n"
+        "Summary:\n"
+        "summary text"
+    )
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_call_started",
+            message="search",
+            data={"id": "call-1", "name": "search", "arguments": {"query": "slime"}},
+        )
+    )
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_result",
+            message="result",
+            data={
+                "id": "call-1",
+                "name": "search",
+                "result": summary_result,
+                "status": "completed",
+                "extensions": {
+                    "searched_ids": ["a.md", "b.md"],
+                    "documents": [
+                        {"id": "a.md", "title": "a.md", "url": None, "query": "slime"},
+                        {"id": "b.md", "title": "b.md", "url": None, "query": "slime"},
+                    ],
+                },
+            },
+        )
+    )
+
+    preview_text = _render_text(app)
+    assert "├─ a.md" in preview_text
+    assert "└─ b.md" in preview_text
+    assert "Evidence in page" not in preview_text
+    assert "use /tool-detail to expand details for 2 documents" in preview_text
 
 
 def test_tui_chat_viewport_does_not_pad_lines_so_terminal_selection_copies_clean_text() -> None:
