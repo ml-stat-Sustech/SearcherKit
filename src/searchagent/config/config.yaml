@@ -6,10 +6,9 @@ defaults:
 agent:
   llm_client:
     model: qwen3-8b
-    openai:
-      api_key: REMOVED_REVOKED_SECRET
-      base_url: https://www.dmxapi.cn/v1
-      concurrency_limit: 128
+    api_key: "REMOVED_REVOKED_SECRET"
+    base_url: https://www.dmxapi.cn/v1
+    concurrency_limit: 128
 
   # Sources define how SearchAgent connects to searchable data backends.
   # Native tools reference named sources through `source: [<name>]`.

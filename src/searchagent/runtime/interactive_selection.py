@@ -12,12 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Sequence
 
 from searchagent.agent.search_agent import SearchAgentConfig
-from searchagent.llm.base import (
-    ClientConfig,
-    OpenAIConfig,
-    VllmConfig,
-)
-from searchagent.llm.base import OpenAIConfig as OpenAICompatibleProviderConfig
+from searchagent.llm.base import ClientConfig
 from searchagent.sources import SourceConfig
 
 SOURCE_BACKED_TOOL_TYPES = frozenset({"search", "visit"})
@@ -228,12 +223,10 @@ def apply_active_source(agent_config: SearchAgentConfig, source_name: str) -> in
 # --- Active Model ----------------------------------------------------------
 
 
-def openai_compatible_provider_config(config: ClientConfig) -> OpenAICompatibleProviderConfig | None:
+def openai_compatible_provider_config(config: ClientConfig) -> ClientConfig | None:
     provider = str(config.type or "").lower()
-    if provider == "openai":
-        return config.openai
-    if provider in {"vllm", "vllm_server"}:
-        return config.vllm
+    if provider in _OPENAI_COMPATIBLE_DISCOVERY_PROVIDERS:
+        return config
     return None
 
 
@@ -347,7 +340,7 @@ def active_model_event_data(config: ClientConfig) -> dict[str, Any]:
     provider = str(config.type or "")
     provider_cfg = openai_compatible_provider_config(config)
     if provider_cfg is None and provider.lower() == "anthropic":
-        provider_cfg = config.anthropic
+        provider_cfg = config
     return {
         "provider": provider,
         "model": config.model,
@@ -358,20 +351,4 @@ def active_model_event_data(config: ClientConfig) -> dict[str, Any]:
 def apply_active_model(config: ClientConfig, option: ModelOption) -> None:
     config.type = option.provider
     config.model = option.model
-    provider_config = openai_compatible_provider_config(config)
-    if provider_config is None:
-        provider_config = _ensure_openai_compatible_provider_config(config, option.provider)
-    provider_config.base_url = option.base_url
-
-
-def _ensure_openai_compatible_provider_config(
-    config: ClientConfig,
-    provider: str,
-) -> OpenAICompatibleProviderConfig:
-    if provider == "openai":
-        config.openai = config.openai or OpenAIConfig()
-        return config.openai
-    if provider in {"vllm", "vllm_server"}:
-        config.vllm = config.vllm or VllmConfig()
-        return config.vllm
-    raise ValueError(f"Unsupported model option provider: {provider}")
+    config.base_url = option.base_url

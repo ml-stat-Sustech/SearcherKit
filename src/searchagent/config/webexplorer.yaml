@@ -18,17 +18,16 @@ agent:
       temperature: 0.6
       top_p: 0.95
       max_tokens: 10000
-    openai:
-      api_key: "EMPTY"
-      base_url: 
-        - http://127.0.0.1:6002/v1
-        - http://127.0.0.1:6003/v1
-        - http://127.0.0.1:6004/v1
-        - http://127.0.0.1:6005/v1
-        - http://127.0.0.1:6006/v1
-        - http://127.0.0.1:6007/v1
-      concurrency_limit: 512
-      extra_client_kwargs: null
+    api_key: "EMPTY"
+    base_url:
+      - http://127.0.0.1:6002/v1
+      - http://127.0.0.1:6003/v1
+      - http://127.0.0.1:6004/v1
+      - http://127.0.0.1:6005/v1
+      - http://127.0.0.1:6006/v1
+      - http://127.0.0.1:6007/v1
+    concurrency_limit: 512
+    extra_client_kwargs: null
   parser:
     type: upstream
   sources:

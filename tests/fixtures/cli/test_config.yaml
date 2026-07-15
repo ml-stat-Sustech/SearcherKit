@@ -10,12 +10,11 @@ agent:
     model: mock-chat
     default_kwargs:
       temperature: 0
-    openai:
-      api_key: test-key
-      base_url: https://llm.example.test/v1
-      concurrency_limit: 2
-      extra_client_kwargs:
-        max_retries: 0
+    api_key: test-key
+    base_url: https://llm.example.test/v1
+    concurrency_limit: 2
+    extra_client_kwargs:
+      max_retries: 0
   parser:
     type: upstream
   sources:

@@ -5,7 +5,7 @@ import pytest
 from anthropic import APITimeoutError
 
 from searchagent.common.retry import RetryPolicy
-from searchagent.llm.base import AnthropicConfig, ClientConfig
+from searchagent.llm.base import ClientConfig
 from searchagent.llm.anthropic import AnthropicClient
 from mock_endpoints import anthropic
 
@@ -40,11 +40,9 @@ def _config_client(retry_policy: RetryPolicy | None = None) -> AnthropicClient:
             model="claude-test",
             retry_policy=retry_policy,
             default_kwargs={"max_tokens": 128},
-            anthropic=AnthropicConfig(
-                api_key="test-key",
-                base_url=anthropic.BASE_URL,
-                extra_client_kwargs={"max_retries": 0},
-            ),
+            api_key="test-key",
+            base_url=anthropic.BASE_URL,
+            extra_client_kwargs={"max_retries": 0},
         )
     )
 

@@ -98,9 +98,6 @@ reference:
       - runtime.runner.RunConfig
       - agent.SearchAgentConfig
       - llm.ClientConfig
-      - llm.OpenAIConfig
-      - llm.AnthropicConfig
-      - llm.VllmConfig
       - llm.parsers.ParserConfig
       - sources.SourceConfig
       - tools.ToolConfig

@@ -10,7 +10,7 @@ from searchagent.runtime.interactive_selection import ModelOption, apply_active_
 from searchagent.interfaces.tui.slash.slash_command import SlashCommandMenuState, TuiCommand
 from searchagent.interfaces.tui.ui.formatting import _display_width, _formatted_lines
 from searchagent.interfaces.tui.ui.selection_types import ChatPoint, ChatSelection
-from searchagent.llm.base import ClientConfig, OpenAIConfig, VllmConfig
+from searchagent.llm.base import ClientConfig
 from searchagent.runtime.interactive import InteractiveQueryConfig
 from searchagent.common.live_events import LiveEvent
 from searchagent.sources import SourceConfig
@@ -1007,7 +1007,7 @@ def test_tui_active_source_scopes_next_query_config(tmp_path) -> None:
 
 def test_model_command_parsing_and_application_updates_provider_config() -> None:
     option = ModelOption(provider="openai", model="llama3.2:1b", base_url="http://127.0.0.1:11434/v1")
-    config = ClientConfig(type="openai", model="qwen2.5:0.5b", openai=OpenAIConfig())
+    config = ClientConfig(type="openai", model="qwen2.5:0.5b")
 
     assert parse_model_command("models:openai/llama3.2:1b", [option]) == option
 
@@ -1015,8 +1015,7 @@ def test_model_command_parsing_and_application_updates_provider_config() -> None
 
     assert config.type == "openai"
     assert config.model == "llama3.2:1b"
-    assert config.openai is not None
-    assert config.openai.base_url == "http://127.0.0.1:11434/v1"
+    assert config.base_url == "http://127.0.0.1:11434/v1"
 
 
 def test_tui_model_commands_are_generated_and_rendered(tmp_path) -> None:
@@ -1146,7 +1145,7 @@ def test_tui_model_command_scopes_next_query_config(tmp_path) -> None:
             llm_client=ClientConfig(
                 type="openai",
                 model="qwen2.5:0.5b",
-                openai=OpenAIConfig(base_url="http://127.0.0.1:11434/v1"),
+                base_url="http://127.0.0.1:11434/v1",
             )
         ),
     )
@@ -1159,8 +1158,7 @@ def test_tui_model_command_scopes_next_query_config(tmp_path) -> None:
     run_config = app.query_controller.build_run_config()
 
     assert run_config.agent.llm_client.model == "llama3.2:1b"
-    assert run_config.agent.llm_client.openai is not None
-    assert run_config.agent.llm_client.openai.base_url == "http://127.0.0.1:11434/v1"
+    assert run_config.agent.llm_client.base_url == "http://127.0.0.1:11434/v1"
     assert config.agent.llm_client.model == "qwen2.5:0.5b"
 
 
@@ -1189,7 +1187,7 @@ def test_active_model_application_keeps_openai_parser_and_prompts_unchanged(tmp_
             llm_client=ClientConfig(
                 type="openai",
                 model="model-a",
-                openai=OpenAIConfig(base_url="http://127.0.0.1:8001/v1"),
+                base_url="http://127.0.0.1:8001/v1",
             ),
             system_prompt="system",
             query_prompt="Q: {query}",
@@ -1204,8 +1202,7 @@ def test_active_model_application_keeps_openai_parser_and_prompts_unchanged(tmp_
     run_config = app.query_controller.build_run_config()
 
     assert run_config.agent.llm_client.model == "model-b"
-    assert run_config.agent.llm_client.openai is not None
-    assert run_config.agent.llm_client.openai.base_url == "http://127.0.0.1:8000/v1"
+    assert run_config.agent.llm_client.base_url == "http://127.0.0.1:8000/v1"
     assert run_config.agent.parser == config.agent.parser
     assert run_config.agent.system_prompt == "system"
     assert run_config.agent.query_prompt == "Q: {query}"
@@ -1237,7 +1234,7 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
             ClientConfig(
                 type="openai",
                 model="qwen2.5:0.5b",
-                openai=OpenAIConfig(base_url="http://127.0.0.1:11434/v1"),
+                base_url="http://127.0.0.1:11434/v1",
             )
         )
     )
@@ -1271,7 +1268,7 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
             ClientConfig(
                 type="vllm",
                 model="same-model",
-                vllm=VllmConfig(base_url=["http://a/v1", "http://b/v1"]),
+                base_url=["http://a/v1", "http://b/v1"],
             )
         )
     )
@@ -1299,7 +1296,7 @@ def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None
             ClientConfig(
                 type="openai",
                 model="qwen2.5:0.5b",
-                openai=OpenAIConfig(base_url="http://127.0.0.1:11434/v1"),
+                base_url="http://127.0.0.1:11434/v1",
             )
         )
     )

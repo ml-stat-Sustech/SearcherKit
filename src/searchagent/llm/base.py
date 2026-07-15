@@ -37,35 +37,15 @@ class LLMStreamChunk:
 
 
 @dataclass
-class OpenAIConfig:
+class ClientConfig:
+    type: str = "openai"
+    model: str = ""
     api_key: str | None = None
     base_url: Any | None = None
     concurrency_limit: int | None = None
     extra_client_kwargs: dict[str, Any] | None = None
-
-
-@dataclass
-class AnthropicConfig:
-    api_key: str | None = None
-    base_url: str | None = None
-    concurrency_limit: int | None = None
-    extra_client_kwargs: dict[str, Any] | None = None
-
-
-@dataclass
-class VllmConfig(OpenAIConfig):
-    base_url: Any | None = "http://127.0.0.1:8000/v1"
-
-
-@dataclass
-class ClientConfig:
-    type: str = "openai"
-    model: str = ""
     retry_policy: RetryPolicy | None = None
     default_kwargs: dict[str, Any] | None = None
-    openai: OpenAIConfig | None = None
-    anthropic: AnthropicConfig | None = None
-    vllm: VllmConfig | None = None
 
 
 class Client(abc.ABC):

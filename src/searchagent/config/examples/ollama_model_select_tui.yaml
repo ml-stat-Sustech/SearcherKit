@@ -28,11 +28,10 @@ agent:
     default_kwargs:
       temperature: 0.2
       max_tokens: 512
-    openai:
-      api_key: ollama
-      base_url: http://127.0.0.1:11434/v1
-      concurrency_limit: null
-      extra_client_kwargs: null
+    api_key: ollama
+    base_url: http://127.0.0.1:11434/v1
+    concurrency_limit: null
+    extra_client_kwargs: null
   parser:
     type: qwen
     qwen:

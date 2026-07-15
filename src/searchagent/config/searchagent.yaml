@@ -13,14 +13,13 @@ agent:
     default_kwargs:
       temperature: 1.0
       top_p: 1.0
-    openai:
-      api_key: "a"
-      base_url: 
-        - http://127.0.0.1:6001/v1
-        - http://127.0.0.1:6002/v1
-        - http://127.0.0.1:6003/v1
-      concurrency_limit: 512
-      extra_client_kwargs: null
+    api_key: "a"
+    base_url:
+      - http://127.0.0.1:6001/v1
+      - http://127.0.0.1:6002/v1
+      - http://127.0.0.1:6003/v1
+    concurrency_limit: 512
+    extra_client_kwargs: null
   parser:
     type: upstream
   sources:

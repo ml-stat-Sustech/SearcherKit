@@ -13,12 +13,7 @@ from searchagent.agent import SearchAgentConfig
 from searchagent.common.dataloader import DataConfig
 from searchagent.common.errors import FatalError
 from searchagent.common.retry import RetryConfig
-from searchagent.llm.base import (
-    AnthropicConfig,
-    ClientConfig,
-    OpenAIConfig,
-    VllmConfig,
-)
+from searchagent.llm.base import ClientConfig
 from searchagent.llm.parsers import ParserConfig
 from searchagent.runtime.runner import RunConfig
 from searchagent.sources import SourceConfig
@@ -48,9 +43,6 @@ def register_config_store() -> None:
     cs.store(group="llm", name="UpstreamParser", node=ParserConfig)
     cs.store(group="common", name="RetryPolicy", node=RetryConfig)
     cs.store(group="common", name="GenericDataLoader", node=DataConfig)
-    cs.store(name="__openai_config__", node=OpenAIConfig)
-    cs.store(name="__anthropic_config__", node=AnthropicConfig)
-    cs.store(name="__vllm_config__", node=VllmConfig)
     cs.store(name="__tool_config__", node=ToolConfig())
     cs.store(name="__summarizer_config__", node=SummarizerConfig())
     cs.store(name="__source_config__", node=SourceConfig())

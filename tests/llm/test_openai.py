@@ -8,7 +8,7 @@ import respx
 from openai import APITimeoutError
 
 from searchagent.common.retry import RetryPolicy
-from searchagent.llm.base import Client, ClientConfig, LLMStreamChunk, OpenAIConfig
+from searchagent.llm.base import Client, ClientConfig, LLMStreamChunk
 from searchagent.llm.openai import OpenAIClient
 from mock_endpoints import upstream_parsed_endpoint
 
@@ -120,11 +120,9 @@ def _config_client(retry_policy: RetryPolicy | None = None) -> OpenAIClient:
             model="gpt-test",
             retry_policy=retry_policy,
             default_kwargs={"temperature": 0.7, "max_tokens": 64},
-            openai=OpenAIConfig(
-                api_key="test-key",
-                base_url=upstream_parsed_endpoint.BASE_URL,
-                extra_client_kwargs={"max_retries": 0},
-            ),
+            api_key="test-key",
+            base_url=upstream_parsed_endpoint.BASE_URL,
+            extra_client_kwargs={"max_retries": 0},
         )
     )
 

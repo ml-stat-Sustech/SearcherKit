@@ -15,7 +15,7 @@ from searchagent.common.messages import Tool as ToolMsgType
 from searchagent.tools import BaseTool, ToolConfig, build_tool
 from searchagent.sources import DataSource, SourceConfig, add_source_cfg
 from searchagent.llm.parsers import Parser, ParsingError, ParserConfig, get_parser
-from searchagent.llm.base import Client, ClientConfig, get_client, OpenAIConfig
+from searchagent.llm.base import Client, ClientConfig, get_client
 from searchagent.agent import BaseAgent
 from searchagent.common.errors import LLMError
 from searchagent.common.log import append_trace_interaction, get_logger, log_context, LogTiming
@@ -66,7 +66,6 @@ class SearchAgentConfig:
     llm_client: ClientConfig = field(default_factory=lambda: ClientConfig(
         type="openai",
         model="",
-        openai=OpenAIConfig(),
     ))
     parser: ParserConfig = field(default_factory=lambda: ParserConfig(type="upstream"))
     sources: list[SourceConfig] = field(default_factory=list)

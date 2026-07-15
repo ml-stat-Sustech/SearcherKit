@@ -17,17 +17,16 @@ agent:
       stop:
         - "\n<tool_response>"
         - "<tool_response>"
-    openai:
-      api_key: "a"
-      base_url: 
-        - http://127.0.0.1:6002/v1
-        - http://127.0.0.1:6003/v1
-        - http://127.0.0.1:6004/v1
-        - http://127.0.0.1:6005/v1
-        - http://127.0.0.1:6006/v1
-        - http://127.0.0.1:6007/v1
-      concurrency_limit: 512
-      extra_client_kwargs: null
+    api_key: "a"
+    base_url:
+      - http://127.0.0.1:6002/v1
+      - http://127.0.0.1:6003/v1
+      - http://127.0.0.1:6004/v1
+      - http://127.0.0.1:6005/v1
+      - http://127.0.0.1:6006/v1
+      - http://127.0.0.1:6007/v1
+    concurrency_limit: 512
+    extra_client_kwargs: null
   parser:
     type: tongyi_deep_research
   sources:

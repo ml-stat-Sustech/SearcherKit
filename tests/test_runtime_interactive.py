@@ -9,7 +9,7 @@ import pytest
 
 from searchagent.agent.search_agent import SearchAgentConfig
 from searchagent.common.messages import ToolCall, assistant, tool
-from searchagent.llm.base import ClientConfig, LLMStreamChunk, OpenAIConfig
+from searchagent.llm.base import ClientConfig, LLMStreamChunk
 from searchagent.llm.parsers import QwenParser
 from searchagent.common.errors import RecoverableError
 from searchagent.runtime.interactive import (
@@ -246,10 +246,8 @@ def test_interactive_query_runner_records_active_model_from_run_config(tmp_path)
                 llm_client=ClientConfig(
                     type="openai",
                     model="llama3.2:1b",
-                    openai=OpenAIConfig(
-                        base_url="http://127.0.0.1:11434/v1",
-                        api_key="secret",
-                    ),
+                    base_url="http://127.0.0.1:11434/v1",
+                    api_key="secret",
                 ),
             ),
         )

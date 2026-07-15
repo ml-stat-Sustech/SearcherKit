@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from searchagent.llm.base import ClientConfig, VllmConfig
+from searchagent.llm.base import ClientConfig
 from searchagent.llm.openai import OpenAIClient
 
 
 class VllmClient(OpenAIClient):
     def __init__(self, *, config: ClientConfig | None = None, **kwargs: Any) -> None:
         if config is not None:
-            provider_config = config.vllm or VllmConfig()
             openai_config = ClientConfig(
                 type="openai",
                 model=config.model,
+                api_key=config.api_key,
+                base_url=config.base_url or "http://127.0.0.1:8000/v1",
+                concurrency_limit=config.concurrency_limit,
+                extra_client_kwargs=config.extra_client_kwargs,
                 retry_policy=config.retry_policy,
                 default_kwargs=config.default_kwargs,
-                openai=provider_config,
             )
             super().__init__(config=openai_config)
             return

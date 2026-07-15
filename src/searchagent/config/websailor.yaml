@@ -19,12 +19,11 @@ agent:
       stop:
         - "\n<tool_response>"
         - "<tool_response>"
-    openai:
-      api_key: "EMPTY"
-      base_url: 
+    api_key: "EMPTY"
+    base_url:
       - http://127.0.0.1:6001/v1
-      concurrency_limit: 512
-      extra_client_kwargs: null
+    concurrency_limit: 512
+    extra_client_kwargs: null
   parser:
     type: websailor
   sources:

@@ -52,16 +52,14 @@ class OpenAIClient(Client):
         **extra_client_kwargs: Any,
     ) -> None:
         if config is not None:
-            if config.openai is None:
-                raise ValueError("Please specify openai config when using openai client")
             self.__init__(
                 model=config.model,
-                api_key=config.openai.api_key,
-                base_url=config.openai.base_url,
+                api_key=config.api_key,
+                base_url=config.base_url,
                 retry_policy=config.retry_policy,
-                concurrency_limit=config.openai.concurrency_limit,
+                concurrency_limit=config.concurrency_limit,
                 default_kwargs=config.default_kwargs,
-                **(config.openai.extra_client_kwargs or {}),
+                **(config.extra_client_kwargs or {}),
             )
             return
 

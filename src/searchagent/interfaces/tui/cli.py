@@ -11,12 +11,7 @@ from typing import Any, Sequence
 from searchagent.cli.config import compose_dataclass_config
 from searchagent.common.live_events import LiveEvent
 from searchagent.common.log import disable_console_logging, setup_logger
-from searchagent.llm.base import (
-    AnthropicConfig,
-    ClientConfig,
-    OpenAIConfig,
-    VllmConfig,
-)
+from searchagent.llm.base import ClientConfig
 from searchagent.runtime.interactive import InteractiveQueryConfig, InteractiveQueryRunner
 from searchagent.runtime.interactive_selection import discover_model_options
 from searchagent.runtime.runner import RunConfig
@@ -178,15 +173,7 @@ def apply_llm_env(config: ClientConfig) -> None:
         raise ValueError(
             "LLM provider must be one of: openai, anthropic, vllm, vllm_server"
         )
-    if provider_type == "openai":
-        config.openai = config.openai or OpenAIConfig()
-        _apply_endpoint_env(config.openai, api_key=api_key, base_url=base_url)
-    elif provider_type in {"vllm", "vllm_server"}:
-        config.vllm = config.vllm or VllmConfig()
-        _apply_endpoint_env(config.vllm, api_key=api_key, base_url=base_url)
-    elif provider_type == "anthropic":
-        config.anthropic = config.anthropic or AnthropicConfig()
-        _apply_endpoint_env(config.anthropic, api_key=api_key, base_url=base_url)
+    _apply_endpoint_env(config, api_key=api_key, base_url=base_url)
 
 
 def _apply_endpoint_env(config: Any, *, api_key: str | None, base_url: str | None) -> None:

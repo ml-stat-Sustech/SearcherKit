@@ -18,11 +18,10 @@ agent:
     default_kwargs:
       temperature: 0.2
       max_tokens: 1024
-    openai:
-      api_key: YOUR_API_KEY
-      base_url: http://127.0.0.1:8001/v1
-      concurrency_limit: 4
-      extra_client_kwargs: null
+    api_key: YOUR_API_KEY
+    base_url: http://127.0.0.1:8001/v1
+    concurrency_limit: 4
+    extra_client_kwargs: null
   parser:
     type: qwen
     qwen:

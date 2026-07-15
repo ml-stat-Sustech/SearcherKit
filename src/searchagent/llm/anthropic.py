@@ -203,18 +203,14 @@ class AnthropicClient(Client):
         **extra_client_kwargs: Any,
     ) -> None:
         if config is not None:
-            if config.anthropic is None:
-                raise ValueError(
-                    "Please specify anthropic config when using anthropic client"
-                )
             self.__init__(
                 model=config.model,
-                api_key=config.anthropic.api_key,
-                base_url=config.anthropic.base_url,
+                api_key=config.api_key,
+                base_url=config.base_url,
                 retry_policy=config.retry_policy,
-                concurrency_limit=config.anthropic.concurrency_limit,
+                concurrency_limit=config.concurrency_limit,
                 default_kwargs=config.default_kwargs,
-                **(config.anthropic.extra_client_kwargs or {}),
+                **(config.extra_client_kwargs or {}),
             )
             return
 

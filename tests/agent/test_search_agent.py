@@ -16,7 +16,7 @@ from searchagent.agent import SearchAgent, SearchAgentConfig
 from searchagent.agent.search_agent import LLMContextError
 from searchagent.common.messages import ToolMessage
 from searchagent.common.retry import RetryPolicy
-from searchagent.llm.base import ClientConfig, OpenAIConfig
+from searchagent.llm.base import ClientConfig
 from searchagent.llm.openai import OpenAIClient
 from searchagent.llm.parsers import ParserConfig
 from searchagent.llm.parsers.upstream import UpstreamParser
@@ -99,11 +99,9 @@ def _config_agent() -> SearchAgent:
             llm_client=ClientConfig(
                 type="openai",
                 model="gpt-test",
-                openai=OpenAIConfig(
-                    api_key="test-key",
-                    base_url=upstream_parsed_endpoint.BASE_URL,
-                    extra_client_kwargs={"max_retries": 0},
-                ),
+                api_key="test-key",
+                base_url=upstream_parsed_endpoint.BASE_URL,
+                extra_client_kwargs={"max_retries": 0},
             ),
             parser=ParserConfig(
                 type="upstream",
