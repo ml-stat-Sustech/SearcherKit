@@ -34,7 +34,12 @@ class SummarizerConfig:
 
 @dataclass
 class ToolConfig:
-    """Single configuration schema shared by every tool entry."""
+    """Single configuration schema shared by every tool entry.
+
+    When *type* is ``"custom"``, *target* must be a ``pkg://`` or ``file://``
+    import path to a :class:`BaseTool` subclass. Values in *extra* are expanded
+    into keyword arguments when the custom tool is instantiated.
+    """
 
     # Common fields
     type: str | None = None

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable
 
+from searchagent.common.config import import_from_path
+
 from .base import BaseTool, ToolConfig
 from .mcp import MCPTool
 from .multi_source_search import MultiSourceSearchTool
@@ -47,10 +49,24 @@ def build_tool(
 ) -> BaseTool:
     """Instantiate a tool from *cfg*.
 
-    Looks up *cfg.type* in the registry.
+    Looks up *cfg.type* in the registry. For the ``custom`` type, imports the
+    class at ``cfg.target`` and passes ``cfg.extra`` as constructor arguments.
     If the entry is a class, instantiates it with ``config=cfg``.
     If the entry is a callable, calls it with *cfg* and returns the result.
     """
+    if cfg.type == "custom":
+        if not cfg.target:
+            raise ValueError(
+                "tool type 'custom' requires a non-empty 'target' field "
+                "(e.g. pkg://my.package:MyTool or file:///path/to/file.py:MyTool)"
+            )
+        tool_class = import_from_path(cfg.target)
+        if not isinstance(tool_class, type) or not issubclass(tool_class, BaseTool):
+            raise TypeError(
+                f"custom tool class {tool_class!r} must be a subclass of BaseTool"
+            )
+        return tool_class(config=cfg, **cfg.extra)
+
     entry = _REGISTRY.get(cfg.type) if cfg.type else None
     if entry is None:
         raise ValueError(
