@@ -1,0 +1,96 @@
+---
+title: Source
+---
+
+## Overview
+
+A **source** retrieves documents. A **tool** exposes an action to the model. Keeping them separate allows the same Elasticsearch, web, or file source to support search visit, or a custom tool interface.
+
+Built-in tools include `search`, `visit`, and `mcp`.
+
+## Configure Tools
+
+Tools are configured with the `source` they operate on, and `name`, `description`, and `inputSchema` which are exposed to LLM for tool call.
+
+```yaml
+agent:
+  tools:
+  - type: search
+      name: search
+      description: Search for more information.
+      inputSchema: # input schema
+      source:
+        - elasticsearch
+  - type: visit
+      name: visit
+      description: Fetch full text with document id
+      inputSchema: # input schema
+      source:
+        - file_1
+```
+
+## Customize the tool informations provided to model
+
+Tool behavior and model-facing presentation are configured independently:
+
+```yaml
+agent:
+  tools:
+    - type: search
+      name: search_web
+      description: Search the indexed web corpus for evidence.
+      source: [corpus]
+      inputSchema:
+        type: object
+        properties:
+          key_word:
+            type: string
+            description: A focused search query.
+        required: [key_word]
+        additionalProperties: false
+      argument_mapping:
+        key_word: query
+      raise_argument_validation_error: false
+```
+
+`argument_mapping` can rename model-visible arguments before execution. Keep schemas small and unambiguous: the model should see only arguments it can use correctly.
+
+## Summarize large tool results
+
+Search and visit tools can pass their output through a separate summarizer model:
+
+```yaml
+agent:
+  tools:
+    - type: visit
+      name: visit
+      source: [corpus]
+      summary_goal_key: goal
+      summarizer:
+        model: Qwen3-8B
+        base_url: http://127.0.0.1:8010/v1
+        api_key: EMPTY
+        max_chars: 40000
+        max_concurrency: 128
+        default_kwargs:
+          max_tokens: 1024
+        retry_config:
+          max_tries: 3
+```
+
+The summarizer reduces context growth but adds latency and another failure surface.
+Use it when raw documents are substantially larger than the evidence needed.
+
+## MCP tools
+
+Use `type: mcp` to expose a tool hosted by an MCP server. Configure the server
+transport and remote tool name in the `ToolConfig` fields used by `MCPTool`. MCP tools
+share the same initialization, validation, retry, and shutdown lifecycle as native
+tools.
+
+For custom retrieval, subclass `DataSource` and use `type: custom` with a `target`.
+For custom model actions, subclass `BaseTool` and register the implementation with
+`register_tool()` before building the agent.
+
+For complete examples of defining and configuring these extensions, see
+[Custom modules](../04-advanced-usage/01-custom-modules.qmd)

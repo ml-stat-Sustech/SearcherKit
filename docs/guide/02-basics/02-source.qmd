@@ -1,0 +1,223 @@
+---
+title: Source
+---
+
+## Overview
+
+A **source** retrieves documents. A **tool** exposes an action to the model. Keeping them separate allows the same Elasticsearch, web, or file source to support search visit, or a custom tool interface.
+
+Built-in sources:
+
+| Type | Purpose |
+| --- | --- |
+| `file` | Full-text search and fetch under a local directory; requires `rg` |
+| `elasticsearch` | BM25, vector, or hybrid retrieval from an Elasticsearch index |
+| `web` | Serper search and Jina page fetch |
+| `custom` | A project-defined `DataSource` implementation |
+
+## Configure sources
+
+Configuration accepts a list of `SourceConfig`. Each source has a unique `name`. Source-backed tools refer to those names to decide with source they search/fetch from:
+
+```yaml
+agent:
+  sources:
+    - type: file
+      name: docs
+      root_path: ./docs
+
+  tools:
+    - type: search
+      name: search
+      source: [docs]
+    - type: visit
+      name: visit
+      source: [docs]
+```
+
+## Local files
+
+To search from local files, specify root folder path in `root_path`. The `search` tool specified with the source would launch a `ripgrep` full text search within `root_path`. The `visit` tool would fetch the full file specified with file path as `document_id`.
+
+```yaml
+agent:
+  sources:
+    - type: file
+      name: file
+      root_path: /path/to/file/root
+```
+
+## Web
+
+To search from web. There should be a SERP API to connect to. For example, [Serper](https://serper.dev/). The `search` tool uses serp api to aquire web search result.
+
+[Jina](https://jina.ai/) is a webpage reader specified in converting webpages to LLM-friendly format. When using the web source, `visit` tool uses Jina to read webpages.
+
+```yaml
+agent:
+  sources:
+    - type: web
+      name: web_source
+      serper_api_key: API_KEY
+      jina_api_key: API_KEY
+```
+
+## Elasticsearch
+
+To search from a local knowledge base, SearcherKit supports searching from elasticsearch endpoint
+
+### Search Mode
+
+Searching in elasticsearch source supports `vector_search_mode: bm25`, `vector`, or `hybrid`. Vector and hybrid modes require an embedding model endpoint and a populated vector field in the index.
+
+```yaml
+agent:
+  sources:
+    - type: elasticsearch
+      name: corpus
+      hosts: http://127.0.0.1:9200
+      index: documents
+      search_fields: [title, text]
+      document_id_field: url
+      fetch_field: url
+      vector_search_mode: hybrid
+      vector_field: text_vector
+      embedding_model: Qwen3-Embedding-8B
+      embedding_base_url: http://127.0.0.1:8004/v1
+      embedding_api_key: EMPTY
+      es_max_concurrency: 256
+      embedding_max_concurrency: 256
+```
+
+::: {.callout-tip}
+To use `vector` and `hybrid` search. You needs an embedding model. To serve the model locally, we recommand using [Text Embeddings Interface](https://github.com/huggingface/text-embeddings-inference)
+:::
+
+::: {.callout-caution}
+Some embedding models use different prompts between query embedding and indexing embedding generation. For example, `Qwen3-Embedding-8B` have
+```{.json filename="config_sentence_transformers.json"}
+{
+  "prompts": {
+    "query": "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+    "document": ""
+  }
+}
+```
+
+Check carefully on your embedding API / inference engines on how these configurations are processed.
+
+For our recommanded method, [Text Embeddings Interface](https://github.com/huggingface/text-embeddings-inference) dose not autometically append the prompt to the query, thus, configure the prompt with `embedding_prefix` under source configuration.
+
+```yaml
+agent:
+  sources:
+    - type: elasticsearch
+      name: corpus
+      embedding_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
+```
+:::
+
+### Highlighting
+Set `highlight: true` to build compact, search-engine-style snippets from matching fragments. Tune `highlight_fragment_size`, `highlight_number_of_fragments`, and `snippet_chars` to control the returned context.
+
+Search mode should always set to `hybrid` when using highlight.
+
+
+### Build elasticsearch index
+
+SearcherKit provides plugin to quickly deploy knowledgebase to elasticsearch
+
+Deploy a local Wiki index:
+
+```bash
+searchagent plugins deploy local-wiki \
+  --wiki_dump_path data/wiki.xml.bz2 \
+  --es_host http://127.0.0.1:9200 \
+  --index_name wiki_local \
+  --overwrite
+```
+
+Deploy BrowseComp Plus:
+
+```bash
+searchagent plugins deploy browsecomp-plus \
+  --dataset_path data/browsecomp_plus_corpus.jsonl \
+  --es_host http://127.0.0.1:9200 \
+  --index_name browsecomp_plus \
+  --overwrite
+```
+
+## Configure Tools
+
+
+
+## Customize the model-visible tool
+
+Tool behavior and model-facing presentation are configured independently:
+
+```yaml
+agent:
+  tools:
+    - type: search
+      name: search_web
+      description: Search the indexed web corpus for evidence.
+      source: [corpus]
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+            description: A focused search query.
+        required: [query]
+        additionalProperties: false
+      raise_argument_validation_error: false
+```
+
+`argument_mapping` can rename model-visible arguments before execution. Keep schemas
+small and unambiguous: the model should see only arguments it can use correctly.
+
+
+The tool name, description, and input
+schema are visible to the model.
+
+## Summarize large tool results
+
+Search and visit tools can pass their output through a separate summarizer model:
+
+```yaml
+agent:
+  tools:
+    - type: visit
+      name: visit
+      source: [corpus]
+      summary_goal_key: goal
+      summarizer:
+        model: Qwen3-8B
+        base_url: http://127.0.0.1:8010/v1
+        api_key: EMPTY
+        max_chars: 40000
+        max_concurrency: 128
+        default_kwargs:
+          max_tokens: 1024
+        retry_config:
+          max_tries: 3
+```
+
+The summarizer reduces context growth but adds latency and another failure surface.
+Use it when raw documents are substantially larger than the evidence needed.
+
+## MCP tools
+
+Use `type: mcp` to expose a tool hosted by an MCP server. Configure the server
+transport and remote tool name in the `ToolConfig` fields used by `MCPTool`. MCP tools
+share the same initialization, validation, retry, and shutdown lifecycle as native
+tools.
+
+For custom retrieval, subclass `DataSource` and use `type: custom` with a `target`.
+For custom model actions, subclass `BaseTool` and register the implementation with
+`register_tool()` before building the agent.
+
+For complete examples of defining and configuring these extensions, see
+[Custom source](../04-developement/01-development.qmd#custom-source) and
+[Custom tool](../04-developement/01-development.qmd#custom-tool) in the
+development guide.

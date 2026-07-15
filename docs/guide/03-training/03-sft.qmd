@@ -57,7 +57,7 @@ then run the same inference recipe and dataset used for the baseline:
 ```bash
 searchagent run --config-name webexplorer \
   agent.llm_client.model=/models/searchagent-sft \
-  agent.llm_client.openai.base_url=http://127.0.0.1:8001/v1 \
+  agent.llm_client.base_url=http://127.0.0.1:8001/v1 \
   dataloader.source=data/eval.jsonl \
   output_path=outputs/sft_eval
 ```

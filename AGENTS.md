@@ -221,8 +221,9 @@ when `.venv` exists, per the project command rule above. Examples include
 `tests\cli\test_run.py`, `tests\tools\test_search.py`,
 `tests\tools\test_visit.py`, `tests\sources\test_web.py`,
 `tests\sources\test_elasticsearch.py`, `tests\llm\test_openai.py`, and
-`tests\llm\test_anthropic.py`. `tests\sources\test_elasticsearch.py` also
-requires the `elasticsearch-source` extra.
+`tests\llm\test_anthropic.py`. Elasticsearch, Anthropic, and TUI dependencies
+are included in the default installation; the `indexing` extra is reserved for
+local indexing and deployment dependencies.
 
 Search for stale paths:
 ```powershell

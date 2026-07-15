@@ -1,0 +1,19 @@
+---
+title: Custom Modules
+---
+
+### Custom parser
+
+For a custom parser, subclass `searchagent.llm.parsers.Parser` and configure its
+import path:
+
+```yaml
+agent:
+  parser:
+    type: custom
+    target: pkg://my_project.parsers:MyParser
+```
+
+
+`Parser.to_model()` prepares the message history. `Parser.from_model()` yields
+provider-independent assistant messages. Parsers that set `uses_provider_tools` also receive OpenAI-style tool schemas through the provider request.
