@@ -17,7 +17,7 @@ import openai
 from searchagent.common.log import get_logger, setup_logger
 from searchagent.agent import BaseAgent
 from searchagent.agent import SingleTurnAgent
-from searchagent.llm.openai import OpenAIClient
+from searchagent.llm.openai_client import OpenAIClient
 from searchagent.llm.parsers import UpstreamParser
 from searchagent.common.retry import RetryPolicy, retry_async
 

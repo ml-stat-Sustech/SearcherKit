@@ -17,7 +17,7 @@ from searchagent.agent.search_agent import LLMContextError
 from searchagent.common.messages import ToolMessage
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm.base import ClientConfig
-from searchagent.llm.openai import OpenAIClient
+from searchagent.llm.openai_client import OpenAIClient
 from searchagent.llm.parsers import ParserConfig
 from searchagent.llm.parsers.upstream import UpstreamParser
 from searchagent.tools import BaseTool

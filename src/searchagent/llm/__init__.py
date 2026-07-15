@@ -1,4 +1,4 @@
-from .anthropic import AnthropicClient
+from .anthropic_client import AnthropicClient
 from .base import (
     Client,
     ClientConfig,
@@ -6,7 +6,7 @@ from .base import (
     LLMResult,
     get_client,
 )
-from .openai import OpenAIClient
+from .openai_client import OpenAIClient
 from .parsers import (
     Parser,
     ParserConfig,

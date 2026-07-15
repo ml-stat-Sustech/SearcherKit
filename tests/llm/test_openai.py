@@ -9,7 +9,7 @@ from openai import APITimeoutError
 
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm.base import Client, ClientConfig, LLMStreamChunk
-from searchagent.llm.openai import OpenAIClient
+from searchagent.llm.openai_client import OpenAIClient
 from mock_endpoints import upstream_parsed_endpoint
 
 

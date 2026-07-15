@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from searchagent.llm.base import ClientConfig
-from searchagent.llm.openai import OpenAIClient
+from searchagent.llm.openai_client import OpenAIClient
 
 
 class VllmClient(OpenAIClient):

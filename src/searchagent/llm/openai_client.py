@@ -9,10 +9,20 @@ from contextlib import nullcontext
 from typing import TYPE_CHECKING, Any, AsyncIterator, Awaitable, Callable, Iterable, overload
 
 from openai import AsyncOpenAI
+from openai import APIError, APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
+
 
 from searchagent.common.log import get_logger
 from searchagent.common.retry import RetryPolicy, wrap_async
 from searchagent.llm.base import Client, ClientConfig, LLMStreamChunk
+
+_OPENAI_ERRORS = (
+    OpenAIError,
+    APIError,
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
+)
 
 if TYPE_CHECKING:
     from openai.types.completion_usage import CompletionUsage
@@ -82,16 +92,17 @@ class OpenAIClient(Client):
         self.model = model
         self.default_kwargs = default_kwargs or {}
         self.llm_concurrency_lock = asyncio.Semaphore(concurrency_limit) if concurrency_limit else nullcontext()
+        retry_policy = retry_policy if retry_policy else RetryPolicy(
+            exceptions=_OPENAI_ERRORS
+        )
         self._create_completion: Callable[
             [list[dict[str, Any]], dict[str, Any], int | None],
             Awaitable[Any],
-        ] = self._create_completion_no_retry
-        if retry_policy is not None:
-            self._create_completion = wrap_async(
-                self._create_completion_no_retry,
-                policy=retry_policy,
-                op_name="openai.chat.completions.create",
-            )
+        ] = wrap_async(
+            self._create_completion_no_retry,
+            policy=retry_policy,
+            op_name="openai.chat.completions.create",
+        )
 
     async def complete(
         self,

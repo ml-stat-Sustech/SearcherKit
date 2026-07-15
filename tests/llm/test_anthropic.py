@@ -6,7 +6,7 @@ from anthropic import APITimeoutError
 
 from searchagent.common.retry import RetryPolicy
 from searchagent.llm.base import ClientConfig
-from searchagent.llm.anthropic import AnthropicClient
+from searchagent.llm.anthropic_client import AnthropicClient
 from mock_endpoints import anthropic
 
 

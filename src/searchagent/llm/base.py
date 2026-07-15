@@ -89,11 +89,11 @@ LLMClient = Client
 def get_client(config: ClientConfig) -> Client:
     provider = config.type.lower()
     if provider == "openai":
-        from searchagent.llm.openai import OpenAIClient
+        from searchagent.llm.openai_client import OpenAIClient
 
         return OpenAIClient(config=config)
     if provider == "anthropic":
-        from searchagent.llm.anthropic import AnthropicClient
+        from searchagent.llm.anthropic_client import AnthropicClient
 
         return AnthropicClient(config=config)
     if provider in {"vllm", "vllm_server"}:
