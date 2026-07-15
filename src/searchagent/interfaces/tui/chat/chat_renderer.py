@@ -90,6 +90,10 @@ class ChatRenderer:
                 chat_width=chat_width,
             )
             return
+        if entry.role == "assistant":
+            # Intermediate assistant message: body only, no rule divider.
+            self._append_assistant_body_parts(parts, entry, chat_width=chat_width)
+            return
         title = self._entry_title(entry)
         if entry.role != "thinking":
             parts.append((entry.style or "class:meta", f"{self._rule_title(title, chat_width=chat_width)}\n"))
@@ -114,6 +118,27 @@ class ChatRenderer:
             parts.append((body_style, wrapped))
             if not wrapped.endswith("\n"):
                 parts.append((body_style, "\n"))
+        parts.append(("", "\n"))
+
+    def _append_assistant_body_parts(
+        self,
+        parts: list[tuple[str, str]],
+        entry: ConversationEntry,
+        *,
+        chat_width: int,
+    ) -> None:
+        """Render intermediate assistant content without a rule divider."""
+        if not entry.body:
+            return
+        body_indent = "  "
+        wrapped = _indent_multiline(
+            entry.body,
+            width=self._body_wrap_width(chat_width=chat_width, indent=body_indent),
+            indent=body_indent,
+        )
+        parts.append(("class:assistant-body", wrapped))
+        if not wrapped.endswith("\n"):
+            parts.append(("class:assistant-body", "\n"))
         parts.append(("", "\n"))
 
     def _append_shaded_entry_parts(

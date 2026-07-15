@@ -103,9 +103,15 @@ def test_tui_can_show_thinking_when_toggled() -> None:
     app = _make_app()
     app.chat_history._entries = [
         ConversationEntry(
-            role="assistant",
-            title="Assistant",
+            role="thinking",
+            title="thinking completed",
             thinking="visible thinking",
+            style="class:thinking",
+            status="completed",
+        ),
+        ConversationEntry(
+            role="assistant",
+            title="ASSISTANT",
             body="visible answer",
             style="class:assistant",
         ),
@@ -116,6 +122,7 @@ def test_tui_can_show_thinking_when_toggled() -> None:
 
     assert "visible thinking" in text
     assert "visible answer" in text
+    assert "──" not in text
 
 
 def test_tui_body_wrap_width_follows_terminal_width() -> None:
@@ -486,8 +493,230 @@ def test_tui_does_not_extract_answer_tag_content_for_tool_call_turn() -> None:
 
     text = _render_text(app)
 
-    assert "ASSISTANT · turn 1" in text
+    assert "ASSISTANT" not in text
+    assert "──" not in text
     assert "Use this later: <answer>Paris</answer>" in text
+
+
+def test_tui_shows_requested_tool_count_when_tool_turn_has_no_message() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={
+                "turn": 1,
+                "content": None,
+                "tool_calls": [{"id": "call-1", "name": "search", "arguments": {"query": "demo"}}],
+            },
+        )
+    )
+
+    entries = list(app.chat_history.entries())
+    assert len(entries) == 1
+    assert entries[0].body == "Requested 1 tool call(s)."
+    assert entries[0].title == "ASSISTANT"
+    text = _render_text(app)
+    assert "Requested 1 tool call(s)." in text
+    assert "ASSISTANT ·" not in text
+    assert "──" not in text
+
+
+def test_tui_shows_requested_tool_count_when_content_is_whitespace_only() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={
+                "turn": 1,
+                "content": "\n  \n",
+                "tool_calls": [
+                    {"id": "call-1", "name": "search", "arguments": {}},
+                    {"id": "call-2", "name": "visit", "arguments": {}},
+                ],
+            },
+        )
+    )
+
+    entries = list(app.chat_history.entries())
+    assert len(entries) == 1
+    assert entries[0].body == "Requested 2 tool call(s)."
+    text = _render_text(app)
+    assert "Requested 2 tool call(s)." in text
+    assert "ASSISTANT ·" not in text
+
+
+def test_tui_replaces_streaming_assistant_with_requested_tool_count() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="x",
+            data={"turn": 1, "field": "content", "delta": "partial"},
+        )
+    )
+    assert [entry.role for entry in app.chat_history.entries()] == ["assistant"]
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={
+                "turn": 1,
+                "content": None,
+                "tool_calls": [{"id": "call-1", "name": "search", "arguments": {}}],
+            },
+        )
+    )
+
+    entries = list(app.chat_history.entries())
+    assert len(entries) == 1
+    assert entries[0].body == "Requested 1 tool call(s)."
+    assert entries[0].status == ""
+
+
+def test_tui_drops_streaming_assistant_when_empty_final_answer() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="x",
+            data={"turn": 1, "field": "content", "delta": "partial"},
+        )
+    )
+    assert [entry.role for entry in app.chat_history.entries()] == ["assistant"]
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={"turn": 1, "content": None, "tool_calls": []},
+        )
+    )
+
+    assert list(app.chat_history.entries()) == []
+
+
+def test_tui_renders_thirty_turn_transcript_without_assistant_dividers() -> None:
+    """Synthetic multi-turn Step-Level Live View stress check (no real LLM)."""
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    total_turns = 30
+    app.chat_history.append_event(
+        LiveEvent(kind="user_message", message="multi-turn display stress query")
+    )
+
+    for turn in range(1, total_turns + 1):
+        is_final = turn == total_turns
+        call_id = f"call-{turn}"
+        if is_final:
+            app.chat_history.append_event(
+                LiveEvent(
+                    kind="assistant_message",
+                    message="final",
+                    data={
+                        "turn": turn,
+                        "content": f"<answer>done after {total_turns} turns</answer>",
+                        "tool_calls": [],
+                    },
+                )
+            )
+            continue
+
+        # Alternate empty-content tool turns and short-preamble tool turns.
+        content = None if turn % 2 == 1 else f"Checking lead {turn}."
+        app.chat_history.append_event(
+            LiveEvent(
+                kind="assistant_message",
+                message="assistant",
+                data={
+                    "turn": turn,
+                    "content": content,
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "name": "search",
+                            "arguments": {"query": [f"topic-{turn}"], "top_k": 3},
+                        }
+                    ],
+                },
+            )
+        )
+        app.chat_history.append_event(
+            LiveEvent(
+                kind="tool_call_started",
+                message="search",
+                data={
+                    "id": call_id,
+                    "name": "search",
+                    "arguments": {"query": [f"topic-{turn}"], "top_k": 3},
+                    "turn": turn,
+                },
+            )
+        )
+        app.chat_history.append_event(
+            LiveEvent(
+                kind="tool_result",
+                message="result",
+                data={
+                    "id": call_id,
+                    "name": "search",
+                    "turn": turn,
+                    "result": f"hit for topic-{turn}",
+                    "status": "completed",
+                    "extensions": {
+                        "documents": [
+                            {
+                                "id": f"doc-{turn}",
+                                "title": f"Doc {turn}",
+                                "url": None,
+                                "query": f"topic-{turn}",
+                            }
+                        ]
+                    },
+                },
+            )
+        )
+
+    text = _render_text(app)
+
+    assert "multi-turn display stress query" in text
+    assert text.count("Requested 1 tool call(s).") == 15  # odd turns 1..29
+    for turn in range(2, total_turns, 2):
+        assert f"Checking lead {turn}." in text
+    assert "ASSISTANT ·" not in text
+    assert text.count("FINAL ANSWER ·") == 1
+    assert f"FINAL ANSWER · turn {total_turns}" in text
+    assert "done after 30 turns" in text
+    assert "reasoning summary" not in text  # answer-tag extraction
+    assert text.count("TOOL · turn") == total_turns - 1
+    assert "Doc 1" in text
+    assert "Doc 29" in text
 
 
 def test_tui_tool_detail_toggles_preview_and_full_result() -> None:

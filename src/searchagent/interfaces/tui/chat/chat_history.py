@@ -141,7 +141,12 @@ class ChatHistory:
                     self._entries.append(thinking_entry)
                 thinking_entry.thinking += delta
             else:
+                existing = self._find_streaming_assistant_entry(turn_meta=turn_meta, create=False)
+                # Whitespace-only content is not a user-visible message; do not open a block.
+                if existing is None and not delta.strip():
+                    return
                 assistant_entry = self._find_streaming_assistant_entry(turn_meta=turn_meta)
+                assert assistant_entry is not None
                 assistant_entry.body += delta
         elif kind == "assistant_message":
             data = event.data
@@ -152,32 +157,37 @@ class ChatHistory:
             self._complete_latest_thinking(
                 turn_meta=turn_meta, reasoning=str(thinking) if thinking else ""
             )
-            body = ""
-            if content:
+            # Message = non-blank answer content. Thinking is separate.
+            # Empty content with tool calls gets a short system placeholder.
+            has_message = bool(str(content or "").strip())
+            existing = self._find_streaming_assistant_entry(turn_meta=turn_meta, create=False)
+            if has_message:
                 body = str(content)
-            if not body and tool_calls:
+            elif tool_calls:
                 body = f"Requested {len(tool_calls)} tool call(s)."
-            if body:
-                is_final = not tool_calls
-                if is_final:
-                    body = _extract_final_answer_body(body)
-                existing = self._find_streaming_assistant_entry(turn_meta=turn_meta, create=False)
-                if existing is None:
-                    self._entries.append(
-                        ConversationEntry(
-                            role="assistant",
-                            title="FINAL ANSWER" if is_final else "ASSISTANT",
-                            body=body,
-                            meta=turn_meta,
-                            style="class:final-answer" if is_final else "class:assistant",
-                        )
+            else:
+                if existing is not None:
+                    self._entries.remove(existing)
+                return
+            is_final = not tool_calls
+            if is_final:
+                body = _extract_final_answer_body(body)
+            if existing is None:
+                self._entries.append(
+                    ConversationEntry(
+                        role="assistant",
+                        title="FINAL ANSWER" if is_final else "ASSISTANT",
+                        body=body,
+                        meta=turn_meta,
+                        style="class:final-answer" if is_final else "class:assistant",
                     )
-                else:
-                    existing.title = "FINAL ANSWER" if is_final else "ASSISTANT"
-                    existing.body = body
-                    existing.meta = turn_meta
-                    existing.style = "class:final-answer" if is_final else "class:assistant"
-                    existing.status = ""
+                )
+            else:
+                existing.title = "FINAL ANSWER" if is_final else "ASSISTANT"
+                existing.body = body
+                existing.meta = turn_meta
+                existing.style = "class:final-answer" if is_final else "class:assistant"
+                existing.status = ""
         elif kind == "tool_call_started":
             data = event.data
             name = data.get("name") or "tool"
