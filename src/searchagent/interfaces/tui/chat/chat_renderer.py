@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from searchagent.interfaces.tui.chat.conversation_entry import ConversationEntry
 from searchagent.interfaces.tui.ui.formatting import (
     _body_style,
-    _format_search_document_tree,
+    _format_document_tree,
     _tool_detail_documents_hint,
     _display_width,
     _format_json_compact,
@@ -214,7 +214,7 @@ class ChatRenderer:
         self._append_tool_call_block_text(parts, wrapped_call, tool_name=entry.title or "tool", chat_width=chat_width)
 
         if entry.result:
-            document_tree = None if show_tool_detail else _format_search_document_tree(entry.extensions)
+            document_tree = None if show_tool_detail else _format_document_tree(entry.extensions)
             if document_tree is not None:
                 tree_text, document_count = document_tree
                 tree_indent = "  "

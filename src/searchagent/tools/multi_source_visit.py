@@ -8,6 +8,7 @@ from typing import overload
 from searchagent.common.errors import RecoverableError
 from searchagent.sources import DataSource, Document, SourceError, build_source
 from searchagent.tools.base import BaseTool, ToolConfig
+from searchagent.tools.visit import _visit_extensions
 
 
 def _format_document(document: Document) -> str:
@@ -96,7 +97,7 @@ class MultiSourceVisitTool(BaseTool):
         document_id: str,
         source: str,
         goal: str | None = None,
-    ) -> str:
+    ) -> tuple[str, dict[str, object]]:
         """Fetch a document from one of the configured data sources."""
         selected_source = self.source_map.get(source)
         if selected_source is None:
@@ -113,7 +114,7 @@ class MultiSourceVisitTool(BaseTool):
         text = _format_document(document)
         if self.response_char_limit is not None:
             text = _limit_response(text, self.response_char_limit)
-        return text
+        return text, _visit_extensions([document], source=source)
 
     async def close(self) -> None:
         for source in self.source_map.values():

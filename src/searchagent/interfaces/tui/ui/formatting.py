@@ -29,10 +29,10 @@ def _document_display_name(document: Mapping[str, Any]) -> str:
     return "(untitled)"
 
 
-def _format_search_document_tree(
+def _format_document_tree(
     extensions: dict[str, Any] | None,
 ) -> tuple[str, int] | None:
-    """Format collapsed search hits as a tree under the tool call line.
+    """Format collapsed search/visit hits as a tree under the tool call line.
 
     Returns ``(tree_text, document_count)``, or ``None`` when structured
     documents are unavailable.

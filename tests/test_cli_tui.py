@@ -893,6 +893,57 @@ def test_tui_collapses_summarized_search_to_document_count() -> None:
     assert "use /tool-detail to expand details for 2 documents" in preview_text
 
 
+def test_tui_collapses_visit_results_to_document_tree() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+    visit_result = "[source_files.md](None)\nfull document body\n"
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_call_started",
+            message="visit",
+            data={
+                "id": "call-1",
+                "name": "visit",
+                "arguments": {"document_id": "source_files.md", "goal": "read it"},
+            },
+        )
+    )
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_result",
+            message="result",
+            data={
+                "id": "call-1",
+                "name": "visit",
+                "result": visit_result,
+                "status": "completed",
+                "extensions": {
+                    "documents": [
+                        {
+                            "id": "source_files.md",
+                            "title": "source_files.md",
+                            "url": None,
+                        }
+                    ],
+                },
+            },
+        )
+    )
+
+    preview_text = _render_text(app)
+    app.view_state.show_tool_detail = True
+    full_text = _render_text(app)
+
+    assert "└─ source_files.md" in preview_text
+    assert "use /tool-detail to expand details for 1 document" in preview_text
+    assert "full document body" not in preview_text
+    assert "full document body" in full_text
+
+
 def test_tui_chat_viewport_does_not_pad_lines_so_terminal_selection_copies_clean_text() -> None:
     app = _make_app()
     app.chat_history._entries = [ConversationEntry(role="assistant", title="Assistant", body="short", style="class:assistant")]
