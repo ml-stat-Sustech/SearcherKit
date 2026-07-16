@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from searchagent.runtime.interactive_selection import (
+from searcherkit.runtime.interactive_selection import (
     apply_active_source,
     infer_active_source,
     parse_source_command,
     selectable_source_options,
 )
-from searchagent.agent.search_agent import SearchAgentConfig
-from searchagent.sources import SourceConfig
-from searchagent.tools.base import ToolConfig
+from searcherkit.agent.search_agent import SearchAgentConfig
+from searcherkit.sources import SourceConfig
+from searcherkit.tools.base import ToolConfig
 
 
 def test_selectable_source_options_use_safe_name_and_type() -> None:

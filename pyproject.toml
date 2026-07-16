@@ -1,5 +1,5 @@
 [project]
-name = "searchagent"
+name = "searcherkit"
 version = "0.1.0"
 description = "Pluggable search agent runtime for offline web sources and multiple LLM providers."
 readme = "README.md"
@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-searchagent = "searchagent.cli.main:main"
+searcherkit = "searcherkit.cli.main:main"
 
 [project.optional-dependencies]
 indexing = [

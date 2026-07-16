@@ -56,10 +56,10 @@ __pycache__
 
 # results
 outputs/
-docs/assets/searchagent-design-overview.svg
-docs/assets/searchagent-execution-flow.svg
-docs/assets/searchagent-extension-points.svg
-docs/assets/searchagent-feature-map.svg
+docs/assets/searcherkit-design-overview.svg
+docs/assets/searcherkit-execution-flow.svg
+docs/assets/searcherkit-extension-points.svg
+docs/assets/searcherkit-feature-map.svg
 docs/visual-overview.md
 
 # Great Docs build directory (ephemeral, do not commit)

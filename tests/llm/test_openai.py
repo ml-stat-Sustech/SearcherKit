@@ -7,9 +7,9 @@ import pytest
 import respx
 from openai import APITimeoutError
 
-from searchagent.common.retry import RetryPolicy
-from searchagent.llm.base import Client, ClientConfig, LLMStreamChunk
-from searchagent.llm.openai_client import OpenAIClient
+from searcherkit.common.retry import RetryPolicy
+from searcherkit.llm.base import Client, ClientConfig, LLMStreamChunk
+from searcherkit.llm.openai_client import OpenAIClient
 from mock_endpoints import upstream_parsed_endpoint
 
 

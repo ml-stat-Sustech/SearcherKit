@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from omegaconf import OmegaConf
 
-from searchagent.tools import BaseTool, ToolConfig, build_tool
+from searcherkit.tools import BaseTool, ToolConfig, build_tool
 
 
 CUSTOM_TOOL_FILE = Path(__file__).resolve().parents[1] / "fixtures" / "custom_tool.py"

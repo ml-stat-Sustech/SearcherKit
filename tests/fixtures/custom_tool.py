@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from searchagent.tools import BaseTool, ToolConfig
+from searcherkit.tools import BaseTool, ToolConfig
 
 
 class CustomTool(BaseTool):

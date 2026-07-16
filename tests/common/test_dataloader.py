@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from searchagent.common.dataloader import DataConfig, GenericDataLoader
+from searcherkit.common.dataloader import DataConfig, GenericDataLoader
 
 
 FIXTURE_PATH = Path("tests/fixtures/datasets/openseeker.jsonl")

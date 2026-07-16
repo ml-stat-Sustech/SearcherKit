@@ -5,13 +5,13 @@ import pytest
 from aioresponses import aioresponses
 from yarl import URL
 
-from searchagent.common.retry import RetryConfig
-from searchagent.sources import DataSource, SourceConfig, SourceError, build_source
-from searchagent.sources.web import WebSource
+from searcherkit.common.retry import RetryConfig
+from searcherkit.sources import DataSource, SourceConfig, SourceError, build_source
+from searcherkit.sources.web import WebSource
 
 
 SERPER_URL = "https://google.serper.dev/search"
-JINA_URL = "https://r.jina.ai/https://example.test/searchagent"
+JINA_URL = "https://r.jina.ai/https://example.test/searcherkit"
 RETRY_CONFIG = RetryConfig(
     max_tries=2,
     exceptions=["pkg://builtins:TimeoutError"],
@@ -24,8 +24,8 @@ def _search_payload() -> dict[str, object]:
     return {
         "organic": [
             {
-                "title": "SearchAgent",
-                "link": "https://example.test/searchagent",
+                "title": "SearcherKit",
+                "link": "https://example.test/searcherkit",
                 "snippet": "A pluggable search-agent runtime.",
                 "position": 1,
             }
@@ -63,17 +63,17 @@ def test_search(source_factory: Callable[..., DataSource]) -> None:
             mocked.post(SERPER_URL, payload=_search_payload())
             source = source_factory()
 
-            results = await source.search("searchagent", top_k=2)
+            results = await source.search("searcherkit", top_k=2)
             await source.close()
 
         request = mocked.requests[("POST", URL(SERPER_URL))][0]
         assert request.kwargs["headers"]["X-API-KEY"] == "serper-key"
         assert request.kwargs["headers"]["Content-Type"] == "application/json"
-        assert request.kwargs["json"] == {"q": "searchagent", "num": 2}
+        assert request.kwargs["json"] == {"q": "searcherkit", "num": 2}
         assert request.kwargs["timeout"].total == 30
-        assert results[0].document.id == "https://example.test/searchagent"
-        assert results[0].document.title == "SearchAgent"
-        assert results[0].document.url == "https://example.test/searchagent"
+        assert results[0].document.id == "https://example.test/searcherkit"
+        assert results[0].document.title == "SearcherKit"
+        assert results[0].document.url == "https://example.test/searcherkit"
         assert results[0].snippet == "A pluggable search-agent runtime."
         assert results[0].document.metadata == {"position": 1}
         assert results[0].metadata == {"source": "serper"}
@@ -88,15 +88,15 @@ def test_fetch(source_factory: Callable[..., DataSource]) -> None:
             mocked.get(JINA_URL, body="Full page text from Jina Reader.")
             source = source_factory()
 
-            document = await source.fetch("https://example.test/searchagent")
+            document = await source.fetch("https://example.test/searcherkit")
             await source.close()
 
         request = mocked.requests[("GET", URL(JINA_URL))][0]
         assert request.kwargs["headers"]["Authorization"] == "Bearer jina-key"
         assert request.kwargs["headers"]["Accept"] == "text/plain"
         assert request.kwargs["timeout"].total == 60
-        assert document.id == "https://example.test/searchagent"
-        assert document.url == "https://example.test/searchagent"
+        assert document.id == "https://example.test/searcherkit"
+        assert document.url == "https://example.test/searcherkit"
         assert document.text == "Full page text from Jina Reader."
         assert document.metadata == {"source": "jina"}
 
@@ -112,10 +112,10 @@ def test_retry_success(source_factory: Callable[..., DataSource]) -> None:
                 mocked.post(SERPER_URL, exception=TimeoutError("serper timeout"))
                 mocked.post(SERPER_URL, payload=_search_payload())
 
-                results = await source.search("searchagent", top_k=2)
+                results = await source.search("searcherkit", top_k=2)
 
                 assert len(mocked.requests[("POST", URL(SERPER_URL))]) == 2
-                assert results[0].document.title == "SearchAgent"
+                assert results[0].document.title == "SearcherKit"
         finally:
             await source.close()
 
@@ -132,7 +132,7 @@ def test_retry_failure(source_factory: Callable[..., DataSource]) -> None:
                 mocked.get(JINA_URL, exception=TimeoutError("jina timeout"))
 
                 with pytest.raises(SourceError, match="failed to fetch web document"):
-                    await source.fetch("https://example.test/searchagent")
+                    await source.fetch("https://example.test/searcherkit")
 
                 assert len(mocked.requests[("GET", URL(JINA_URL))]) == 2
         finally:

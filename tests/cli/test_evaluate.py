@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from searchagent.cli import main as cli_main
+from searcherkit.cli import main as cli_main
 
 
 EVALUATE_BASE_URL = "https://judge.example.test/v1"
@@ -28,8 +28,8 @@ def _judge_response() -> httpx.Response:
                         "role": "assistant",
                         "content": json.dumps(
                             {
-                                "extracted_final_answer": "SearchAgent",
-                                "correct_answer": "SearchAgent",
+                                "extracted_final_answer": "SearcherKit",
+                                "correct_answer": "SearcherKit",
                                 "reasoning": (
                                     "The final answer matches the expected answer."
                                 ),
@@ -62,10 +62,10 @@ def test_evaluate(
         json.dumps(
             {
                 "input": "What runtime is this test about?",
-                "answer": "SearchAgent",
+                "answer": "SearcherKit",
                 "history": [
                     {"role": "user", "content": "Question"},
-                    {"role": "assistant", "content": r"\boxed{SearchAgent}"},
+                    {"role": "assistant", "content": r"\boxed{SearcherKit}"},
                 ],
             }
         ),
@@ -93,7 +93,7 @@ def test_evaluate(
     assert len(judge_route.calls) == 1
     judge_payload = json.loads(judge_route.calls[0].request.content)
     assert judge_payload["model"] == "qwen3-32b"
-    assert "SearchAgent" in judge_payload["messages"][1]["content"]
+    assert "SearcherKit" in judge_payload["messages"][1]["content"]
 
     result = json.loads((output_dir / "000000.json").read_text(encoding="utf-8"))
     assert result["correct"] is True

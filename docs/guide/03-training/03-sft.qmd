@@ -4,11 +4,11 @@ title: SFT with MS-Swift
 
 ## Convert trajectories
 
-SearchAgent includes a converter from OpenSeeker-style agent trajectories to the
+SearcherKit includes a converter from OpenSeeker-style agent trajectories to the
 MS-Swift JSONL format:
 
 ```bash
-searchagent plugins convert \
+searcherkit plugins convert \
   data/openseeker.jsonl \
   outputs/sft/ms_swift.jsonl
 ```
@@ -21,14 +21,14 @@ tool-result messages are ordered correctly and match the model's intended tool f
 ## Run SFT training
 
 Install [MS-Swift](https://github.com/modelscope/ms-swift) in a dedicated training
-environment, then install SearchAgent into that environment. Configure
+environment, then install SearcherKit into that environment. Configure
 `scripts/sft/sft_training.yaml` with the dataset, base model, output directory, context
 length, distributed settings, and reporting backend.
 
 Validate the resolved command first:
 
 ```bash
-python -m searchagent.training.sft \
+python -m searcherkit.training.sft \
   --config scripts/sft/sft_training.yaml \
   --dry-run
 ```
@@ -36,7 +36,7 @@ python -m searchagent.training.sft \
 Start training directly or with the environment-aware wrapper:
 
 ```bash
-python -m searchagent.training.sft --config scripts/sft/sft_training.yaml
+python -m searcherkit.training.sft --config scripts/sft/sft_training.yaml
 ```
 
 ```bash
@@ -51,12 +51,12 @@ fields. Put uncommon MS-Swift flags under `backend.extra_args`.
 
 ## Evaluate the trained model
 
-Serve the checkpoint through an API compatible with the selected SearchAgent client,
+Serve the checkpoint through an API compatible with the selected SearcherKit client,
 then run the same inference recipe and dataset used for the baseline:
 
 ```bash
-searchagent run --config-name webexplorer \
-  agent.llm_client.model=/models/searchagent-sft \
+searcherkit run --config-name webexplorer \
+  agent.llm_client.model=/models/searcherkit-sft \
   agent.llm_client.base_url=http://127.0.0.1:8001/v1 \
   dataloader.source=data/eval.jsonl \
   output_path=outputs/sft_eval

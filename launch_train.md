@@ -1,4 +1,4 @@
-# SearchAgent Training Launch
+# SearcherKit Training Launch
 
 本文记录当前三台 workspace 的启动流程和已验证状态。
 
@@ -14,7 +14,7 @@
   - 已从 `search-agent-02` 验证 `/v1/models` 和 `/v1/chat/completions` 可用。
   - `response_format={"type":"json_object"}` 和 `chat_template_kwargs.enable_thinking=false` 已验证生效。
 - 训练日志已配置为 SwanLab cloud。
-  - SwanLab project: `searchagent`
+  - SwanLab project: `searcherkit`
   - SwanLab experiment: `zero_query_repeat_align`
   - WandB 已关闭。
 - `train/train_dist.sh` 已内置 CUDA/curand 环境变量，用于 FlashInfer sampling JIT 编译。
@@ -33,7 +33,7 @@ kubectl get pods -o wide
 ## 公共路径
 
 ```bash
-REPO=/home/jovyan/code/searchagent
+REPO=/home/jovyan/code/searcherkit
 QWEN3_MODEL=/data/hf/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
 EMB_MODEL=/data/hf/hub/models--Qwen--Qwen3-Embedding-8B/snapshots/1d8ad4ca9b3dd8059ad90a75d4983776a23d44af
 ```
@@ -168,12 +168,12 @@ tmux new -s train
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate webagent-train
 
-REPO=/home/jovyan/code/searchagent
+REPO=/home/jovyan/code/searcherkit
 cd "$REPO"
 mkdir -p outputs/train_logs
 
 set -o pipefail
-TRIAL_NAME=qwen3_searchagent_$(date +%Y%m%d_%H%M%S)
+TRIAL_NAME=qwen3_searcherkit_$(date +%Y%m%d_%H%M%S)
 LOG=outputs/train_logs/${TRIAL_NAME}.log
 TRIAL_NAME="$TRIAL_NAME" bash train/train_dist.sh 2>&1 | tee "$LOG"
 ```
@@ -201,4 +201,3 @@ tmux attach -t train
 ```
 
 正常 detach 是 `Ctrl-b d`。不要在服务进程里按 `Ctrl-C`，否则 server 会停止。
-

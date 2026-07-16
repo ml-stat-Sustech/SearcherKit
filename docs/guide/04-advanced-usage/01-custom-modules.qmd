@@ -4,7 +4,7 @@ title: Custom Modules
 
 ### Custom parser
 
-For a custom parser, subclass `searchagent.llm.parsers.Parser` and configure its
+For a custom parser, subclass `searcherkit.llm.parsers.Parser` and configure its
 import path:
 
 ```yaml

@@ -4,7 +4,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
-from searchagent.plugins.conversion.main import main as conversion_main
+from searcherkit.plugins.conversion.main import main as conversion_main
 
 
 FIXTURE_DIR = Path("tests/fixtures/datasets")
@@ -19,7 +19,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _run_conversion_cli(args: list[str]) -> dict[str, int]:
     stdout = StringIO()
     with redirect_stdout(stdout):
-        status = conversion_main(args, prog="searchagent plugins convert")
+        status = conversion_main(args, prog="searcherkit plugins convert")
     assert status == 0
     return json.loads(stdout.getvalue())
 

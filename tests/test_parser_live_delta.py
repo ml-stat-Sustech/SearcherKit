@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from searchagent.common.messages import tool
-from searchagent.llm.parsers import Parser, UpstreamParser
-from searchagent.llm.parsers.qwen import QwenParser
+from searcherkit.common.messages import tool
+from searcherkit.llm.parsers import Parser, UpstreamParser
+from searcherkit.llm.parsers.qwen import QwenParser
 
 
 def _parts(parser: Parser, chunks: list[str]) -> list[tuple[str, str]]:

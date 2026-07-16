@@ -66,4 +66,4 @@ if [[ -d "${CURAND_LIB_DIR}" ]]; then
     export LIBRARY_PATH="${CURAND_LIB_DIR}${LIBRARY_PATH:+:${LIBRARY_PATH}}"
 fi
 
-"${SFT_PYTHON}" -m searchagent.training.sft --config "${SFT_TRAINING_CONFIG}" "$@"
+"${SFT_PYTHON}" -m searcherkit.training.sft --config "${SFT_TRAINING_CONFIG}" "$@"

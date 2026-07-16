@@ -1,0 +1,129 @@
+# Full config example for a Qwen-backed SearcherKit agent
+
+defaults:
+  - _self_
+
+task_retry_policy:
+  max_tries: 3
+
+agent:
+  llm_client:
+    type: openai
+    model: /home/jovyan1/searcherkit/outputs/checkpoints/jovyan/webagent/qwen3_igpo_20260615_135454/default/epoch1epochstep104globalstep209
+    default_kwargs:
+      temperature: 1.0
+      top_p: 1.0
+    api_key: "a"
+    base_url:
+      - http://127.0.0.1:6001/v1
+      - http://127.0.0.1:6002/v1
+      - http://127.0.0.1:6003/v1
+    concurrency_limit: 512
+    extra_client_kwargs: null
+  parser:
+    type: upstream
+  sources:
+    - name: elasticsearch
+      type: elasticsearch
+      hosts: ["http://10.32.33.135:9200"]
+      index: browsecomp_plus_qwen3-embedding-8b
+      search_fields: ["title", "text"]
+      es_max_concurrency: 1024
+      embedding_max_concurrency: 2048
+      title_field: title
+      text_field: text
+      url_field: url
+      highlight: false
+      snippet_chars: 8192
+      vector_search_mode: vector
+      embedding_prefix: |
+        Instruct: Given a web search query, retrieve relevant passages that answer the query
+        Query:
+      embedding_model: /home/jovyan/Qwen3-Embedding-8B
+      embedding_api_key: api_key
+      embedding_base_url: http://10.32.64.110:8004
+  tools:
+    - type: search
+      name: search
+      description: Search for more information.
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+        required:
+          - query
+        additionalProperties: false
+      source:
+        - elasticsearch
+      raise_argument_validation_error: false
+      summary_goal_key: query
+      summarizer:
+        model: /home/jovyan/Qwen3-8B-AWQ
+        api_key: api_key
+        max_chars: 40000
+        base_url: http://127.0.0.1:6010/v1
+        max_concurrency: 1024
+        default_kwargs:
+          max_tokens: 1024
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
+        retry_config: null
+  system_prompt: |
+   You are a helpful AI assistant that can search for information to answer questions accurately.
+    
+    When answering questions:
+    1. Use the available search tools to find relevant and reliable information
+    2. Synthesize information from multiple sources when needed
+    3. Provide accurate and comprehensive answers based on your search results
+    4. Do not use Chinese in your responses, keep using English only
+    5. Do not search the same query multiple times
+    6. Do not call tools inside <think></think>
+    7. Always put your final answer in \boxed{} format
+    For example:
+    - If the answer is "American", write: \boxed{American}
+    - If the answer is "yes", write: \boxed{yes}
+    - If the answer is a year like "1985", write: \boxed{1985}
+    
+    Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
+  # query_prompt: "<question>{query}</question>"
+  query_prompt: "{query}"
+  max_turn: 100
+  max_turn_prompt: "You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n\\boxed{your answer}"
+  max_tokens: 262144
+  max_tokens_prompt: "You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:\n\\boxed{your answer}"
+  max_tokens_prompt_margin: 8192
+  llm_retry_config:
+    max_tries: 5
+    exceptions:
+      - pkg://searcherkit.llm.parsers:ParsingError
+  tool_retry_config:
+    max_tries: 5
+    exceptions:
+      - pkg://searcherkit.common.errors:RecoverableError
+
+dataloader:
+  source: /home/jovyan1/browsecomp_plus_decrypted_qa.jsonl
+  input_key: question
+  answer_key: answer
+  max_items: null
+
+max_concurrency: 128
+output_path: outputs/rl_0625
+overwrite_output: false
+
+checkpoint:
+  enabled: true
+  dir: null
+  resume: true
+  filename: manifest.json
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"

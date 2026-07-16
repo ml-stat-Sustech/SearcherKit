@@ -4,9 +4,9 @@ from collections.abc import Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
-from searchagent.plugins.browsecomp_plus import BrowseCompPlusSource, preprocess_browsecomp_plus_record
-from searchagent.plugins.browsecomp_plus import deploy_elasticsearch
-from searchagent.plugins.indexing import IndexDocument
+from searcherkit.plugins.browsecomp_plus import BrowseCompPlusSource, preprocess_browsecomp_plus_record
+from searcherkit.plugins.browsecomp_plus import deploy_elasticsearch
+from searcherkit.plugins.indexing import IndexDocument
 
 
 FIXTURE_DIR = Path("tests/fixtures/plugin_sources")

@@ -4,7 +4,7 @@ title: RL with slime
 
 ## Overview
 
-The slime integration uses SearchAgent as the custom rollout and reward layer while
+The slime integration uses SearcherKit as the custom rollout and reward layer while
 slime manages SGLang rollout workers, Megatron training workers, Ray placement, weight
 synchronization, and checkpoints. Both synchronous and fully asynchronous GRPO paths
 are available.
@@ -13,27 +13,27 @@ are available.
 
 Install and validate [slime](https://github.com/THUDM/slime) from its official
 instructions, including its SGLang, Megatron, router, and Ray dependencies. Install
-SearchAgent into that environment. Do not add the full slime stack to a lightweight
-SearchAgent inference environment.
+SearcherKit into that environment. Do not add the full slime stack to a lightweight
+SearcherKit inference environment.
 
-Before launch, verify that the cluster can access the model, dataset, SearchAgent
+Before launch, verify that the cluster can access the model, dataset, SearcherKit
 config, search services, embedding services, and shared output paths.
 
 ## Configure the agent rollout
 
-`src/searchagent/config/training/train_slime.yaml` defines the agent used inside each
-rollout. The launcher reads it from `SEARCHAGENT_AGENT_CONFIG` by default.
+`src/searcherkit/config/training/train_slime.yaml` defines the agent used inside each
+rollout. The launcher reads it from `SEARCHERKIT_AGENT_CONFIG` by default.
 
 The integration provides these main hooks:
 
 | Hook | Path |
 | --- | --- |
-| Agent rollout | `searchagent.training.slime.rollout.generate_searchagent` |
-| Reward model | `searchagent.training.slime.rollout.custom_rm` |
-| Fully async rollout | `searchagent.training.slime.fully_async.generate_rollout_fully_async` |
-| Rollout metrics | `searchagent.training.slime.rollout.searchagent_rollout_log` |
+| Agent rollout | `searcherkit.training.slime.rollout.generate_searcherkit` |
+| Reward model | `searcherkit.training.slime.rollout.custom_rm` |
+| Fully async rollout | `searcherkit.training.slime.fully_async.generate_rollout_fully_async` |
+| Rollout metrics | `searcherkit.training.slime.rollout.searcherkit_rollout_log` |
 
-`SlimeSGLangClient` connects the SearchAgent loop to slime's generation service while
+`SlimeSGLangClient` connects the SearcherKit loop to slime's generation service while
 preserving turn boundaries and token metadata needed for training.
 
 ## Run training
@@ -41,7 +41,7 @@ preserving turn boundaries and token metadata needed for training.
 Run the GRPO template:
 
 ```bash
-SEARCHAGENT_AGENT_CONFIG=src/searchagent/config/training/train_slime.yaml \
+SEARCHERKIT_AGENT_CONFIG=src/searcherkit/config/training/train_slime.yaml \
 HF_CHECKPOINT=/models/Qwen3-8B \
 PROMPT_DATA=/data/train.jsonl \
 bash scripts/slime/train_grpo.sh

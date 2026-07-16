@@ -7,19 +7,19 @@ from typing import Any
 
 import pytest
 
-from searchagent.agent.search_agent import SearchAgentConfig
-from searchagent.common.messages import ToolCall, assistant, tool
-from searchagent.llm.base import ClientConfig, LLMStreamChunk
-from searchagent.llm.parsers import QwenParser
-from searchagent.common.errors import RecoverableError
-from searchagent.runtime.interactive import (
+from searcherkit.agent.search_agent import SearchAgentConfig
+from searcherkit.common.messages import ToolCall, assistant, tool
+from searcherkit.llm.base import ClientConfig, LLMStreamChunk
+from searcherkit.llm.parsers import QwenParser
+from searcherkit.common.errors import RecoverableError
+from searcherkit.runtime.interactive import (
     InteractiveQueryConfig,
     InteractiveQueryRunner,
     resolve_record_dir,
 )
-from searchagent.common.live_events import LiveEvent, emit_live_event
-from searchagent.sources import SourceConfig
-from searchagent.tools.base import ToolConfig
+from searcherkit.common.live_events import LiveEvent, emit_live_event
+from searcherkit.sources import SourceConfig
+from searcherkit.tools.base import ToolConfig
 
 
 class SuccessfulAgent:
@@ -172,8 +172,8 @@ def test_interactive_query_runner_persists_completed_record_and_events(tmp_path)
 
 def test_interactive_query_runner_enables_streaming_for_default_agent(tmp_path) -> None:
     async def run_case() -> None:
-        from searchagent.agent.search_agent import SearchAgent
-        from searchagent.runtime.interactive import InteractiveQueryConfig
+        from searcherkit.agent.search_agent import SearchAgent
+        from searcherkit.runtime.interactive import InteractiveQueryConfig
 
         client = StreamingClient()
         events: list[LiveEvent] = []
@@ -216,7 +216,7 @@ def test_interactive_query_runner_enables_streaming_for_default_agent(tmp_path) 
 
 def test_interactive_query_runner_streaming_uses_parser_for_live_deltas_without_answer_parsing(tmp_path) -> None:
     async def run_case() -> None:
-        from searchagent.agent.search_agent import SearchAgent
+        from searcherkit.agent.search_agent import SearchAgent
 
         events: list[LiveEvent] = []
         result = await InteractiveQueryRunner(

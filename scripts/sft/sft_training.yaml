@@ -40,8 +40,8 @@ backend:
     TOKENIZERS_PARALLELISM: "false"
     PYTORCH_ALLOC_CONF: expandable_segments:True
     CELOSS_PARALLEL_SIZE: "2048"
-    TORCH_EXTENSIONS_DIR: ${oc.env:TORCH_EXTENSIONS_DIR,/home/jovyan/code/searchagent/kjob/torch_extensions_swift40}
+    TORCH_EXTENSIONS_DIR: ${oc.env:TORCH_EXTENSIONS_DIR,/home/jovyan/code/searcherkit/kjob/torch_extensions_swift40}
   extra_args:
-    swanlab_project: ${oc.env:SFT_SWANLAB_PROJECT,searchagent-sft}
+    swanlab_project: ${oc.env:SFT_SWANLAB_PROJECT,searcherkit-sft}
     swanlab_exp_name: ${oc.env:SFT_SWANLAB_EXP_NAME,openseeker-qwen3-8b}
     swanlab_mode: ${oc.env:SFT_SWANLAB_MODE,cloud}

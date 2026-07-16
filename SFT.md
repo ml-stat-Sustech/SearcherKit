@@ -1,4 +1,4 @@
-# SearchAgent SFT
+# SearcherKit SFT
 
 This document describes how to run agentic SFT in this repository and how to
 evaluate the trained checkpoint on BrowseComp Plus.
@@ -7,8 +7,8 @@ evaluate the trained checkpoint on BrowseComp Plus.
 
 SFT is intentionally isolated from the RL/AReaL training path.
 
-- RL remains under `searchagent.training.train_dist` and `train/train_dist.yaml`.
-- SFT lives under `searchagent.training.sft` and `train/sft_openseeker_original.yaml`.
+- RL remains under `searcherkit.training.train_dist` and `train/train_dist.yaml`.
+- SFT lives under `searcherkit.training.sft` and `train/sft_openseeker_original.yaml`.
 - The repository does not vendor or install `ms-swift`.
 - Run SFT commands from an environment that already provides `swift` and any
   converter-only dependencies needed by your input format, such as `pyarrow` for
@@ -21,17 +21,17 @@ For reproducing the Search-Agent-SFT route inside this repository, use OpenSeeke
 - `search({"query": ...})`, where `query` may be a string or list of strings.
 - `visit({"url": ..., "goal": ...})`, where `url` may be a string or list of strings.
 
-The runtime pieces for this route are isolated from the RL path. The OpenSeeker parser and tool contract are adapted from `Search-Agent-SFT/eval/openseeker`; only the source dispatch and config glue are SearchAgent-specific:
+The runtime pieces for this route are isolated from the RL path. The OpenSeeker parser and tool contract are adapted from `Search-Agent-SFT/eval/openseeker`; only the source dispatch and config glue are SearcherKit-specific:
 
-- `searchagent.llm.parsers.openseeker.OpenSeekerParser` accepts OpenSeeker `<tool_calls_begin>` wrappers.
-- `openseeker_search` and `openseeker_visit` wrap existing SearchAgent sources without changing native RL tools.
+- `searcherkit.llm.parsers.openseeker.OpenSeekerParser` accepts OpenSeeker `<tool_calls_begin>` wrappers.
+- `openseeker_search` and `openseeker_visit` wrap existing SearcherKit sources without changing native RL tools.
 - `recipe/sft/browsecomp_openseeker.yaml` runs BCP with the OpenSeeker protocol.
 
 ## SFT Data Flow
 
 The SFT pipeline has two data formats:
 
-- Canonical SearchAgent SFT JSONL: written to `data.output_path`.
+- Canonical SearcherKit SFT JSONL: written to `data.output_path`.
 - ms-swift Hermes JSONL: written to `data.train_path` and passed to `swift sft`.
 
 The canonical format keeps the agent trajectory explicit:
@@ -64,7 +64,7 @@ The default `train/sft_openseeker_original.yaml` uses `input_type: existing` and
 Important data fields:
 
 - `data.input_path`: raw input path.
-- `data.output_path`: canonical SearchAgent SFT JSONL output.
+- `data.output_path`: canonical SearcherKit SFT JSONL output.
 - `data.train_path`: ms-swift training JSONL output.
 - `data.max_tool_response_chars`: truncate long tool responses before SFT.
 - `data.drop_repeated_search_turns`: for OpenSeeker, optionally drop repeated
@@ -77,14 +77,14 @@ Important data fields:
 From the repo root, with the SFT environment active:
 
 ```bash
-python -m searchagent.training.sft.train --config train/sft_openseeker_converted.yaml --convert-only
+python -m searcherkit.training.sft.train --config train/sft_openseeker_converted.yaml --convert-only
 ```
 
 For raw OpenSeeker conversion, this writes the reusable converted data outside the repository output directory:
 
 ```text
-/home/jovyan/data/searchagent/sft/openseeker_canonical.jsonl
-/home/jovyan/data/searchagent/sft/openseeker_ms_swift.jsonl
+/home/jovyan/data/searcherkit/sft/openseeker_canonical.jsonl
+/home/jovyan/data/searcherkit/sft/openseeker_ms_swift.jsonl
 ```
 
 Default red-search training uses the prepared JSONL directly. Training jobs should use `--skip-convert` and avoid mixing conversion into GPU training.
@@ -124,7 +124,7 @@ The default SFT config reports training metrics to SwanLab:
 backend:
   report_to: swanlab
   extra_args:
-    swanlab_project: ${oc.env:SWANLAB_PROJECT,searchagent-sft}
+    swanlab_project: ${oc.env:SWANLAB_PROJECT,searcherkit-sft}
     swanlab_exp_name: ${oc.env:SWANLAB_EXP_NAME,openseeker-qwen3-8b}
     swanlab_mode: ${oc.env:SWANLAB_MODE,cloud}
 ```
@@ -143,8 +143,8 @@ To train on OpenSeeker:
 data:
   input_type: openseeker
   input_path: /path/to/openseeker.jsonl
-  output_path: /home/jovyan/data/searchagent/sft/openseeker_canonical.jsonl
-  train_path: /home/jovyan/data/searchagent/sft/openseeker_ms_swift.jsonl
+  output_path: /home/jovyan/data/searcherkit/sft/openseeker_canonical.jsonl
+  train_path: /home/jovyan/data/searcherkit/sft/openseeker_ms_swift.jsonl
   drop_repeated_search_turns: false
 ```
 
@@ -163,9 +163,9 @@ OpenResearcher expects seed folders like `seed_42/*.parquet`.
 
 Evaluation is not run inside `swift sft`. For OpenSeeker SFT checkpoints, use the strict OpenSeeker BCP path in this repository:
 
-- Generation: `searchagent.training.sft.openseeker_bcp.generate`
-- Search/visit tools: `searchagent.training.sft.openseeker_bcp.mcp_server`
-- Judge: `searchagent.training.sft.openseeker_bcp.judge`
+- Generation: `searcherkit.training.sft.openseeker_bcp.generate`
+- Search/visit tools: `searcherkit.training.sft.openseeker_bcp.mcp_server`
+- Judge: `searcherkit.training.sft.openseeker_bcp.judge`
 
 This path mirrors `Search-Agent-SFT/eval/openseeker`: it uses `/v1/completions`, the OpenSeeker Jinja chat template, the `<|im_start|>assistant\n<think>\n` generation prompt, `search`/`visit` tool calls through MCP, `result_tool*.jsonl` outputs, and the A/B judge prompt.
 
@@ -197,12 +197,12 @@ Summary base URL: http://<node-ip>:6010/v1
 If the model, embedding, summary, and MCP services are already running, run generation directly:
 
 ```bash
-export PYTHONPATH=/home/jovyan/code/searchagent/src:$PYTHONPATH
+export PYTHONPATH=/home/jovyan/code/searcherkit/src:$PYTHONPATH
 export OPENSEEKER_BASE_URL=http://127.0.0.1:8001/v1
 export OPENSEEKER_MODEL=Qwen3-8B-SearchVisit-SFT
 export MCP_ENDPOINT=http://127.0.0.1:8303/mcp/
 
-BCP_DATASET=/home/jovyan/data/searchagent/browsecomp_plus_decrypted_qa.jsonl \
+BCP_DATASET=/home/jovyan/data/searcherkit/browsecomp_plus_decrypted_qa.jsonl \
 OUTPUT_DIR=outputs/sft/openseeker_bcp_strict \
 bash scripts/sft/evaluate_sft_bcp_openseeker.sh
 ```
@@ -219,7 +219,7 @@ The runner writes:
 This job requests one node and 8 GPUs for the SFT model server. It starts the in-repo MCP server and reuses external embedding/summary endpoints:
 
 ```bash
-SFT_CKPT=/home/jovyan/code/searchagent/outputs/sft/model/v2-20260620-150109/checkpoint-1459 \
+SFT_CKPT=/home/jovyan/code/searcherkit/outputs/sft/model/v2-20260620-150109/checkpoint-1459 \
 MODEL_TOKENIZER_PATH=/data/hf/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218 \
 EMBEDDING_BASE_URL=http://<support-node-ip>:8004/v1 \
 SUMMARY_BASE_URL=http://<support-node-ip>:6010/v1 \
@@ -237,7 +237,7 @@ Run the OpenSeeker A/B judge over `result_tool200.jsonl`:
 SCORER_URLS=http://<judge-node-ip>:8000/v1 \
 SCORER_API_KEY=EMPTY \
 SCORER_MODEL_NAME=/data/hf/hub/models--Qwen--Qwen3-32B/snapshots/9216db5781bf21249d130ec9da846c4624c16137 \
-python -m searchagent.training.sft.openseeker_bcp.judge \
+python -m searcherkit.training.sft.openseeker_bcp.judge \
   --data_path outputs/sft/openseeker_bcp_strict_ckpt1459/result_tool200.jsonl \
   --max_workers 20
 ```
@@ -249,8 +249,8 @@ The judge writes `result_tool200_eval.jsonl`. Its first line is a summary with `
 Useful smoke checks:
 
 ```bash
-python -m searchagent.training.sft.train --config train/sft_openseeker_original.yaml --dry-run --max-records 1
-python -m searchagent.training.sft.train --config train/sft_openseeker_converted.yaml --convert-only --max-records 1
+python -m searcherkit.training.sft.train --config train/sft_openseeker_original.yaml --dry-run --max-records 1
+python -m searcherkit.training.sft.train --config train/sft_openseeker_converted.yaml --convert-only --max-records 1
 python -m pytest tests/test_training_sft.py
 ```
 

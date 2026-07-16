@@ -33,7 +33,7 @@
   and the final error is surfaced.
 
 ## Project Overview
-SearchAgent is a pluggable search-agent runtime for retrieval-augmented tasks,
+SearcherKit is a pluggable search-agent runtime for retrieval-augmented tasks,
 benchmark recipes, source plugins, Elasticsearch deployment, and multiple LLM
 provider adapters.
 
@@ -50,8 +50,8 @@ Implementation priorities:
 
 ## Current Layout
 ```text
-src/searchagent/
-|-- __main__.py              # thin `python -m searchagent` entry, delegates to CLI
+src/searcherkit/
+|-- __main__.py              # thin `python -m searcherkit` entry, delegates to CLI
 |-- __init__.py
 |-- agent/
 |   |-- base.py              # agent protocol/base types
@@ -76,7 +76,7 @@ src/searchagent/
 |   `-- utils.py
 |-- config/
 |   |-- config.yaml          # packaged default run config
-|   |-- searchagent.yaml     # example config
+|   |-- searcherkit.yaml     # example config
 |   |-- agent/               # agent config groups
 |   |-- common/              # retry/dataloader config groups
 |   |-- examples/
@@ -155,7 +155,7 @@ recipe/
 - `llm/parsers/`: model/training-format parsers. Put Qwen, WebSailor,
   WebExplorer, OpenAI tool-call, and similar parser implementations here.
 - `plugins/`: data source reading, preprocessing, and Elasticsearch deployment.
-  `searchagent plugins deploy ...` should call these implementations rather than
+  `searcherkit plugins deploy ...` should call these implementations rather than
   reimplementing them.
 - `recipe/`: benchmark, paper, or experiment-level run recipes. Recipes may
   reference parsers, plugins, sources, and tools, but should not contain core
@@ -169,19 +169,19 @@ recipe/
 ## CLI
 Common commands:
 ```powershell
-python -m searchagent --help
-python -m searchagent run --config-path recipe\webexplorer --config-name webexplorer
-python -m searchagent inspect --config-path recipe\webexplorer --config-name webexplorer
-python -m searchagent inspect --config-path recipe\websailor --config-name websailor
-python -m searchagent evaluate outputs\webexplorer outputs\webexplorer_eval --max-concurrency 32
-python -m searchagent plugins list
-python -m searchagent plugins deploy local-wiki --help
-python -m searchagent plugins deploy browsecomp-plus --help
+python -m searcherkit --help
+python -m searcherkit run --config-path recipe\webexplorer --config-name webexplorer
+python -m searcherkit inspect --config-path recipe\webexplorer --config-name webexplorer
+python -m searcherkit inspect --config-path recipe\websailor --config-name websailor
+python -m searcherkit evaluate outputs\webexplorer outputs\webexplorer_eval --max-concurrency 32
+python -m searcherkit plugins list
+python -m searcherkit plugins deploy local-wiki --help
+python -m searcherkit plugins deploy browsecomp-plus --help
 ```
 
 Hydra-style overrides are supported:
 ```powershell
-python -m searchagent inspect --config-path recipe\websailor --config-name websailor agent.llm_client.model=demo
+python -m searcherkit inspect --config-path recipe\websailor --config-name websailor agent.llm_client.model=demo
 ```
 
 ## Design Rules
@@ -190,11 +190,11 @@ python -m searchagent inspect --config-path recipe\websailor --config-name websa
 - Put run recipes in `recipe/`, plugin data/deploy logic in `plugins/`, and
   reusable defaults/config groups in `config/`.
 - Do not put WebSailor/WebExplorer parser implementation code under `recipe/`;
-  keep it in `src/searchagent/llm/parsers/`.
-- Do not restore `src/searchagent/llm/client.py` or
-  `src/searchagent/llm/parser.py` compatibility re-export modules.
+  keep it in `src/searcherkit/llm/parsers/`.
+- Do not restore `src/searcherkit/llm/client.py` or
+  `src/searcherkit/llm/parser.py` compatibility re-export modules.
 - Do not reintroduce `integrations/`; source ingestion and deployment belong in
-  `src/searchagent/plugins/`.
+  `src/searcherkit/plugins/`.
 - Do not reintroduce local wiki `mcp/` or `retrievers/` directories unless there
   is a new, actively used integration path. Current wiki/BrowseComp Plus flows
   should go through sources, tools, and Elasticsearch deployment helpers.
@@ -206,10 +206,10 @@ python -m searchagent inspect --config-path recipe\websailor --config-name websa
 ## Suggested Verification
 Use targeted checks:
 ```powershell
-python -m compileall -q src\searchagent recipe tests
-python -m searchagent --help
-python -m searchagent inspect --config-path recipe\webexplorer --config-name webexplorer
-python -m searchagent inspect --config-path recipe\websailor --config-name websailor
+python -m compileall -q src\searcherkit recipe tests
+python -m searcherkit --help
+python -m searcherkit inspect --config-path recipe\webexplorer --config-name webexplorer
+python -m searcherkit inspect --config-path recipe\websailor --config-name websailor
 python -m pytest tests\cli\test_inspect.py tests\common\test_dataloader.py tests\tools\test_base.py tests\tools\test_multi_source_tools.py
 python -m pytest tests\sources\test_memory.py tests\sources\test_local_file.py
 python -m pytest tests\plugins\test_conversion.py tests\plugins\test_local_wiki.py tests\plugins\test_browsecomp_plus.py
@@ -227,7 +227,7 @@ local indexing and deployment dependencies.
 
 Search for stale paths:
 ```powershell
-rg --pcre2 "WebAgent|searchagent\.llm\.client\b|searchagent\.llm\.parser(?!s)|integrations" src recipe tests docs README.md pyproject.toml
+rg --pcre2 "WebAgent|searcherkit\.llm\.client\b|searcherkit\.llm\.parser(?!s)|integrations" src recipe tests docs README.md pyproject.toml
 ```
 
 Pytest cache permission warnings may appear in this workspace; they are not

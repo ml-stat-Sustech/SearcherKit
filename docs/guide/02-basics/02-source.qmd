@@ -130,7 +130,7 @@ SearcherKit provides plugin to quickly deploy knowledgebase to elasticsearch
 Deploy a local Wiki index:
 
 ```bash
-searchagent plugins deploy local-wiki \
+searcherkit plugins deploy local-wiki \
   --wiki_dump_path data/wiki.xml.bz2 \
   --es_host http://127.0.0.1:9200 \
   --index_name wiki_local \
@@ -140,7 +140,7 @@ searchagent plugins deploy local-wiki \
 Deploy BrowseComp Plus:
 
 ```bash
-searchagent plugins deploy browsecomp-plus \
+searcherkit plugins deploy browsecomp-plus \
   --dataset_path data/browsecomp_plus_corpus.jsonl \
   --es_host http://127.0.0.1:9200 \
   --index_name browsecomp_plus \

@@ -8,9 +8,9 @@ import respx
 from aioresponses import aioresponses
 from yarl import URL
 
-from searchagent.common.retry import RetryConfig
-from searchagent.sources import DataSource, SourceConfig, SourceError, build_source
-from searchagent.sources.elasticsearch import ElasticsearchSource
+from searcherkit.common.retry import RetryConfig
+from searcherkit.sources import DataSource, SourceConfig, SourceError, build_source
+from searcherkit.sources.elasticsearch import ElasticsearchSource
 
 
 BASE_URL = "http://localhost:9200"
@@ -151,7 +151,7 @@ def _search_response() -> dict[str, object]:
                     "_id": "doc-1",
                     "_score": 1.5,
                     "_source": {
-                        "title": "SearchAgent",
+                        "title": "SearcherKit",
                         "text": "pluggable runtime",
                         "url": "https://example.test/doc-1",
                         "links": ["https://example.test/next"],
@@ -199,7 +199,7 @@ def test_search(source_factory: Callable[[], DataSource]) -> None:
                     "fields": {"text": {"fragment_size": 256, "number_of_fragments": 5}}
                 }
                 assert results[0].document.id == "doc-1"
-                assert results[0].document.title == "SearchAgent"
+                assert results[0].document.title == "SearcherKit"
                 assert results[0].document.metadata == {"links": ["https://example.test/next"]}
                 assert results[0].snippet == "pluggable runtime"
                 assert results[0].score == 1.5
@@ -230,7 +230,7 @@ def test_fetch_by_field(source_factory: Callable[[], DataSource]) -> None:
                 }
                 assert document.id == document_url
                 assert document.url == document_url
-                assert document.title == "SearchAgent"
+                assert document.title == "SearcherKit"
                 assert document.metadata == {"links": ["https://example.test/next"]}
         finally:
             await source.close()
@@ -274,7 +274,7 @@ def test_hybrid_search_with_highlight(source_factory: Callable[..., DataSource])
                     "fields": {"text": {"fragment_size": 256, "number_of_fragments": 5}}
                 }
                 assert results[0].document.id == "doc-1"
-                assert results[0].document.title == "SearchAgent"
+                assert results[0].document.title == "SearcherKit"
                 assert results[0].snippet == "pluggable runtime"
                 assert results[0].score == 1.5
         finally:

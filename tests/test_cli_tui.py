@@ -3,18 +3,18 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from searchagent.agent.search_agent import SearchAgentConfig
-from searchagent.interfaces.tui.app import SearchAgentTui
-from searchagent.interfaces.tui.chat.conversation_entry import ConversationEntry
-from searchagent.runtime.interactive_selection import ModelOption, apply_active_model, discover_model_options, parse_model_command
-from searchagent.interfaces.tui.slash.slash_command import SlashCommandMenuState, TuiCommand
-from searchagent.interfaces.tui.ui.formatting import _display_width, _formatted_lines
-from searchagent.interfaces.tui.ui.selection_types import ChatPoint, ChatSelection
-from searchagent.llm.base import ClientConfig
-from searchagent.runtime.interactive import InteractiveQueryConfig
-from searchagent.common.live_events import LiveEvent
-from searchagent.sources import SourceConfig
-from searchagent.tools.base import ToolConfig
+from searcherkit.agent.search_agent import SearchAgentConfig
+from searcherkit.interfaces.tui.app import SearcherKitTui
+from searcherkit.interfaces.tui.chat.conversation_entry import ConversationEntry
+from searcherkit.runtime.interactive_selection import ModelOption, apply_active_model, discover_model_options, parse_model_command
+from searcherkit.interfaces.tui.slash.slash_command import SlashCommandMenuState, TuiCommand
+from searcherkit.interfaces.tui.ui.formatting import _display_width, _formatted_lines
+from searcherkit.interfaces.tui.ui.selection_types import ChatPoint, ChatSelection
+from searcherkit.llm.base import ClientConfig
+from searcherkit.runtime.interactive import InteractiveQueryConfig
+from searcherkit.common.live_events import LiveEvent
+from searcherkit.sources import SourceConfig
+from searcherkit.tools.base import ToolConfig
 
 
 class _FakeBuffer:
@@ -27,32 +27,32 @@ class _FakeInput:
         self.buffer = _FakeBuffer()
 
 
-def _render_text(app: SearchAgentTui) -> str:
+def _render_text(app: SearcherKitTui) -> str:
     return "".join(text for _, text in app._render_chat_full())
 
 
-def _set_test_input(app: SearchAgentTui, text: str = "") -> None:
+def _set_test_input(app: SearcherKitTui, text: str = "") -> None:
     app.input_field.set_input_field(_FakeInput(text))
 
 
-def _set_test_slash_menu(app: SearchAgentTui, commands: list[Any]) -> None:
+def _set_test_slash_menu(app: SearcherKitTui, commands: list[Any]) -> None:
     app.slash_menu.menu_state = SlashCommandMenuState(commands)
 
 
-def _make_app(config: InteractiveQueryConfig | None = None, **view_overrides: Any) -> SearchAgentTui:
+def _make_app(config: InteractiveQueryConfig | None = None, **view_overrides: Any) -> SearcherKitTui:
     if config is None:
         config = InteractiveQueryConfig(
             record_dir="/tmp/tui_test",
             agent=SearchAgentConfig(sources=[], tools=[]),
         )
-    app = SearchAgentTui(config=config)
+    app = SearcherKitTui(config=config)
     for key, value in view_overrides.items():
         setattr(app.view_state, key, value)
     _set_test_input(app, "")
     return app
 
 
-def _append_selection_entry(app: SearchAgentTui, prefix: str, label: str) -> None:
+def _append_selection_entry(app: SearcherKitTui, prefix: str, label: str) -> None:
     app.chat_history.append_selection_entry(prefix, label)
     app.view_state.chat_scroll_top = None
 
@@ -296,7 +296,7 @@ def test_tui_renders_interactive_events() -> None:
 
 def test_tui_new_query_clears_existing_entries(tmp_path) -> None:
     async def run_case() -> None:
-        app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
+        app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
         app.chat_history._entries = [ConversationEntry(role="assistant", title="Old", body="old", style="class:assistant")]
         app._pt_app = None
         app.query_controller._current_task = None
@@ -306,11 +306,11 @@ def test_tui_new_query_clears_existing_entries(tmp_path) -> None:
                 self.config = config
 
             async def run_query(self, query, *, live_event_sink=None):
-                from searchagent.runtime.interactive import InteractiveRunResult
+                from searcherkit.runtime.interactive import InteractiveRunResult
                 await live_event_sink(LiveEvent(kind="user_message", message="new"))
                 return InteractiveRunResult(status="completed", record_path=tmp_path / "record.json", payload={})
 
-        import searchagent.interfaces.tui.runtime.query_controller as query_controller
+        import searcherkit.interfaces.tui.runtime.query_controller as query_controller
 
         original = query_controller.InteractiveQueryRunner
         query_controller.InteractiveQueryRunner = FakeRunner
@@ -784,7 +784,7 @@ def test_tui_clear_command_rejected_while_running_and_preserves_input() -> None:
 
 
 def test_tui_clear_command_clears_entries_when_idle(tmp_path) -> None:
-    app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
+    app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
     app.chat_history._entries = [ConversationEntry(role="assistant", title="Assistant", body="old", style="class:assistant")]
     app.query_controller.running = False
     app.view_state.show_thinking = False
@@ -799,14 +799,14 @@ def test_tui_clear_command_clears_entries_when_idle(tmp_path) -> None:
 
     assert app.execute_tui_command("clear") is True
 
-    assert [entry.title for entry in app.chat_history.entries()] == ["SearchAgent Interactive Query", "Clear"]
+    assert [entry.title for entry in app.chat_history.entries()] == ["SearcherKit Interactive Query", "Clear"]
     assert app.view_state.chat_scroll_top is None
     assert app.input_field.text() == ""
     assert app.chat_history.entries()[-1].body == "Conversation cleared. Ready for new queries."
 
 
 def test_tui_intro_and_clear_entry_widths_follow_terminal(tmp_path) -> None:
-    app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
+    app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
     app.query_controller.running = False
     app.view_state.show_thinking = False
     app.slash_menu.menu_state = SlashCommandMenuState([TuiCommand("clear", "Clear current live view")])
@@ -951,7 +951,7 @@ def _multi_source_interactive_config(tmp_path) -> InteractiveQueryConfig:
 
 
 def test_tui_source_commands_are_generated_and_rendered(tmp_path) -> None:
-    app = SearchAgentTui(config=_multi_source_interactive_config(tmp_path))
+    app = SearcherKitTui(config=_multi_source_interactive_config(tmp_path))
 
     class FakeInput:
         text = "/sources:"
@@ -967,7 +967,7 @@ def test_tui_source_commands_are_generated_and_rendered(tmp_path) -> None:
 
 
 def test_tui_source_command_completes_and_executes(tmp_path) -> None:
-    app = SearchAgentTui(config=_multi_source_interactive_config(tmp_path))
+    app = SearcherKitTui(config=_multi_source_interactive_config(tmp_path))
     app._pt_app = None
     app.query_controller.running = False
 
@@ -990,7 +990,7 @@ def test_tui_source_command_completes_and_executes(tmp_path) -> None:
 
 def test_tui_active_source_scopes_next_query_config(tmp_path) -> None:
     config = _multi_source_interactive_config(tmp_path)
-    app = SearchAgentTui(config=config)
+    app = SearcherKitTui(config=config)
     app._pt_app = None
     app.query_controller.running = False
 
@@ -1020,7 +1020,7 @@ def test_model_command_parsing_and_application_updates_provider_config() -> None
 
 def test_tui_model_commands_are_generated_and_rendered(tmp_path) -> None:
     option = ModelOption(provider="openai", model="qwen2.5:0.5b", base_url="http://127.0.0.1:11434/v1")
-    app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)), model_options=[option])
+    app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)), model_options=[option])
 
     class FakeInput:
         text = "/models:"
@@ -1036,7 +1036,7 @@ def test_tui_model_commands_are_generated_and_rendered(tmp_path) -> None:
 
 
 def test_tui_status_renders_model_and_source_on_highlighted_first_line(tmp_path) -> None:
-    app = SearchAgentTui(config=_multi_source_interactive_config(tmp_path))
+    app = SearcherKitTui(config=_multi_source_interactive_config(tmp_path))
 
     rendered_parts = app.render_status()
     rendered = "".join(text for _, text in rendered_parts)
@@ -1070,8 +1070,8 @@ def test_tui_run_query_renders_provider_not_found_as_friendly_error(tmp_path, mo
                 body={"error": {"message": "model 'qwen2.5:0.5b' not found"}},
             )
 
-    monkeypatch.setattr("searchagent.interfaces.tui.runtime.query_controller.InteractiveQueryRunner", FakeRunner)
-    app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
+    monkeypatch.setattr("searcherkit.interfaces.tui.runtime.query_controller.InteractiveQueryRunner", FakeRunner)
+    app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
     app._pt_app = None
 
     asyncio.run(app.query_controller.run_query("hello"))
@@ -1108,8 +1108,8 @@ def test_tui_run_query_renders_bad_request_as_friendly_error(tmp_path, monkeypat
                 body={"error": {"message": "model 'nomic-embed-text' does not support chat completions"}},
             )
 
-    monkeypatch.setattr("searchagent.interfaces.tui.runtime.query_controller.InteractiveQueryRunner", FakeRunner)
-    app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
+    monkeypatch.setattr("searcherkit.interfaces.tui.runtime.query_controller.InteractiveQueryRunner", FakeRunner)
+    app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
     app._pt_app = None
     app.session_state.active_model = ModelOption(provider="openai", model="nomic-embed-text", base_url="http://127.0.0.1:11434/v1")
 
@@ -1126,7 +1126,7 @@ def test_tui_run_query_renders_bad_request_as_friendly_error(tmp_path, monkeypat
 def test_tui_model_command_appends_selection_entry(tmp_path) -> None:
     option = ModelOption(provider="openai", model="llama3.2:1b", base_url="http://127.0.0.1:11434/v1")
     config = InteractiveQueryConfig(record_dir=str(tmp_path))
-    app = SearchAgentTui(config=config, model_options=[option])
+    app = SearcherKitTui(config=config, model_options=[option])
     app._pt_app = None
     app.query_controller.running = False
 
@@ -1149,7 +1149,7 @@ def test_tui_model_command_scopes_next_query_config(tmp_path) -> None:
             )
         ),
     )
-    app = SearchAgentTui(config=config, model_options=[option])
+    app = SearcherKitTui(config=config, model_options=[option])
     app._pt_app = None
     app.query_controller.running = False
 
@@ -1164,7 +1164,7 @@ def test_tui_model_command_scopes_next_query_config(tmp_path) -> None:
 
 def test_tui_model_command_rejected_while_running(tmp_path) -> None:
     option = ModelOption(provider="openai", model="llama3.2:1b", base_url="http://127.0.0.1:11434/v1")
-    app = SearchAgentTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)), model_options=[option])
+    app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)), model_options=[option])
     app._pt_app = None
     app.query_controller.running = True
 
@@ -1193,7 +1193,7 @@ def test_active_model_application_keeps_openai_parser_and_prompts_unchanged(tmp_
             query_prompt="Q: {query}",
         ),
     )
-    app = SearchAgentTui(config=config, model_options=[option])
+    app = SearcherKitTui(config=config, model_options=[option])
     app._pt_app = None
     app.query_controller.running = False
 

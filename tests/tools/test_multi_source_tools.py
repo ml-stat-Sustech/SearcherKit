@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from searchagent.common.errors import RecoverableError
-from searchagent.sources import SourceConfig, add_source_cfg
-from searchagent.sources.file import FileSource
-from searchagent.tools import ToolConfig, build_tool
-from searchagent.tools.multi_source_search import MultiSourceSearchTool
-from searchagent.tools.multi_source_visit import MultiSourceVisitTool
+from searcherkit.common.errors import RecoverableError
+from searcherkit.sources import SourceConfig, add_source_cfg
+from searcherkit.sources.file import FileSource
+from searcherkit.tools import ToolConfig, build_tool
+from searcherkit.tools.multi_source_search import MultiSourceSearchTool
+from searcherkit.tools.multi_source_visit import MultiSourceVisitTool
 
 
 SearchFactory = Callable[..., MultiSourceSearchTool]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export SearchAgent_LOG_LEVEL=WARN
+export SEARCHERKIT_LOG_LEVEL=WARN
 export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
 export AREAL_ENABLE_STEP_LEVEL_CLIPPING=1
 
@@ -11,8 +11,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/step_level_clipping:${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-python3 -m searchagent.training.areal.train_igpo \
-    --config "${REPO_ROOT}/src/searchagent/config/training/train_dist_areal_igpo.yaml" \
+python3 -m searcherkit.training.areal.train_igpo \
+    --config "${REPO_ROOT}/src/searcherkit/config/training/train_dist_areal_igpo.yaml" \
     scheduler.type=ray \
     cluster.n_nodes=2 \
     actor.backend=fsdp:d2c2 \

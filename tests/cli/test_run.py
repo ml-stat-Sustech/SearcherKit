@@ -10,7 +10,7 @@ import respx
 from aioresponses import aioresponses
 from yarl import URL
 
-from searchagent.cli import main as cli_main
+from searcherkit.cli import main as cli_main
 
 
 LLM_BASE_URL = "https://llm.example.test/v1"
@@ -79,8 +79,8 @@ def _summary_response() -> httpx.Response:
     return _chat_response(
         content=json.dumps(
             {
-                "evidence": "SearchAgent is a pluggable runtime.",
-                "summary": "SearchAgent supports pluggable search-agent runs.",
+                "evidence": "SearcherKit is a pluggable runtime.",
+                "summary": "SearcherKit supports pluggable search-agent runs.",
             }
         )
     )
@@ -95,9 +95,9 @@ def _search_response() -> dict[str, Any]:
                     "_id": "doc-1",
                     "_score": 1.0,
                     "_source": {
-                        "title": "SearchAgent",
-                        "text": "SearchAgent is a pluggable search-agent runtime.",
-                        "url": "https://example.test/searchagent",
+                        "title": "SearcherKit",
+                        "text": "SearcherKit is a pluggable search-agent runtime.",
+                        "url": "https://example.test/searcherkit",
                     },
                 }
             ]
@@ -114,7 +114,7 @@ def _write_dataset(path: Path) -> None:
         json.dumps(
             {
                 "question": "What runtime is this test about?",
-                "answer": "SearchAgent",
+                "answer": "SearcherKit",
             }
         )
         + "\n",
@@ -157,7 +157,7 @@ def test_run(
             "name": "search",
             "arguments": json.dumps(
                 {
-                    "query": "SearchAgent runtime",
+                    "query": "SearcherKit runtime",
                     "top_k": 1,
                 }
             ),
@@ -176,7 +176,7 @@ def test_run(
                     tool_calls=[tool_call],
                     finish_reason="tool_calls",
                 ),
-                _chat_response(content=r"\boxed{SearchAgent}"),
+                _chat_response(content=r"\boxed{SearcherKit}"),
             ]
         )
         embedding_route = router.post(f"{EMBEDDING_BASE_URL}/embeddings").mock(
@@ -203,7 +203,7 @@ def test_run(
 
     embedding_payload = json.loads(embedding_route.calls[0].request.content)
     assert embedding_payload["model"] == "mock-embedding"
-    assert embedding_payload["input"] == "query: SearchAgent runtime"
+    assert embedding_payload["input"] == "query: SearcherKit runtime"
     assert embedding_payload["encoding_format"] == "float"
 
     es_request = mocked.requests[("POST", URL(search_url))][0]
@@ -220,7 +220,7 @@ def test_run(
     summary_payload = json.loads(summary_route.calls[0].request.content)
     assert summary_payload["model"] == "mock-summary"
     assert summary_payload["response_format"] == {"type": "json_object"}
-    assert "SearchAgent is a pluggable search-agent runtime." in (
+    assert "SearcherKit is a pluggable search-agent runtime." in (
         summary_payload["messages"][0]["content"]
     )
 
@@ -233,9 +233,9 @@ def test_run(
         (output_path / "history" / "000000.json").read_text(encoding="utf-8")
     )
     assert record["input"] == "What runtime is this test about?"
-    assert record["answer"] == "SearchAgent"
-    assert record["history"][-1]["content"] == r"\boxed{SearchAgent}"
+    assert record["answer"] == "SearcherKit"
+    assert record["history"][-1]["content"] == r"\boxed{SearcherKit}"
     tool_message = next(message for message in record["history"] if message["role"] == "tool")
-    assert "SearchAgent supports pluggable search-agent runs." in (
+    assert "SearcherKit supports pluggable search-agent runs." in (
         next(iter(tool_message["tool_responses"].values()))
     )

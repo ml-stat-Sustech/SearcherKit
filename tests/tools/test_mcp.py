@@ -4,11 +4,11 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
-from searchagent.tools.mcp import MCPTool
+from searcherkit.tools.mcp import MCPTool
 
 
 def test_mcp_tool_defers_default_metadata_until_init(caplog: Any) -> None:
-    caplog.set_level(logging.WARNING, logger="searchagent.tools.mcp")
+    caplog.set_level(logging.WARNING, logger="searcherkit.tools.mcp")
 
     tool = MCPTool(
         name="lookup",

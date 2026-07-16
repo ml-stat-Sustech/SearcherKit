@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export SearchAgent_LOG_LEVEL=WARN
+export SEARCHERKIT_LOG_LEVEL=WARN
 export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,8 +10,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-python3 -m searchagent.training.areal.train_dist \
-    --config "${REPO_ROOT}/src/searchagent/config/training/train_areal.yaml" \
+python3 -m searcherkit.training.areal.train_dist \
+    --config "${REPO_ROOT}/src/searcherkit/config/training/train_areal.yaml" \
     scheduler.type=ray \
     cluster.n_nodes=2 \
     actor.backend=fsdp:d4c2 \

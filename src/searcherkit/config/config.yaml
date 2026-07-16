@@ -1,0 +1,51 @@
+# Full config example for a Qwen-backed SearcherKit agent
+
+defaults:
+  - _self_
+
+agent:
+  llm_client:
+    model: qwen3-8b
+    api_key: "REMOVED_REVOKED_SECRET"
+    base_url: https://www.dmxapi.cn/v1
+    concurrency_limit: 128
+
+  # Sources define how SearcherKit connects to searchable data backends.
+  # Native tools reference named sources through `source: [<name>]`.
+  sources:
+    - type: file
+      name: file_1
+      root_path: /home/justin/searcherkit
+
+  # Tools expose agent-callable actions. `type` chooses the implementation;
+  # `name` is the function name visible to the model.
+  tools:
+    - type: search
+      name: search
+      source:
+        - file_1
+    - type: visit
+      name: visit
+      source:
+        - file_1
+      summary_goal_key: goal
+
+  system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."
+
+  llm_retry_config:
+    exceptions:
+      - pkg://searcherkit.llm.parsers:ParsingError
+
+dataloader:
+  source: /path/to/questions.jsonl
+
+output_path: outputs/agent_history
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"

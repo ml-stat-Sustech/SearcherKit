@@ -3,16 +3,16 @@ from collections.abc import Callable
 
 import pytest
 
-from searchagent.sources import DataSource, SourceConfig, SourceError, build_source
-from searchagent.sources.file import FileSource
+from searcherkit.sources import DataSource, SourceConfig, SourceError, build_source
+from searcherkit.sources.file import FileSource
 
 
 def _write_files(root_path) -> None:
     (root_path / "README.md").write_text("Project overview", encoding="utf-8")
     nested = root_path / "docs"
     nested.mkdir()
-    (nested / "SearchAgent Notes.txt").write_text(
-        "Nested SearchAgent notes\nAnother searchagent line",
+    (nested / "SearcherKit Notes.txt").write_text(
+        "Nested SearcherKit notes\nAnother searcherkit line",
         encoding="utf-8",
     )
     (nested / "other.txt").write_text("Other text", encoding="utf-8")
@@ -42,20 +42,20 @@ def test_search_matches_file_contents_in_subfolders(
         source = source_factory(tmp_path)
 
         results = await asyncio.wait_for(
-            source.search("searchagent", top_k=5),
+            source.search("searcherkit", top_k=5),
             timeout=5,
         )
 
         assert [result.document.id for result in results] == [
-            "docs/SearchAgent Notes.txt"
+            "docs/SearcherKit Notes.txt"
         ]
-        assert results[0].document.title == "SearchAgent Notes.txt"
+        assert results[0].document.title == "SearcherKit Notes.txt"
         assert results[0].document.text == (
-            "Nested SearchAgent notes\nAnother searchagent line"
+            "Nested SearcherKit notes\nAnother searcherkit line"
         )
         assert results[0].snippet == (
-            "docs/SearchAgent Notes.txt:1:Nested SearchAgent notes\n"
-            "docs/SearchAgent Notes.txt:2:Another searchagent line"
+            "docs/SearcherKit Notes.txt:1:Nested SearcherKit notes\n"
+            "docs/SearcherKit Notes.txt:2:Another searcherkit line"
         )
         assert results[0].metadata == {"source": "file"}
 
@@ -99,13 +99,13 @@ def test_search_limits_results_by_file_count(tmp_path) -> None:
 
 def test_search_raises_source_error_when_rg_is_missing(tmp_path, monkeypatch) -> None:
     _write_files(tmp_path)
-    monkeypatch.setattr("searchagent.sources.file.shutil.which", lambda name: None)
+    monkeypatch.setattr("searcherkit.sources.file.shutil.which", lambda name: None)
 
     async def run() -> None:
         source = FileSource(root_path=tmp_path)
 
         with pytest.raises(SourceError, match="rg executable not found"):
-            await asyncio.wait_for(source.search("SearchAgent"), timeout=5)
+            await asyncio.wait_for(source.search("SearcherKit"), timeout=5)
 
     asyncio.run(run())
 
@@ -120,13 +120,13 @@ def test_fetch_opens_file_within_root(
     async def run() -> None:
         source = source_factory(tmp_path)
 
-        document = await source.fetch("docs/SearchAgent Notes.txt")
+        document = await source.fetch("docs/SearcherKit Notes.txt")
 
-        assert document.id == "docs/SearchAgent Notes.txt"
-        assert document.title == "SearchAgent Notes.txt"
-        assert document.text == "Nested SearchAgent notes\nAnother searchagent line"
+        assert document.id == "docs/SearcherKit Notes.txt"
+        assert document.title == "SearcherKit Notes.txt"
+        assert document.text == "Nested SearcherKit notes\nAnother searcherkit line"
         assert document.metadata == {
-            "path": "docs/SearchAgent Notes.txt",
+            "path": "docs/SearcherKit Notes.txt",
             "source": "file",
         }
 

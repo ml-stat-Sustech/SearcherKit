@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from searchagent.common.messages import ToolCall, assistant, system, tool, user
-from searchagent.llm.parsers import ParserConfig, ParsingError, get_parser
-from searchagent.llm.parsers.upstream import UpstreamParser
+from searcherkit.common.messages import ToolCall, assistant, system, tool, user
+from searcherkit.llm.parsers import ParserConfig, ParsingError, get_parser
+from searcherkit.llm.parsers.upstream import UpstreamParser
 
 
 def _assistant_payload(arguments: str) -> dict[str, object]:

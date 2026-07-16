@@ -16,7 +16,7 @@ stack.
 
 ![SearcherKit](docs/images/searcherkit.png){width=60% fig-align="center"}
 
-- 🌐 **Retrieve from various sources** — Integrate with search sources from files, knowledge bases and web pages. Build and use your local knowledge bases with a few lines of command.
+- 🌐 **Retrieve from various sources** — Integrate with search sources from files, knowledge bases and web pages. Attach to any 
 
 ![SearcherKit supports multiple search sources](docs/images/sources.png){width=60% fig-align="center"}
 
@@ -24,36 +24,22 @@ stack.
 
 ## 🚀 Quick Start
 
-Install the project in editable mode:
-
-```bash
-pip install -e .
-```
-
-The default installation includes the Elasticsearch source, Anthropic client,
-and terminal UI dependencies. The `indexing` extra remains available for
-building and deploying local indexes:
-
-```bash
-pip install -e '.[indexing]'
-```
-
-See [Quick Start](docs/index.qmd) to start running your search agent.
+See [Quick Start](docs/guide/index.qmd) to start running your search agent.
 
 ## 📖 Documentation
 
-- [Full guide](docs/index.qmd)
+- [Full guide](docs/guide/index.qmd)
 - [CLI reference](docs/cli/index.qmd)
 
 ## 🤝 Contributing
 
-SearchAgent is actively evolving. Reproduction reports, new model parsers,
+SearcherKit is actively evolving. Reproduction reports, new model parsers,
 source adapters, benchmark recipes, training integrations, bug reports, and
 documentation improvements are welcome. Open an issue with the model,
 benchmark, and environment you want to support—or submit a focused pull
 request.
 
-If SearchAgent helps your research or makes your agent stack easier to reason
+If SearcherKit helps your research or makes your agent stack easier to reason
 about, consider starring the repository. It helps more search-agent builders
 find the project.
 

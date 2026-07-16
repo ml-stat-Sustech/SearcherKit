@@ -1,5 +1,5 @@
 generate:
-  dataset_path: ${oc.env:BCP_DATASET,/home/jovyan/data/searchagent/browsecomp_plus_decrypted_qa.jsonl}
+  dataset_path: ${oc.env:BCP_DATASET,/home/jovyan/data/searcherkit/browsecomp_plus_decrypted_qa.jsonl}
   out_dir: ${oc.env:OUTPUT_DIR,outputs/sft/openseeker_bcp_strict}
   normalized_dataset: ${oc.env:NORMALIZED_DATASET,null}
   max_tokens: ${oc.env:MAX_TOKENS,32768}

@@ -1,0 +1,386 @@
+# from math/gsm8k dapo dynamic_bs.yaml and agent_workflow/config.yaml
+
+experiment_name: webagent
+trial_name: trial0
+
+seed: 1
+dynamic_bs: false
+enable_offload: false
+total_train_epochs: 6
+tokenizer_path: ${actor.path}
+
+cluster:
+  n_nodes: 2
+  n_gpus_per_node: 8
+  fileroot: /home/jovyan1/searcherkit/outputs
+  name_resolve:
+    type: nfs
+    nfs_record_root: /home/jovyan1/searcherkit/name_resolve
+
+scheduler:
+  type: ray
+
+workflow:
+  answer_pattern: '\\boxed\{(?P<answer>[^}]*)\}'
+  agent:
+    llm_client:
+      type: openai
+      model: ${actor.path}
+      retry_policy: null
+      default_kwargs:
+        temperature: 1.0
+        max_completion_tokens: 8192
+        top_p: 1.0
+        extra_body:
+          chat_template_kwargs:
+            enable_thinking: true
+    parser:
+      type: upstream
+    max_tokens: 40960
+    system_prompt: |
+      You are a helpful AI assistant that can search for information to answer questions accurately.
+      
+      When answering questions:
+      1. Use the available tools to find relevant and reliable information
+      2. Synthesize information from multiple sources when needed
+      3. Provide accurate and comprehensive answers based on your search results
+      4. Do not search the same query multiple times
+      5. Make exactly one tool call at a time
+      6. Always put your final answer in \boxed{} format
+      
+      Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
+    # system_prompt: "You are a helpfule assistant, answer the question with tools.\n\nWhile calling the tools, avoid making identical tool calls that had been called before.\nAvoid making more than 5 tool calls in a single response, but always make more tool calls in the next turn if more information is needed.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>\n\n"
+    # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
+    query_prompt: "{query}"
+
+    max_tokens_prompt_margin: 11000
+    max_turn: 50
+    max_turn_prompt: |
+      You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
+      \boxed{your final answer, in a few words}
+    max_tokens_prompt: |
+      You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
+      \boxed{your final answer, in a few words}
+    raise_repeat_tool_call: false
+    llm_retry_config: null
+    tool_retry_config:
+      max_tries: 3
+      max_time: null
+      exceptions:
+        - pkg://searcherkit.common.errors:RecoverableError
+      giveup: null
+      jitter: pkg://backoff:full_jitter
+      factor: 1.0
+      base: 1.0
+    sources:
+      - name: elasticsearch
+        type: elasticsearch
+        hosts: ["http://10.32.33.135:9200"]
+        index: wiki20251101_qwen3-embedding-8b
+        search_fields: ["title", "text"]
+        es_max_concurrency: 1024
+        embedding_max_concurrency: 2048
+        title_field: title
+        text_field: text
+        url_field: url
+        highlight: false
+        snippet_chars: 8192
+        vector_search_mode: vector
+        embedding_prefix: |
+          Instruct: Given a web search query, retrieve relevant passages that answer the query
+          Query:
+        embedding_model: /home/jovyan/Qwen3-Embedding-8B
+        embedding_api_key: api_key
+        embedding_base_url: http://10.32.64.11:8004
+    tools:
+      - type: search
+        name: search
+        description: Search for more information.
+        inputSchema:
+          type: object
+          properties:
+            query:
+              type: string
+          required:
+            - query
+          additionalProperties: false
+        source:
+          - elasticsearch
+        raise_argument_validation_error: false
+        summarizer:
+          model: /home/jovyan/Qwen3-8B
+          api_key: api_key
+          max_chars: 100000
+          base_url: http://10.32.64.11:6010/v1
+          max_concurrency: 1024
+          default_kwargs:
+            max_tokens: 1024
+            extra_body:
+              chat_template_kwargs:
+                enable_thinking: false
+          retry_config: null
+
+eval_workflow:
+  answer_pattern: ${workflow.answer_pattern}
+  agent:
+    llm_client:
+      type: openai
+      model: ${actor.path}
+      retry_policy: null
+      default_kwargs:
+        temperature: 1.0
+        max_completion_tokens: 8192
+        top_p: 1.0
+        extra_body:
+          chat_template_kwargs:
+            enable_thinking: true
+    parser:
+      type: upstream
+    max_tokens: ${workflow.agent.max_tokens}
+    system_prompt: ${workflow.agent.system_prompt}
+    query_prompt: ${workflow.agent.query_prompt}
+    max_tokens_prompt_margin: 11000
+    max_turn: 1000
+    max_turn_prompt: ${workflow.agent.max_turn_prompt}
+    max_tokens_prompt: ${workflow.agent.max_tokens_prompt}
+    raise_repeat_tool_call: false
+    llm_retry_config: null
+    tool_retry_config:
+      max_tries: 3
+      max_time: null
+      exceptions:
+        - pkg://searcherkit.common.errors:RecoverableError
+        - pkg://jsonschema:ValidationError
+      giveup: null
+      jitter: pkg://backoff:full_jitter
+      factor: 1.0
+      base: 1.0
+    sources:
+      - name: elasticsearch
+        type: elasticsearch
+        hosts: ["http://10.32.33.135:9200"]
+        index: browsecomp_plus_qwen3-embedding-8b
+        search_fields: ["title", "text"]
+        es_max_concurrency: 1024
+        embedding_max_concurrency: 2048
+        title_field: title
+        text_field: text
+        url_field: url
+        highlight: false
+        snippet_chars: 8192
+        vector_search_mode: vector
+        embedding_prefix: |
+          Instruct: Given a web search query, retrieve relevant passages that answer the query
+          Query:
+        embedding_model: /home/jovyan/Qwen3-Embedding-8B
+        embedding_api_key: api_key
+        embedding_base_url: http://10.32.64.11:8004
+    tools:
+      - type: search
+        name: search
+        description: Search for more information.
+        inputSchema:
+          type: object
+          properties:
+            query:
+              type: string
+          required:
+            - query
+          additionalProperties: false
+        source:
+          - elasticsearch
+        raise_argument_validation_error: false
+        summarizer:
+          model: /home/jovyan/Qwen3-8B
+          api_key: api_key
+          max_chars: 100000
+          base_url: http://10.32.64.11:6010/v1
+          max_concurrency: 1024
+          default_kwargs:
+            max_tokens: 1024
+            extra_body:
+              chat_template_kwargs:
+                enable_thinking: false
+          retry_config: null
+
+rollout:
+  experiment_name: ${experiment_name}
+  backend: sglang:d8
+  trial_name: ${trial_name}
+  max_concurrent_rollouts: 128 # the concurrency refer to task, not traj
+  queue_size: null
+  consumer_batch_size: ${train_dataset.batch_size}
+  max_head_offpolicyness: 3
+  enable_rollout_tracing: true
+  scheduling_spec: ${actor.scheduling_spec}
+  fileroot: ${cluster.fileroot}
+  tokenizer_path: ${tokenizer_path}
+  dump_to_file: true
+  request_timeout: 7200
+  agent:
+    mode: inline
+    tool_call_parser: qwen
+    reasoning_parser: qwen3
+    export_style: concat
+    chat_template_type: concat 
+    turn_discount: 1.0
+    engine_max_tokens: ${workflow.agent.max_tokens}
+    session_timeout_seconds: 7200
+
+gconfig:
+  n_samples: 8
+  min_new_tokens: 0
+  max_new_tokens: ${workflow.agent.llm_client.default_kwargs.max_completion_tokens}
+  # max_tokens: 131072
+  greedy: false
+  temperature: ${workflow.agent.llm_client.default_kwargs.temperature}
+  top_p: ${workflow.agent.llm_client.default_kwargs.top_p}
+
+eval_gconfig:
+  n_samples: 1
+  min_new_tokens: 0
+  max_new_tokens: ${eval_workflow.agent.llm_client.default_kwargs.max_completion_tokens}
+  # max_tokens: 131072
+  greedy: false
+  temperature: ${eval_workflow.agent.llm_client.default_kwargs.temperature}
+  top_p: ${eval_workflow.agent.llm_client.default_kwargs.top_p}
+
+actor:
+  # enable_tree_training: true
+  # pad_to_maximum: true # Must be set to true for tree training
+  weight_update_mode: xccl
+  backend: fsdp:c4
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  path: /home/jovyan1/Qwen3-8B
+  attn_impl: "flash_attention_3"
+  init_from_scratch: false
+  disable_dropout: true
+  gradient_checkpointing: true
+  dtype: bfloat16
+  mb_spec:
+    # max_tokens_per_mb: ${workflow.agent.max_tokens}
+    max_tokens_per_mb: 40960
+  optimizer:
+    type: adam
+    lr: 5e-6
+    lr_scheduler_type: constant
+    gradient_clipping: 1.0
+    warmup_steps_proportion: 0.001
+  eps_clip: 0.2
+  eps_clip_higher: 0.28
+  temperature: ${gconfig.temperature}
+  overlong_reward_penalty: false
+  kl_ctl: 0.0
+  ppo_n_minibatches: 4
+  rejection_sampling:
+    level: token
+    upper: 5.0
+    agg: mean
+    action: clamp
+  # behave_imp_weight_cap: 5.0
+  # behave_imp_weight_mode: sequence_mask
+  recompute_logprob: true
+  use_decoupled_loss: true
+  reward_norm:
+    mean_level: group
+    std_level: group
+    group_size: ${gconfig.n_samples}
+  adv_norm:
+    mean_level: batch
+    std_level: batch
+  max_new_tokens: ${workflow.agent.llm_client.default_kwargs.max_completion_tokens}
+  scheduling_spec:
+    - task_type: worker
+      port_count: 2
+      gpu: 1
+      mem: 32
+      cmd: python3 -m areal.infra.rpc.rpc_server
+      env_vars: {SEARCHERKIT_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"}
+
+ref:
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  backend: ${actor.backend}
+  path: ${actor.path}
+  attn_impl: "flash_attention_3"
+  init_from_scratch: false
+  dtype: ${actor.dtype}
+  mb_spec:
+    # max_tokens_per_mb: ${workflow.agent.max_tokens}
+    max_tokens_per_mb: 40960
+  optimizer: null
+  scheduling_strategy:
+    type: colocation
+    target: actor
+  scheduling_spec: ${actor.scheduling_spec}
+
+# SGLang
+sglang:
+  model_path: ${actor.path}
+  random_seed: ${seed}
+  skip_tokenizer_init: true
+  dtype: ${actor.dtype}
+  max_running_requests: null
+  context_length: ${workflow.agent.max_tokens}
+  mem_fraction_static: 0.8
+  max_prefill_tokens: ${workflow.agent.max_tokens}
+
+# datasets
+train_dataset:
+  batch_size: 128
+  shuffle: true
+  pin_memory: true
+  num_workers: 16
+  path: /home/jovyan1/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean.jsonl
+  type: rl
+
+valid_dataset:
+  batch_size: 256
+  pin_memory: true
+  num_workers: 16
+  path: /home/jovyan1/browsecomp_plus_decrypted_qa.jsonl
+  type: rl
+
+# Utilities
+saver:
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  fileroot: ${cluster.fileroot}
+  freq_epochs: 1
+  freq_steps: 32
+  freq_secs: null
+
+recover:
+  mode: auto
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  fileroot: ${cluster.fileroot}
+  freq_epochs: 1
+  freq_steps: 2
+  freq_secs: null
+
+evaluator:
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  fileroot: ${cluster.fileroot}
+  freq_epochs: 1
+  freq_steps: 32
+  freq_secs: null
+
+stats_logger:
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  fileroot: ${cluster.fileroot}
+  wandb:
+    mode: online
+    project: ${experiment_name}
+    name: ${trial_name}
+
+perf_tracer:
+  experiment_name: ${experiment_name}
+  trial_name: ${trial_name}
+  fileroot: ${cluster.fileroot}
+  enabled: false
+  session_tracer:
+    enabled: false

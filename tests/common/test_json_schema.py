@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from enum import Enum
 from typing import Any, Literal
 
-from searchagent.common.json_schema import schema_from_signature
+from searcherkit.common.json_schema import schema_from_signature
 
 
 class Status(Enum):
@@ -83,7 +83,7 @@ def test_schema_from_signature_returns_none_for_non_keyword_signatures(caplog: A
     async def run(query: str, **kwargs: Any) -> str:
         return query
 
-    caplog.set_level(logging.WARNING, logger="searchagent.common.json_schema")
+    caplog.set_level(logging.WARNING, logger="searcherkit.common.json_schema")
 
     assert schema_from_signature(run) is None
     assert "unsupported kind variadic keyword" in caplog.text
@@ -93,7 +93,7 @@ def test_schema_from_signature_returns_none_when_type_hints_cannot_resolve(caplo
     async def run(*, item: "MissingType") -> str:  # noqa: F821
         return str(item)
 
-    caplog.set_level(logging.WARNING, logger="searchagent.common.json_schema")
+    caplog.set_level(logging.WARNING, logger="searcherkit.common.json_schema")
 
     assert schema_from_signature(run) is None
     assert "type hints could not be resolved" in caplog.text

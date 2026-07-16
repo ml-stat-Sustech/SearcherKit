@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export SearchAgent_LOG_LEVEL=WARN
+export SEARCHERKIT_LOG_LEVEL=WARN
 export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-SEARCHAGENT_AGENT_CONFIG="${SEARCHAGENT_AGENT_CONFIG:-${REPO_ROOT}/src/searchagent/config/training/train_slime.yaml}"
+SEARCHERKIT_AGENT_CONFIG="${SEARCHERKIT_AGENT_CONFIG:-${REPO_ROOT}/src/searcherkit/config/training/train_slime.yaml}"
 
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/src:${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
@@ -64,7 +64,7 @@ HF_CHECKPOINT="${HF_CHECKPOINT:-/home/jovyan1/Qwen3-8B}"
 MEGATRON_CKPT="${MEGATRON_CKPT:-/home/jovyan1/Qwen3-8B_torch_dist}"
 PROMPT_DATA="${PROMPT_DATA:-/home/jovyan1/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean/ASearcher_en_no-math_Qwen3-8B-reject-sample-clean.jsonl}"
 VALID_DATA="${VALID_DATA:-/home/jovyan1/browsecomp_plus_decrypted_qa.jsonl}"
-SAVE_ROOT="${SAVE_ROOT:-/home/jovyan1/wsy/searchagent/searchagent-slime/logs/slime}"
+SAVE_ROOT="${SAVE_ROOT:-/home/jovyan1/wsy/searcherkit/searcherkit-slime/logs/slime}"
 TRIAL_NAME="${TRIAL_NAME:-qwen3_slime_$(date +%Y%m%d_%H%M%S)}"
 ACTOR_LOAD="${ACTOR_LOAD:-${SAVE_ROOT}/${TRIAL_NAME}}"
 SWANLAB_PROJECT="${SWANLAB_PROJECT:-webagent}"
@@ -129,15 +129,15 @@ LOG_PROBS_CHUNK_SIZE="${LOG_PROBS_CHUNK_SIZE:-1024}"
 LR="${LR:-5e-6}"
 KL_LOSS_COEF="${KL_LOSS_COEF:-0.0}"
 SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.7}"
-SEARCHAGENT_EVAL_CONCURRENCY="${SEARCHAGENT_EVAL_CONCURRENCY:-64}"
+SEARCHERKIT_EVAL_CONCURRENCY="${SEARCHERKIT_EVAL_CONCURRENCY:-64}"
 ADVANTAGE_ESTIMATOR="${ADVANTAGE_ESTIMATOR:-grpo}"
-SEARCHAGENT_IGPO_REWARD_COEF="${SEARCHAGENT_IGPO_REWARD_COEF:-1.0}"
-SEARCHAGENT_IGPO_OUTCOME_REWARD_COEF="${SEARCHAGENT_IGPO_OUTCOME_REWARD_COEF:-1.0}"
-SEARCHAGENT_IGPO_REWARD_SIDE="${SEARCHAGENT_IGPO_REWARD_SIDE:-rollout}"
-SEARCHAGENT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE="${SEARCHAGENT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE:-8}"
-SEARCHAGENT_PPO_RATIO_MODE="${SEARCHAGENT_PPO_RATIO_MODE:-token}"
-SEARCHAGENT_TRUNCATION_PENALTY="${SEARCHAGENT_TRUNCATION_PENALTY:--1.0}"
-DYNAMIC_SAMPLING_FILTER_PATH="${DYNAMIC_SAMPLING_FILTER_PATH:-searchagent.training.slime.rollout.mixed_reward_filter}"
+SEARCHERKIT_IGPO_REWARD_COEF="${SEARCHERKIT_IGPO_REWARD_COEF:-1.0}"
+SEARCHERKIT_IGPO_OUTCOME_REWARD_COEF="${SEARCHERKIT_IGPO_OUTCOME_REWARD_COEF:-1.0}"
+SEARCHERKIT_IGPO_REWARD_SIDE="${SEARCHERKIT_IGPO_REWARD_SIDE:-rollout}"
+SEARCHERKIT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE="${SEARCHERKIT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE:-8}"
+SEARCHERKIT_PPO_RATIO_MODE="${SEARCHERKIT_PPO_RATIO_MODE:-token}"
+SEARCHERKIT_TRUNCATION_PENALTY="${SEARCHERKIT_TRUNCATION_PENALTY:--1.0}"
+DYNAMIC_SAMPLING_FILTER_PATH="${DYNAMIC_SAMPLING_FILTER_PATH:-searcherkit.training.slime.rollout.mixed_reward_filter}"
 CUSTOM_REWARD_POST_PROCESS_PATH="${CUSTOM_REWARD_POST_PROCESS_PATH:-}"
 USE_TIS="${USE_TIS:-${SLIME_ASYNC_MODE}}"
 TIS_CLIP="${TIS_CLIP:-2.0}"
@@ -156,22 +156,22 @@ if [ -n "${CUSTOM_TIS_FUNCTION_PATH}" ]; then
 fi
 ADVANTAGE_ARGS=(--advantage-estimator "${ADVANTAGE_ESTIMATOR}")
 if [ "${ADVANTAGE_ESTIMATOR}" = "igpo" ]; then
-    ADVANTAGE_ARGS+=(--custom-advantage-function-path searchagent.training.slime.igpo.compute_advantages_and_returns)
+    ADVANTAGE_ARGS+=(--custom-advantage-function-path searcherkit.training.slime.igpo.compute_advantages_and_returns)
 fi
 CUSTOM_REWARD_POST_PROCESS_ARGS=()
 if [ -n "${CUSTOM_REWARD_POST_PROCESS_PATH}" ]; then
     CUSTOM_REWARD_POST_PROCESS_ARGS+=(--custom-reward-post-process-path "${CUSTOM_REWARD_POST_PROCESS_PATH}")
 fi
-if [ ! -f "${SEARCHAGENT_AGENT_CONFIG}" ]; then
-    echo "SearchAgent config not found: ${SEARCHAGENT_AGENT_CONFIG}" >&2
+if [ ! -f "${SEARCHERKIT_AGENT_CONFIG}" ]; then
+    echo "SearcherKit config not found: ${SEARCHERKIT_AGENT_CONFIG}" >&2
     exit 2
 fi
 
 if [ "${SLIME_ASYNC_MODE}" = "1" ]; then
-    SLIME_TRAIN_MODULE="${SLIME_TRAIN_MODULE:-searchagent.training.slime.train_async}"
-    ROLLOUT_FUNCTION_PATH="${ROLLOUT_FUNCTION_PATH:-searchagent.training.slime.fully_async.generate_rollout_fully_async}"
+    SLIME_TRAIN_MODULE="${SLIME_TRAIN_MODULE:-searcherkit.training.slime.train_async}"
+    ROLLOUT_FUNCTION_PATH="${ROLLOUT_FUNCTION_PATH:-searcherkit.training.slime.fully_async.generate_rollout_fully_async}"
 else
-    SLIME_TRAIN_MODULE="${SLIME_TRAIN_MODULE:-searchagent.training.slime.train_dist}"
+    SLIME_TRAIN_MODULE="${SLIME_TRAIN_MODULE:-searcherkit.training.slime.train_dist}"
     ROLLOUT_FUNCTION_PATH="${ROLLOUT_FUNCTION_PATH:-slime.rollout.sglang_rollout.generate_rollout}"
 fi
 EVAL_FUNCTION_PATH="${EVAL_FUNCTION_PATH:-slime.rollout.sglang_rollout.generate_rollout}"
@@ -194,11 +194,11 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
     printf 'TIS_CLIP=%s\n' "${TIS_CLIP}"
     printf 'TIS_CLIP_LOW=%s\n' "${TIS_CLIP_LOW}"
     printf 'CUSTOM_TIS_FUNCTION_PATH=%s\n' "${CUSTOM_TIS_FUNCTION_PATH}"
-    printf 'SEARCHAGENT_IGPO_REWARD_SIDE=%s\n' "${SEARCHAGENT_IGPO_REWARD_SIDE}"
-    printf 'SEARCHAGENT_PPO_RATIO_MODE=%s\n' "${SEARCHAGENT_PPO_RATIO_MODE}"
+    printf 'SEARCHERKIT_IGPO_REWARD_SIDE=%s\n' "${SEARCHERKIT_IGPO_REWARD_SIDE}"
+    printf 'SEARCHERKIT_PPO_RATIO_MODE=%s\n' "${SEARCHERKIT_PPO_RATIO_MODE}"
     printf 'DYNAMIC_SAMPLING_FILTER_PATH=%s\n' "${DYNAMIC_SAMPLING_FILTER_PATH}"
     printf 'CUSTOM_REWARD_POST_PROCESS_PATH=%s\n' "${CUSTOM_REWARD_POST_PROCESS_PATH}"
-    printf 'SEARCHAGENT_AGENT_CONFIG=%s\n' "${SEARCHAGENT_AGENT_CONFIG}"
+    printf 'SEARCHERKIT_AGENT_CONFIG=%s\n' "${SEARCHERKIT_AGENT_CONFIG}"
     printf 'TRIAL_NAME=%s\n' "${TRIAL_NAME}"
     exit 0
 fi
@@ -239,7 +239,7 @@ python3 -m "${SLIME_TRAIN_MODULE}" \
     --eval-top-p 1.0 \
     --eval-function-path "${EVAL_FUNCTION_PATH}" \
     --eval-interval "${EVAL_INTERVAL}" \
-    --searchagent-eval-concurrency "${SEARCHAGENT_EVAL_CONCURRENCY}" \
+    --searcherkit-eval-concurrency "${SEARCHERKIT_EVAL_CONCURRENCY}" \
     "${EVAL_BEFORE_TRAIN_ARGS[@]}" \
     --rollout-function-path "${ROLLOUT_FUNCTION_PATH}" \
     --actor-num-nodes "${ACTOR_NUM_NODES}" \
@@ -305,19 +305,19 @@ python3 -m "${SLIME_TRAIN_MODULE}" \
     --save-interval "${SAVE_INTERVAL}" \
     "${ADVANTAGE_ARGS[@]}" \
     --balance-data \
-    --custom-generate-function-path searchagent.training.slime.rollout.generate_searchagent \
-    --custom-rm-path searchagent.training.slime.rollout.custom_rm \
+    --custom-generate-function-path searcherkit.training.slime.rollout.generate_searcherkit \
+    --custom-rm-path searcherkit.training.slime.rollout.custom_rm \
     "${CUSTOM_REWARD_POST_PROCESS_ARGS[@]}" \
-    --custom-rollout-log-function-path searchagent.training.slime.rollout.searchagent_rollout_log \
-    --custom-eval-rollout-log-function-path searchagent.training.slime.rollout.searchagent_eval_rollout_log \
+    --custom-rollout-log-function-path searcherkit.training.slime.rollout.searcherkit_rollout_log \
+    --custom-eval-rollout-log-function-path searcherkit.training.slime.rollout.searcherkit_eval_rollout_log \
     --dynamic-sampling-filter-path "${DYNAMIC_SAMPLING_FILTER_PATH}" \
-    --searchagent-agent-config "${SEARCHAGENT_AGENT_CONFIG}" \
-    --searchagent-agent-config-key agent \
-    --searchagent-eval-agent-config-key eval_agent \
-    --searchagent-igpo-reward-coef "${SEARCHAGENT_IGPO_REWARD_COEF}" \
-    --searchagent-igpo-outcome-reward-coef "${SEARCHAGENT_IGPO_OUTCOME_REWARD_COEF}" \
-    --searchagent-igpo-reward-side "${SEARCHAGENT_IGPO_REWARD_SIDE}" \
-    --searchagent-igpo-actor-score-micro-batch-size "${SEARCHAGENT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE}" \
-    --searchagent-ppo-ratio-mode "${SEARCHAGENT_PPO_RATIO_MODE}" \
-    --searchagent-truncation-penalty "${SEARCHAGENT_TRUNCATION_PENALTY}" \
+    --searcherkit-agent-config "${SEARCHERKIT_AGENT_CONFIG}" \
+    --searcherkit-agent-config-key agent \
+    --searcherkit-eval-agent-config-key eval_agent \
+    --searcherkit-igpo-reward-coef "${SEARCHERKIT_IGPO_REWARD_COEF}" \
+    --searcherkit-igpo-outcome-reward-coef "${SEARCHERKIT_IGPO_OUTCOME_REWARD_COEF}" \
+    --searcherkit-igpo-reward-side "${SEARCHERKIT_IGPO_REWARD_SIDE}" \
+    --searcherkit-igpo-actor-score-micro-batch-size "${SEARCHERKIT_IGPO_ACTOR_SCORE_MICRO_BATCH_SIZE}" \
+    --searcherkit-ppo-ratio-mode "${SEARCHERKIT_PPO_RATIO_MODE}" \
+    --searcherkit-truncation-penalty "${SEARCHERKIT_TRUNCATION_PENALTY}" \
     "$@"

@@ -11,7 +11,7 @@ SFT_CONVERSION_MAX_RECORDS="${SFT_CONVERSION_MAX_RECORDS:-0}"
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
-"${SFT_PYTHON}" -m searchagent plugins convert \
+"${SFT_PYTHON}" -m searcherkit plugins convert \
   "${SFT_CONVERSION_INPUT}" \
   "${SFT_TRAIN_DATASET}" \
   --max-records "${SFT_CONVERSION_MAX_RECORDS}" \

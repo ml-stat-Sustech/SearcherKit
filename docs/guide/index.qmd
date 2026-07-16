@@ -4,12 +4,12 @@ title: "🚀 Quick Start"
 
 ## 📦 Install
 
-To install searchagent, directly clone the repository and install:
+To install searcherkit, directly clone the repository and install:
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searchagent.git
-cd searchagent
-pip install -e ./searchagent
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+pip install -e .
 ```
 
 ## 🧩 Additional Dependencies
@@ -22,18 +22,18 @@ The built-in `file` source uses `rg` for full-text search. Install
 
 ### 🗄️ Search knowledge bases
 
-Searchagent supports knowledge bases hosted on Elasticsearch. The Elasticsearch
+SearcherKit supports knowledge bases hosted on Elasticsearch. The Elasticsearch
 client is included in the default installation. You need an active Elasticsearch
 (`version < 9.0.0`) instance to use the `elasticsearch` source. To deploy a local
 Elasticsearch knowledge base, see [Build Elasticsearch knowledge base](04-advanced-usage/03-source-advanced-usage.qmd).
 
 ### 🧠 Search with embeddings
 
-Searchagent supports embedding-based search for elasticsearch source. To deploy a local embedding model, see [Serve embedding model](./02-basics/02-source.qmd).
+SearcherKit supports embedding-based search for elasticsearch source. To deploy a local embedding model, see [Serve embedding model](./02-basics/02-source.qmd).
 
 ## 🖥️ Begin search
 
-Searchagent provides a command-line interface `searchagent ...` to use the package.
+SearcherKit provides a command-line interface `searcherkit ...` to use the package.
 The TUI and its dependencies are included in the default installation.
 
 First, prepare a config file specifying the model, tools and search sources.
@@ -81,7 +81,7 @@ For advanced configuration, see [Source and Tool](02-basics/02-source.qmd)
 
 ### 🛠️ Configure tools
 
-`SeacherKit` provides two tools out-of-the-box.
+`SearcherKit` provides two tools out-of-the-box.
 
 `search` tool takes search query(s) and an optional `top_k`. It returns a list of documents related to the query(s) with the length of `top_k`
 
@@ -138,7 +138,7 @@ agent:
 
   llm_retry_config:
     exceptions:
-      - pkg://searchagent.llm.parsers:ParsingError
+      - pkg://searcherkit.llm.parsers:ParsingError
 
 output_path: outputs/agent_history
 
@@ -152,13 +152,13 @@ logging:
     filename_template: "{sample_id}_{trace_id}.log"
 ```
 
-- See [config.yaml](../../src/searchagent/config/config.yaml) for full configuration.
-- See [searchagent.yaml](../../src/searchagent/config/searchagent.yaml) for a more detailed configuration for `elasticsearch` source.
+- See [config.yaml](../../src/searcherkit/config/config.yaml) for full configuration.
+- See [searcherkit.yaml](../../src/searcherkit/config/searcherkit.yaml) for a more detailed configuration for `elasticsearch` source.
 
 Use the `inspect` command to check if the config is legal
 
 ```bash
-searchagent inspect --config-path /path/to/config --config-name config_name
+searcherkit inspect --config-path /path/to/config --config-name config_name
 ```
 
 If the config is correct, the following message would be shown:
@@ -167,16 +167,16 @@ If the config is correct, the following message would be shown:
 Config validation passed. No issues found.
 ```
 
-Finally, to run the agent. start searchagent TUI with the command:
+Finally, to run the agent. start searcherkit TUI with the command:
 
 ```bash
-searchagent tui --config-path /path/to/config --config-name config_name
+searcherkit tui --config-path /path/to/config --config-name config_name
 ```
 
 To run agent tasks in batch, specify input dataset with `dataloader.source` and output directory with `output_path`, then run with `run` command:
 
 ```bash
-searchagent run \
+searcherkit run \
   --config-path /path/to/config \
   --config-name config_name \
   +dataloader.source /path/to/dataset.jsonl \
@@ -190,7 +190,7 @@ Finally, to evaluate the run result, use the `evaluate` command
 export OPENAI_BASE_URL="https://127.0.0.1/v1"
 export OPENAI_API_KEY=""
 
-searchagent evaluate \
+searcherkit evaluate \
     /path/to/input \
     /path/to/output \
     --max-concurrency 128 \
@@ -201,7 +201,7 @@ See [evaluate](02-basics/05-run-and-evaluation.qmd) for details
 
 ## Examples
 
-Start from `src/searchagent/config/config.yaml` or one of the packaged model configs:
+Start from `src/searcherkit/config/config.yaml` or one of the packaged model configs:
 
 | Config | Parser | Tool interface |
 | --- | --- | --- |
@@ -259,7 +259,7 @@ The agent runner will bind each session to a single endpoint to maximize cache h
 
 ### Deploy embedding database as search source
 ```bash
-searchagent plugins deploy browsecomp-plus \
+searcherkit plugins deploy browsecomp-plus \
   --dataset_path Tevatron/browsecomp-plus-corpus \
   --es_host http://127.0.0.1:9200 \
   --index_name browsecomp_plus_qwen3 \
@@ -273,7 +273,7 @@ searchagent plugins deploy browsecomp-plus \
 ### Start the agent with a bundled recipe:
 
 ```bash
-searchagent run --config-path searchagent
+searcherkit run --config-path searcherkit
 ```
 
 ## CLI Usage

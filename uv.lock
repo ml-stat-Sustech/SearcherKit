@@ -3524,7 +3524,7 @@ wheels = [
 ]
 
 [[package]]
-name = "searchagent"
+name = "searcherkit"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

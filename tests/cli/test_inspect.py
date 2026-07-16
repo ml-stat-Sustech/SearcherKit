@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from searchagent.cli import main as cli_main
+from searcherkit.cli import main as cli_main
 
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "cli"

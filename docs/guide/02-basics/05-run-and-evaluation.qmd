@@ -2,9 +2,9 @@
 title: Run and Evaluation
 ---
 
-## Execute searchagent on a dataset
+## Execute searcherkit on a dataset
 
-`searchagent run` executes a dataset concurrently while keeping one agent instance and one endpoint affinity per trajectory. Results are written incrementally, so completed samples survive an interrupted run.
+`searcherkit run` executes a dataset concurrently while keeping one agent instance and one endpoint affinity per trajectory. Results are written incrementally, so completed samples survive an interrupted run.
 
 ### Prepare input data
 
@@ -61,7 +61,7 @@ agent:
 max_concurrency: 64
 ```
 
-SearchAgent keeps a session on one endpoint to improve KV-cache reuse. Ensure every
+SearcherKit keeps a session on one endpoint to improve KV-cache reuse. Ensure every
 endpoint serves the same model and compatible generation settings.
 
 ### Retry and resume
@@ -84,8 +84,8 @@ With `overwrite_output: false` existing history files are skipped to resume the 
 ### Run a batch
 
 ```bash
-searchagent inspect --config-name websailor
-searchagent run --config-name websailor \
+searcherkit inspect --config-name websailor
+searcherkit run --config-name websailor \
   dataloader.source=data/questions.jsonl \
   max_concurrency=128 \
   output_path=outputs/websailor
@@ -115,7 +115,7 @@ failure, turn, tool-call, and timing statistics.
 
 ## Evaluation
 
-`searchagent evaluate` applies an LLM judge to saved agent trajectories. It extracts
+`searcherkit evaluate` applies an LLM judge to saved agent trajectories. It extracts
 the final answer, compares it with the reference answer, writes one judgment per
 sample, and produces aggregate accuracy statistics.
 
@@ -156,7 +156,7 @@ change the text seen by the judge and make scores incomparable.
 ### Run evaluation
 
 ```bash
-searchagent evaluate \
+searcherkit evaluate \
   outputs/websailor/history \
   outputs/websailor_eval \
   --max-concurrency 32
@@ -165,7 +165,7 @@ searchagent evaluate \
 For `<answer>...</answer>` output:
 
 ```bash
-searchagent evaluate \
+searcherkit evaluate \
   outputs/webexplorer/history \
   outputs/webexplorer_eval \
   --answer-pattern '<answer>(?P<answer>.*?)</answer>' \

@@ -1,0 +1,114 @@
+---
+title: TUI
+---
+
+## Overview
+
+The SearcherKit terminal UI (TUI) is an interactive front end for running ad hoc
+SearcherKit queries. It streams model reasoning, assistant output, and tool activity
+as the agent works, while writing the same history and trace information used by the
+runtime to disk.
+
+Each submitted query starts a fresh, independent agent run. The TUI keeps a visible
+session history for convenience, but earlier questions and answers are not added to
+the next query's model context.
+
+## Usage
+
+Start the TUI with the packaged default configuration:
+
+```bash
+searcherkit tui
+```
+
+To use a recipe or another Hydra configuration, pass its directory and config name:
+
+```bash
+searcherkit tui \
+  --config-path websailor \
+  --config-name websailor
+```
+
+Hydra-style overrides may follow the command options:
+
+```bash
+searcherkit tui \
+  --config-path websailor \
+  --config-name websailor \
+  agent.llm_client.model=Qwen3-8B
+```
+
+Type a question at the `>` prompt and press **Enter**. The interface shows the active
+model, active source, and record directory in the status bar. Model output is
+streamed into the current turn, and search or visit calls appear as tool interaction
+blocks.
+
+::: {.callout-note}
+The TUI uses the configured agent, parser, sources, and tools. Validate a recipe with
+`searcherkit inspect` before opening the TUI when you are creating or changing its
+configuration.
+:::
+
+## Commands and keyboard controls
+
+Type `/` to open the command menu. Use the arrow keys to highlight an entry, **Tab**
+to complete it, and **Enter** to run it.
+
+| Command | Behavior |
+| --- | --- |
+| `/models` | Open the available-model submenu, when model discovery succeeded |
+| `/sources` | Open the configured-source submenu |
+| `/thinking` | Show or hide assistant reasoning blocks |
+| `/tool-detail` | Switch tool interactions between preview and full detail |
+| `/clear` | Clear the live transcript while keeping the TUI open |
+| `/quit` | Exit the TUI |
+
+Selecting a model or source affects subsequent queries only. Selecting a source
+rebinds built-in `search` and `visit` tools to that source for the next independent
+run. The status bar always shows the effective selection.
+
+The main keyboard controls are:
+
+| Key | Behavior |
+| --- | --- |
+| **Enter** | Submit the current query or selected command |
+| **Ctrl+J** | Insert a newline in the input field |
+| **Up / Down** | Move through the command menu or query history |
+| **Page Up / Page Down** | Scroll the transcript |
+| **Escape** | Dismiss the command menu |
+| **Ctrl+C** | Copy selected text, cancel a running query, clear input, or exit when idle |
+
+Mouse scrolling moves through the transcript. Dragging across transcript text selects
+and copies it to the system clipboard when clipboard integration is available.
+
+Commands that change session state, clear the view, or quit are rejected while a
+query is running. Press **Ctrl+C** to cancel the query first. A cancelled run is still
+written as a record with `status: cancelled`.
+
+## Interactive run records
+
+Every query creates a JSON record plus trace logging. The default directory is
+`outputs/interactive`, or `<output_path>/interactive` when the composed configuration
+sets `output_path`. Choose another directory with `--interactive-output-path`:
+
+```bash
+searcherkit tui \
+  --config-path recipe/websailor \
+  --config-name websailor \
+  --interactive-output-path outputs/tui-sessions
+```
+
+The directory contains timestamped run records, a global log, and per-query traces:
+
+```text
+outputs/interactive/
+├── 20260715_143000_<trace-id>.json
+├── run.log
+└── traces/
+    └── <trace-id>.log
+```
+
+Each record includes the input, status, event stream, serialized message history,
+timing, and run statistics. Failed and cancelled queries are persisted as well, with
+their error information, so interactive debugging does not lose the execution
+context.

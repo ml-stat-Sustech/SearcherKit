@@ -5,7 +5,7 @@ set -euo pipefail
 export OPENAI_BASE_URL="https://www.dmxapi.cn/v1"
 export OPENAI_API_KEY=""
 
-searchagent evaluate \
+searcherkit evaluate \
     /path/to/input \
     /path/to/output \
     --max-concurrency 128 \

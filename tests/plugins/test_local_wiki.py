@@ -4,9 +4,9 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from searchagent.plugins.indexing import IndexDocument
-from searchagent.plugins.local_wiki import WikiDumpSource, preprocess_wiki_page
-from searchagent.plugins.local_wiki import deploy_elasticsearch
+from searcherkit.plugins.indexing import IndexDocument
+from searcherkit.plugins.local_wiki import WikiDumpSource, preprocess_wiki_page
+from searcherkit.plugins.local_wiki import deploy_elasticsearch
 
 
 FIXTURE_DIR = Path("tests/fixtures/plugin_sources")

@@ -7,12 +7,12 @@ from typing import Any
 
 import pytest
 
-from searchagent.sources import SourceConfig, add_source_cfg
-from searchagent.sources.file import FileSource
-from searchagent.common.json_schema import schema_from_signature
-from searchagent.tools import ToolConfig, build_tool
-from searchagent.tools.base import map_arguments, map_to_model_visible_schema
-from searchagent.tools.search import SearchTool
+from searcherkit.sources import SourceConfig, add_source_cfg
+from searcherkit.sources.file import FileSource
+from searcherkit.common.json_schema import schema_from_signature
+from searcherkit.tools import ToolConfig, build_tool
+from searcherkit.tools.base import map_arguments, map_to_model_visible_schema
+from searcherkit.tools.search import SearchTool
 
 
 ToolFactory = Callable[..., SearchTool]

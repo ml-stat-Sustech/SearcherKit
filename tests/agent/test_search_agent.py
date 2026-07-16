@@ -12,15 +12,15 @@ from openai import APITimeoutError
 sys.path.append(str(Path(__file__).resolve().parents[1] / "llm"))
 from mock_endpoints import upstream_parsed_endpoint  # noqa: E402
 
-from searchagent.agent import SearchAgent, SearchAgentConfig
-from searchagent.agent.search_agent import LLMContextError
-from searchagent.common.messages import ToolMessage
-from searchagent.common.retry import RetryPolicy
-from searchagent.llm.base import ClientConfig
-from searchagent.llm.openai_client import OpenAIClient
-from searchagent.llm.parsers import ParserConfig
-from searchagent.llm.parsers.upstream import UpstreamParser
-from searchagent.tools import BaseTool
+from searcherkit.agent import SearchAgent, SearchAgentConfig
+from searcherkit.agent.search_agent import LLMContextError
+from searcherkit.common.messages import ToolMessage
+from searcherkit.common.retry import RetryPolicy
+from searcherkit.llm.base import ClientConfig
+from searcherkit.llm.openai_client import OpenAIClient
+from searcherkit.llm.parsers import ParserConfig
+from searcherkit.llm.parsers.upstream import UpstreamParser
+from searcherkit.tools import BaseTool
 
 
 class RetryableToolError(RuntimeError):

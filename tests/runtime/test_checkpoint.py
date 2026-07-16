@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from searchagent.runtime.checkpoint import (
+from searcherkit.runtime.checkpoint import (
     CHECKPOINT_VERSION,
     CheckpointConfig,
     CheckpointCorruptionError,

@@ -11,13 +11,13 @@ import httpx
 import pytest
 import respx
 
-from searchagent.common.retry import RetryConfig, RetryPolicy
-from searchagent.common.errors import RecoverableError
-from searchagent.sources import SourceConfig, add_source_cfg
-from searchagent.sources.file import FileSource
-from searchagent.tools import SummarizerConfig, ToolConfig, build_tool
-from searchagent.tools.summarizer import Summarizer
-from searchagent.tools.visit import VisitTool
+from searcherkit.common.retry import RetryConfig, RetryPolicy
+from searcherkit.common.errors import RecoverableError
+from searcherkit.sources import SourceConfig, add_source_cfg
+from searcherkit.sources.file import FileSource
+from searcherkit.tools import SummarizerConfig, ToolConfig, build_tool
+from searcherkit.tools.summarizer import Summarizer
+from searcherkit.tools.visit import VisitTool
 
 
 BASE_URL = "https://example.test/v1"
@@ -116,7 +116,7 @@ def _add_file_source(name: str) -> None:
 def _retry_config(max_tries: int) -> RetryConfig:
     return RetryConfig(
         max_tries=max_tries,
-        exceptions=["pkg://searchagent.tools.summarizer:SummaryError"],
+        exceptions=["pkg://searcherkit.tools.summarizer:SummaryError"],
         jitter=None,
         factor=0.0,
     )
@@ -226,7 +226,7 @@ def test_summary(tool_factory: ToolFactory) -> None:
         content, extensions = result
         prompt = captured_payload["messages"][0]["content"]
         assert "confirm runtime wiring" in prompt
-        assert "SearchAgent provides a pluggable runtime for source-backed tools." in prompt
+        assert "SearcherKit provides a pluggable runtime for source-backed tools." in prompt
         assert content == (
             "The useful information for query confirm runtime wiring as follows:\n\n"
             "Evidence in page:\n"

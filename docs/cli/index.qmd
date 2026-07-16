@@ -2,43 +2,43 @@
 title: CLI Reference
 ---
 
-The SearchAgent command-line interface is used to run configurations, evaluate outputs, inspect configurations, and manage plugins.
+The SearcherKit command-line interface is used to run configurations, evaluate outputs, inspect configurations, and manage plugins.
 
-## `searchagent run`
+## `searcherkit run`
 
-Run a SearchAgent configuration.
+Run a SearcherKit configuration.
 
 ```bash
-searchagent run
-searchagent run --config-path recipe/webexplorer --config-name webexplorer
+searcherkit run
+searcherkit run --config-path recipe/webexplorer --config-name webexplorer
 ```
 
 Additional arguments are passed as Hydra-style overrides:
 
 ```bash
-searchagent run \
+searcherkit run \
   --config-path recipe/webexplorer \
   --config-name webexplorer \
   agent.llm_client.model=demo
 ```
 
-## `searchagent evaluate`
+## `searcherkit evaluate`
 
 Evaluate saved run records using an LLM judge.
 
 ```bash
-searchagent evaluate outputs/webexplorer outputs/webexplorer_eval \
+searcherkit evaluate outputs/webexplorer outputs/webexplorer_eval \
   --max-concurrency 32
 ```
 
 The evaluation process uses the `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables.
 
-## `searchagent inspect`
+## `searcherkit inspect`
 
 Recursively validate configuration fields against their corresponding structured config types without running the agent.
 
 ```bash
-searchagent inspect \
+searcherkit inspect \
   --config-path webexplorer \
   --config-name webexplorer
 ```
@@ -48,24 +48,24 @@ searchagent inspect \
 Hydra-style overrides are also supported:
 
 ```bash
-searchagent inspect \
+searcherkit inspect \
   --config-path websailor \
   --config-name websailor \
   agent.llm_client.model=demo
 ```
 
-## `searchagent plugins`
+## `searcherkit plugins`
 
 List plugins or run plugin deployment tools.
 
 ```bash
-searchagent plugins list
+searcherkit plugins list
 ```
 
 Deploy a local Wiki index:
 
 ```bash
-searchagent plugins deploy local-wiki \
+searcherkit plugins deploy local-wiki \
   --wiki_dump_path data/wiki.xml.bz2 \
   --es_host http://127.0.0.1:9200 \
   --index_name wiki_local \
@@ -75,7 +75,7 @@ searchagent plugins deploy local-wiki \
 Deploy BrowseComp Plus:
 
 ```bash
-searchagent plugins deploy browsecomp-plus \
+searcherkit plugins deploy browsecomp-plus \
   --dataset_path data/browsecomp_plus_corpus.jsonl \
   --es_host http://127.0.0.1:9200 \
   --index_name browsecomp_plus \

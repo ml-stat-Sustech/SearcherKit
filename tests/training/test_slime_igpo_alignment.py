@@ -3,19 +3,19 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from searchagent.training.slime.actor_igpo import (
+from searcherkit.training.slime.actor_igpo import (
     actor_igpo_reward_metrics,
     build_actor_igpo_score_requests,
     prepare_actor_igpo_reward_tensor,
     scatter_actor_igpo_rewards,
 )
-from searchagent.training.slime.client import concat_prompt_ids_with_parent
-from searchagent.training.slime.rollout import (
+from searcherkit.training.slime.client import concat_prompt_ids_with_parent
+from searcherkit.training.slime.rollout import (
     _build_igpo_token_rewards,
     areal_outcome_reward_filter,
     areal_outcome_reward_post_process,
 )
-from searchagent.training.slime.step_level_loss import compute_step_level_ppo_kl_and_advantages
+from searcherkit.training.slime.step_level_loss import compute_step_level_ppo_kl_and_advantages
 from slime.agent.trajectory import TurnRecord, merge_turns
 
 
@@ -155,11 +155,11 @@ def test_prepare_actor_igpo_reward_tensor_slices_for_context_parallel(monkeypatc
         return values[1:3]
 
     monkeypatch.setattr(
-        "searchagent.training.slime.actor_igpo._context_parallel_world_size",
+        "searcherkit.training.slime.actor_igpo._context_parallel_world_size",
         lambda: 2,
     )
     monkeypatch.setattr(
-        "searchagent.training.slime.actor_igpo._slice_log_prob_with_cp",
+        "searcherkit.training.slime.actor_igpo._slice_log_prob_with_cp",
         fake_slice_log_prob_with_cp,
     )
 

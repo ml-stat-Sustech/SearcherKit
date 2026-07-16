@@ -16,7 +16,9 @@ parser: google
 # ---------------------
 # Use runtime introspection for more accurate documentation (default: true)
 # Set to false if your package has cyclic alias issues (e.g., PyO3/Rust bindings)
-dynamic: true
+# Nested public modules are documented directly; static resolution avoids
+# requiring compatibility re-exports from the top-level package.
+dynamic: false
 
 # User Guide
 # ----------
@@ -26,7 +28,7 @@ user_guide: docs/guide
 
 # Custom Sections
 # ---------------
-# SearchAgent uses argparse rather than Click, so its CLI reference is a
+# SearcherKit uses argparse rather than Click, so its CLI reference is a
 # hand-written custom section instead of Great Docs' automatic CLI section.
 sections:
   - title: CLI
@@ -79,18 +81,18 @@ reference:
   - title: Classes
     desc: Main classes provided by the package
     contents:
-    - agent.SearchAgent
-    - agent.SingleTurnAgent
-    - llm.AnthropicClient
-    - llm.OpenAIClient
-    - llm.TongyiDeepResearchParser
-    - llm.UpstreamParser
-    - llm.WebSailorParser
-    - tools.MCPTool
-    - tools.SearchTool
-    - tools.VisitTool
-    - sources.FileSource
-    - common.dataloader.GenericDataLoader
+      - agent.SearchAgent
+      - agent.SingleTurnAgent
+      - llm.AnthropicClient
+      - llm.OpenAIClient
+      - llm.TongyiDeepResearchParser
+      - llm.UpstreamParser
+      - llm.WebSailorParser
+      - tools.MCPTool
+      - tools.SearchTool
+      - tools.VisitTool
+      - sources.FileSource
+      - common.dataloader.GenericDataLoader
 
   - title: Config
     desc: Config definitions
@@ -147,7 +149,7 @@ reference:
   - title: Errors
     desc: Error types
     contents:
-      - common.errors.SearchAgentError
+      - common.errors.SearcherKitError
       - common.errors.RecoverableError
       - common.errors.FatalError
       - common.errors.LLMError

@@ -11,18 +11,18 @@ import httpx
 import pytest
 import respx
 
-from searchagent.common.retry import RetryConfig, RetryPolicy
-from searchagent.common.errors import RecoverableError
-from searchagent.sources import SourceConfig, add_source_cfg
-from searchagent.sources.file import FileSource
-from searchagent.tools import SummarizerConfig, ToolConfig, build_tool
-from searchagent.tools.search import SearchTool
-from searchagent.tools.summarizer import Summarizer
+from searcherkit.common.retry import RetryConfig, RetryPolicy
+from searcherkit.common.errors import RecoverableError
+from searcherkit.sources import SourceConfig, add_source_cfg
+from searcherkit.sources.file import FileSource
+from searcherkit.tools import SummarizerConfig, ToolConfig, build_tool
+from searcherkit.tools.search import SearchTool
+from searcherkit.tools.summarizer import Summarizer
 
 
 BASE_URL = "https://example.test/v1"
-SUMMARY_EVIDENCE = "SearchAgent evidence"
-SUMMARY_TEXT = "SearchAgent summary"
+SUMMARY_EVIDENCE = "SearcherKit evidence"
+SUMMARY_TEXT = "SearcherKit summary"
 
 ToolFactory = Callable[..., SearchTool]
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
@@ -116,7 +116,7 @@ def _add_file_source(name: str) -> None:
 def _retry_config(max_tries: int) -> RetryConfig:
     return RetryConfig(
         max_tries=max_tries,
-        exceptions=["pkg://searchagent.tools.summarizer:SummaryError"],
+        exceptions=["pkg://searcherkit.tools.summarizer:SummaryError"],
         jitter=None,
         factor=0.0,
     )
