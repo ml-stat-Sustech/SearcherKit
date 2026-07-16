@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from searchagent.runtime.interactive_selection import infer_active_source
@@ -24,6 +25,14 @@ from searchagent.interfaces.tui.ui.view_state import TuiViewState
 from searchagent.runtime.interactive import InteractiveQueryConfig
 
 
+@dataclass(slots=True)
+class _ChatLayout:
+    key: tuple[int, int, bool, bool]
+    parts: list[tuple[str, str]]
+    lines: list[list[tuple[str, str]]]
+    plain_lines: list[str]
+
+
 class SearchAgentTui:
     """Thin prompt-toolkit shell for the SearchAgent interactive TUI."""
 
@@ -41,6 +50,7 @@ class SearchAgentTui:
         self.view_state = TuiViewState()
         self.chat_history = ChatHistory()
         self.renderer = ChatRenderer()
+        self._chat_layout_cache: _ChatLayout | None = None
         self._model_options = list(model_options or [])
         self._model_discovery_message = model_discovery_message
 
@@ -230,19 +240,40 @@ class SearchAgentTui:
     # --- rendering -----------------------------------------------------------
 
     def _render_chat_full(self) -> list[tuple[str, str]]:
-        return self.renderer.render_full(
+        return self._chat_layout().parts
+
+    def _render_chat_plain_lines(self) -> list[str]:
+        return self._chat_layout().plain_lines
+
+    def _chat_layout(self) -> _ChatLayout:
+        chat_width = self.layout_geometry.chat_view_width()
+        key = (
+            self.chat_history.revision,
+            chat_width,
+            self.view_state.show_thinking,
+            self.view_state.show_tool_detail,
+        )
+        cached = self._chat_layout_cache
+        if cached is not None and cached.key == key:
+            return cached
+        parts = self.renderer.render_full(
             self.chat_history.entries(),
-            chat_width=self.layout_geometry.chat_view_width(),
+            chat_width=chat_width,
             show_thinking=self.view_state.show_thinking,
             show_tool_detail=self.view_state.show_tool_detail,
         )
-
-    def _render_chat_plain_lines(self) -> list[str]:
-        return self.renderer.render_plain_lines(self._render_chat_full())
+        lines = _formatted_lines(parts)
+        layout = _ChatLayout(
+            key=key,
+            parts=parts,
+            lines=lines,
+            plain_lines=["".join(text for _, text in line) for line in lines],
+        )
+        self._chat_layout_cache = layout
+        return layout
 
     def render_chat_viewport(self) -> list[tuple[str, str]]:
-        full = self._render_chat_full()
-        lines = _formatted_lines(full)
+        lines = self._chat_layout().lines
         view_height = self.chat_view_height()
         scroll_top = self._current_chat_scroll_top(
             content_lines=len(lines),
@@ -265,7 +296,7 @@ class SearchAgentTui:
 
     def render_scrollbar(self) -> list[tuple[str, str]]:
         view_height = self.chat_view_height()
-        content_lines = len(self._render_chat_plain_lines())
+        content_lines = len(self._chat_layout().lines)
         if content_lines <= view_height:
             return [("class:separator", " \n" * max(1, view_height))]
         thumb_start, thumb_size = self.layout_geometry.scrollbar_thumb(
@@ -343,7 +374,7 @@ class SearchAgentTui:
         )
 
     def _scroll_chat(self, delta: int) -> None:
-        lines = self._render_chat_plain_lines()
+        lines = self._chat_layout().lines
         view_height = self.chat_view_height()
         content_lines = len(lines)
         self.view_state.chat_scroll_top = self.layout_geometry.next_scroll_top(

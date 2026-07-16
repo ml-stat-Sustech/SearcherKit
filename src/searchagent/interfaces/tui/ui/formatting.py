@@ -3,10 +3,17 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from searchagent.runtime.trace import preview_query
+
+try:
+    from prompt_toolkit.utils import get_cwidth as _get_cwidth
+except ImportError:
+    _get_cwidth = None
+
+_prompt_toolkit_cwidth: Callable[[str], int] | None = _get_cwidth
 
 
 def _format_json_compact(value: Any, *, max_chars: int) -> str:
@@ -118,16 +125,16 @@ def _extract_final_answer_body(text: str) -> str:
 
 
 def _char_display_width(char: str) -> int:
-    try:
-        from prompt_toolkit.utils import get_cwidth
-    except ImportError:
-        if unicodedata.combining(char):
-            return 0
-        return 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
-    return max(0, get_cwidth(char))
+    if _prompt_toolkit_cwidth is not None:
+        return max(0, _prompt_toolkit_cwidth(char))
+    if unicodedata.combining(char):
+        return 0
+    return 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
 
 
 def _display_width(text: str) -> int:
+    if _prompt_toolkit_cwidth is not None:
+        return max(0, _prompt_toolkit_cwidth(text))
     return sum(_char_display_width(char) for char in text)
 
 

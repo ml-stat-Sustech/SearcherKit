@@ -1024,6 +1024,89 @@ def test_tui_detail_scroll_can_move_up_and_return_to_tail() -> None:
     assert app.view_state.chat_scroll_top is None
 
 
+def test_tui_reuses_chat_layout_until_render_inputs_change(monkeypatch) -> None:
+    app = _make_app()
+    app.chat_history.clear()
+    app.chat_history.append(
+        role="tool-interaction",
+        title="visit",
+        body="result",
+        status="completed",
+    )
+    render_calls = 0
+    original_render_full = app.renderer.render_full
+
+    def counted_render_full(*args, **kwargs):
+        nonlocal render_calls
+        render_calls += 1
+        return original_render_full(*args, **kwargs)
+
+    monkeypatch.setattr(app.renderer, "render_full", counted_render_full)
+
+    app.render_chat_viewport()
+    app.render_scrollbar()
+    app._render_chat_plain_lines()
+    app._scroll_chat(-1)
+
+    assert render_calls == 1
+
+    app.view_state.show_tool_detail = True
+    app.render_scrollbar()
+    assert render_calls == 2
+
+    app.chat_history.append(role="assistant", title="Assistant", body="new content")
+    app.render_chat_viewport()
+    assert render_calls == 3
+
+
+def test_tui_chat_layout_cache_invalidates_when_terminal_width_changes(monkeypatch) -> None:
+    app = _make_app()
+    render_calls = 0
+    original_render_full = app.renderer.render_full
+
+    class FakeOutput:
+        columns = 40
+
+        def get_size(self):
+            class Size:
+                rows = 30
+                columns = FakeOutput.columns
+
+            return Size()
+
+    class FakeApp:
+        output = FakeOutput()
+
+    def counted_render_full(*args, **kwargs):
+        nonlocal render_calls
+        render_calls += 1
+        return original_render_full(*args, **kwargs)
+
+    app._pt_app = FakeApp()
+    monkeypatch.setattr(app.renderer, "render_full", counted_render_full)
+
+    app.render_chat_viewport()
+    FakeOutput.columns = 100
+    app.render_chat_viewport()
+
+    assert render_calls == 2
+
+
+def test_display_width_uses_prompt_toolkit_for_whole_string(monkeypatch) -> None:
+    import searchagent.interfaces.tui.ui.formatting as formatting
+
+    calls: list[str] = []
+
+    def fake_cwidth(text: str) -> int:
+        calls.append(text)
+        return len(text)
+
+    monkeypatch.setattr(formatting, "_prompt_toolkit_cwidth", fake_cwidth)
+
+    assert formatting._display_width("whole string") == 12
+    assert calls == ["whole string"]
+
+
 def test_slash_command_menu_filters_by_prefix_and_moves_selection() -> None:
     menu = SlashCommandMenuState([
         TuiCommand("models", "Choose the Active Model", kind="submenu"),

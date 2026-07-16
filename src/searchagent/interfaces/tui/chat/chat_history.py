@@ -16,9 +16,19 @@ class ChatHistory:
 
     def __init__(self) -> None:
         self._entries: list[ConversationEntry] = []
+        self._revision = 0
+
+    @property
+    def revision(self) -> int:
+        """Return a token that changes whenever visible history may have changed."""
+        return self._revision
+
+    def _touch(self) -> None:
+        self._revision += 1
 
     def clear(self) -> None:
         self._entries = []
+        self._touch()
 
     def set_intro(
         self,
@@ -43,6 +53,7 @@ class ChatHistory:
                 style="class:meta",
             )
         ]
+        self._touch()
 
     def append(
         self,
@@ -56,6 +67,7 @@ class ChatHistory:
         self._entries.append(
             ConversationEntry(role=role, title=title, body=body, style=style, status=status)
         )
+        self._touch()
 
     def append_selection_entry(self, prefix: str, label: str) -> None:
         title = f"Active {prefix.capitalize()}"
@@ -69,6 +81,7 @@ class ChatHistory:
             self._entries[-1] = entry
         else:
             self._entries.append(entry)
+        self._touch()
 
     def append_run_error(self, title: str, body: str) -> None:
         self._entries.append(
@@ -80,6 +93,7 @@ class ChatHistory:
                 status="failed",
             )
         )
+        self._touch()
 
     def append_tui_command_error(self, body: str) -> None:
         self._entries.append(
@@ -91,6 +105,7 @@ class ChatHistory:
                 status="failed",
             )
         )
+        self._touch()
 
     def append_cancelled(self, message: str = "") -> None:
         self._entries.append(
@@ -103,13 +118,13 @@ class ChatHistory:
                 status="failed",
             )
         )
+        self._touch()
 
     def append_event(self, event: LiveEvent) -> None:
         kind = event.kind
-        if kind == "run_started":
+        if kind in {"run_started", "run_completed", "assistant_turn_started"}:
             return
-        if kind == "run_completed":
-            return
+        self._touch()
         if kind == "run_cancelled":
             self.append_cancelled(event.message)
         elif kind == "run_failed":
@@ -118,9 +133,6 @@ class ChatHistory:
             self._entries.append(
                 ConversationEntry(role="user", title="USER", body=event.message, style="class:user")
             )
-        elif kind == "assistant_turn_started":
-            # No-op: thinking entries are created lazily when thinking deltas arrive.
-            return
         elif kind == "assistant_delta":
             data = event.data
             delta = str(data.get("delta") or event.message or "")
