@@ -1,0 +1,251 @@
+---
+title: Batch Run and Evaluate
+---
+
+SearcherKit provides an asynchronous batch runtime for running SearchAgent over a
+dataset and an LLM-based evaluator for scoring the saved results. This guide covers
+the complete workflow:
+
+1. Prepare a dataset.
+2. Configure and run the agent.
+3. Monitor or resume the batch.
+4. Evaluate the saved trajectories.
+
+## Prepare the input data
+
+The default data loader reads JSONL or Parquet files. Set the source format and the
+fields that contain the question and reference answer:
+
+```yaml
+dataloader:
+  source: data/questions.jsonl
+  fmt: jsonl
+  input_key: question
+  answer_key: answer
+  max_items: null
+```
+
+A JSONL record can be as small as:
+
+```json
+{"question": "Who designed the first compiler?", "answer": "Grace Hopper"}
+```
+
+Set `max_items` to a small number while testing a new configuration, then change it
+to `null` for the full dataset.
+
+## Configure Agent
+
+### Configure concurrency
+
+Large batches can overload an inference server or a search backend. Each concurrency
+setting protects a different resource:
+
+| Setting | Limits |
+| --- | --- |
+| Top-level `max_concurrency` | Concurrent agent tasks |
+| `agent.llm_client.concurrency_limit` | In-flight LLM requests |
+| Source `es_max_concurrency` | Elasticsearch requests |
+| Source `embedding_max_concurrency` | Embedding requests |
+| Source `web_max_concurrency` | Web search and fetch requests |
+| Tool summarizer `max_concurrency` | Summarizer requests |
+
+Start with conservative values and increase them while monitoring queue depth,
+latency, rate-limit responses, and retries. A higher limit does not necessarily
+increase throughput.
+
+### Configure LLM endpoint
+
+For self-hosted LLM endpoint, to encourage KV cache hit. Avoid using data parallel and let SearcherKit handle the scheduling between inference instances.
+
+To do this, run as many independent server instances as the hardware allows instead of running one instance with a large `dp` value. Assign each instance the smallest GPU group that can hold the model. Expose every instance as a separate endpoint and let SearcherKit distribute agent sessions across them.
+
+For example, for one `dp=2, tp=2` deployment uses four GPUs: two data-parallel replicas, each spanning two GPUs with tensor parallelism. Run those replicas as **two** independent `dp=1, tp=2` server instances and configure both endpoints:
+
+```yaml
+agent:
+  llm_client:
+    type: openai
+    model: Qwen3-8B
+    api_key: EMPTY
+    base_url:
+      - http://127.0.0.1:8001/v1
+      - http://127.0.0.1:8002/v1
+    concurrency_limit: 256
+
+max_concurrency: 64
+```
+List all their endpoints under `base_url`. SearcherKit keeps each agent session on one endpoint to improve KV-cache reuse.
+
+Every endpoint must serve the same model with compatible generation settings.
+
+### Configure retries and resume behavior
+
+Retries apply at three boundaries:
+
+- `agent.llm_retry_config` retries recoverable LLM and parsing failures.
+- `agent.tool_retry_config` retries recoverable tool failures.
+- `task_retry_policy` retries an entire dataset sample.
+
+The packaged `searcherkit` configuration also enables checkpoint-based resume. Keep
+`checkpoint.resume: true` and rerun the same command after an interruption. Existing
+sample outputs are preserved unless `overwrite_output` is enabled.
+
+## Run the Agent
+
+First inspect the composed configuration. This catches invalid fields and Hydra
+overrides before the batch starts:
+
+```bash
+searcherkit inspect --config-name searcherkit \
+  dataloader.source=data/questions.jsonl \
+  output_path=outputs/searcherkit
+```
+
+Then run the batch with the same overrides:
+
+```bash
+searcherkit run --config-name searcherkit \
+  dataloader.source=data/questions.jsonl \
+  max_concurrency=128 \
+  output_path=outputs/searcherkit
+```
+
+Use `--debug` before the Hydra overrides for verbose global logging:
+
+```bash
+searcherkit run --debug --config-name searcherkit \
+  dataloader.source=data/questions.jsonl \
+  output_path=outputs/searcherkit
+```
+
+For long-running jobs, monitor `summary.json`, `run.log`, the per-trace logs, and the
+queue depth of each external service.
+
+
+### The run output
+
+Executing `searcherkit run` creates output in the following structure:
+
+```text
+outputs/searcherkit/
+├── history/
+│   ├── 000000.json
+│   └── 000001.json
+├── traces/
+│   ├── 000000_<trace-id>.log
+│   └── 000001_<trace-id>.log
+├── run.log
+└── summary.json
+```
+
+Each file in `history/` contains the input, reference answer, complete message
+history, per-sample statistics, and timing data. `summary.json` reports aggregate completion, failure, turn, tool-call, and timing statistics. `traces/` contains per-trajectory logs while `run.log` contains global log.
+
+## Evaluate the saved trajectories
+
+
+### Evaluate
+
+`searcherkit evaluate` extracts the final answer from each saved trajectory, asks an
+LLM judge to compare it with the reference answer, writes one judgment per sample,
+and produces aggregate accuracy statistics.
+
+### Check the trajectory format
+
+Pass the run's `history/` directory as the evaluator input. Each JSON record must
+contain:
+
+- `input`: the original question;
+- `answer`: the reference answer;
+- `history`: a non-empty list of messages.
+
+The last history item should be an assistant message. Otherwise, the evaluator
+records the sample as an incorrect `No valid response` without calling the judge.
+
+### Configure the judge
+
+The evaluator uses an OpenAI-compatible endpoint:
+
+::: {.panel-tabset}
+### Bash
+
+```bash
+export OPENAI_API_KEY=EMPTY
+export OPENAI_BASE_URL=http://127.0.0.1:8001/v1
+```
+
+### PowerShell
+
+```powershell
+$env:OPENAI_API_KEY = "EMPTY"
+$env:OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
+```
+:::
+
+### Match the final-answer format
+
+The evaluator extracts the first answer inside `\boxed{...}` by default. The
+packaged `searcherkit` configuration instead asks SearchAgent to emit
+`<answer>...</answer>`, so pass a matching regular expression when evaluating its
+output:
+
+```bash
+--answer-pattern '<answer>(?P<answer>.*?)</answer>'
+```
+
+The expression must contain a named `answer` group. If it does not match, or the
+captured answer is empty, the evaluator sends the complete final assistant response
+to the judge. Use the same extraction pattern across runs to keep scores comparable.
+
+### Run the evaluation
+
+```bash
+searcherkit evaluate \
+  outputs/searcherkit/history \
+  outputs/searcherkit-eval \
+  --answer-pattern '<answer>(?P<answer>.*?)</answer>' \
+  --max-concurrency 32
+```
+
+`--max-concurrency` limits simultaneous judge requests. Choose a value within the
+judge server's capacity. If omitted, the evaluator submits all pending records
+concurrently.
+
+The evaluator retries invalid JSON and invalid judge schemas. A valid judge response
+must contain exactly these fields: `extracted_final_answer`, `correct_answer`,
+`reasoning`, `correct`, and `confidence`.
+
+### Resume an evaluation
+
+Each output filename matches its input filename. Existing output files are skipped,
+so rerunning the same command resumes an interrupted evaluation. Delete an individual
+result file only when you need to evaluate that sample again.
+
+Failed requests are logged and counted in `summary.json`; they do not prevent other
+samples from completing.
+
+### Inspect the evaluation output
+
+```text
+outputs/searcherkit-eval/
+├── 000000.json
+├── 000001.json
+└── summary.json
+```
+
+Each result contains the question, evaluated response, reference answer,
+judge-extracted answer, reasoning, correctness, and confidence. The serialized
+reasoning key is currently `judege_reasoning` for compatibility with existing runtime
+output.
+
+`summary.json` includes:
+
+- `accuracy`, `correct`, and `incorrect` over valid result files;
+- `avg_confidence` reported by the judge;
+- `source_total`, `submitted`, and `skipped_existing`;
+- `invalid` result files and `failed_requests` from the current invocation.
+
+LLM-judge scores are not ground truth. Before comparing models, inspect extraction
+failures, low-confidence decisions, and a sample of both correct and incorrect
+judgments.

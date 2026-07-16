@@ -1,0 +1,58 @@
+---
+title: Extend SearcherKit with Custom Modules
+---
+
+Add an extension at the narrowest interface that owns the new behavior. This
+keeps provider transport, model formatting, retrieval, and tool presentation
+independently testable.
+
+## Choose an extension point
+
+| Need | Extend |
+| --- | --- |
+| Call another model API | `searcherkit.llm.Client` |
+| Support another model chat or tool format | `searcherkit.llm.parsers.Parser` |
+| Search or fetch from another backend | `searcherkit.sources.DataSource` |
+| Expose another model-callable action | `searcherkit.tools.BaseTool` |
+| Add dataset or index deployment logic | `searcherkit.plugins` |
+| Add a batch or training integration | `searcherkit.runtime` or `searcherkit.training` |
+
+Do not place provider HTTP calls in parsers, retrieval code in CLI commands, or
+benchmark-specific implementation in packaged config defaults.
+
+## Construction contract
+
+Public runtime components should support normal Python parameters and their
+structured config or factory path. A custom source or tool can be selected with
+`type: custom` and a real import target:
+
+```yaml
+agent:
+  sources:
+    - type: custom
+      name: internal_corpus
+      target: pkg://my_project.sources:InternalSource
+  tools:
+    - type: custom
+      name: lookup
+      target: file://my_project.tools:LookupTool
+      extra:
+        source_name: internal_corpus
+```
+
+## Test the contract
+
+Extension tests should cover, when applicable:
+
+1. construction through direct parameters and through config or factory paths;
+2. functional inputs, outputs, payloads, parsing, state, and public errors;
+3. retry success after transient failures and final error propagation after all
+   attempts fail;
+4. resource initialization and shutdown.
+
+Catch concrete exception types and classify failures as recoverable or fatal at
+the boundary where that distinction is known.
+
+For config, CLI, recipe, or plugin entry-point changes, also run a compose,
+`--help`, or import check in addition to targeted tests. Keep the API Reference
+accurate by updating Google-style docstrings on the public implementation.

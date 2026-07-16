@@ -1,10 +1,75 @@
 ---
-title: "🚀 Quick Start"
+title: Getting started with SearcherKit
 ---
 
-## 📦 Install
+SearcherKit is a modular runtime for building, running, evaluating, and
+training search agents. It connects a language model to retrieval sources and
+model-visible tools, while keeping agent logic, provider APIs, parsing,
+execution, and observability as separate components.
 
-To install searcherkit, directly clone the repository and install:
+Use this page to install SearcherKit and run your first local-file search. You
+can then follow a task guide or explore the system concepts in more detail.
+
+## How SearcherKit works
+
+```text
+dataset or TUI
+      |
+      v
+ AgentRunner ---- checkpoint, logs, per-task retry
+      |
+      v
+ SearchAgent ---- turn, token, and time budgets
+      |
+      +---- Parser <----> LLM Client <----> model endpoint
+      |
+      +---- Tool ----> Source ----> file, web, or Elasticsearch
+      |
+      `---- Tool ----> MCP server
+```
+
+At the center of this flow are three modules with different responsibilities:
+
+- **Sources** connect SearcherKit to information. A source knows how to search
+  and fetch documents from one backend, such as a local directory, the web, or
+  an Elasticsearch index. It returns the same provider-neutral document types
+  regardless of the backend.
+- **Tools** turn capabilities into actions the model can call. A tool defines
+  the model-visible name, description, and input schema, then delegates the
+  work to one or more sources (or to an external service such as MCP). This
+  keeps storage details out of the model's interface.
+- **The LLM** drives the reasoning loop. The LLM client sends requests to the
+  model endpoint, while the parser translates messages and tool calls between
+  the model's format and SearcherKit's internal format. The model decides
+  whether to call a tool, inspect its result, continue searching, or return a
+  final answer.
+
+A typical turn therefore forms a loop:
+
+```text
+question -> LLM -> tool call -> Tool -> Source -> documents
+              ^                                  |
+              `----------- tool result <---------'
+```
+
+Configuration defines how these modules are assembled. Under `agent`, each
+source is declared with a `type`, a unique `name`, and backend-specific
+settings. Each source-backed tool refers to one or more of those names, which
+explicitly defines where the tool retrieves information. The `llm_client` and
+`parser` entries select the model endpoint and the message/tool-call format
+used to communicate with it.
+
+At startup, SearcherKit composes the YAML configuration and uses factories to
+construct the configured LLM client, parser, sources, and tools. It then gives
+the tool definitions to the LLM and keeps the instantiated sources behind the
+tools. In other words, config is not just a list of settings: it is the wiring
+that determines which model can call which tools, which sources those tools can
+reach, and which limits govern the agent loop. The same wiring is used whether
+the run starts from the TUI or a dataset.
+
+## Install SearcherKit
+
+Clone the repository and install the package in editable mode:
 
 ```bash
 git clone https://github.com/ml-stat-Sustech/searcherkit.git
@@ -12,270 +77,139 @@ cd searcherkit
 pip install -e .
 ```
 
-## 🧩 Additional Dependencies
+Confirm that the command is available:
 
-### 📁 Search local files
+```bash
+searcherkit --help
+```
 
-The built-in `file` source uses `rg` for full-text search. Install
-[ripgrep](https://github.com/BurntSushi/ripgrep) and make sure `rg` is on
-`PATH` before using file-backed search tools.
+Local-file search uses [ripgrep](https://github.com/BurntSushi/ripgrep) for
+full-text matching. Install it separately and verify that `rg` is on `PATH`:
 
-### 🗄️ Search knowledge bases
+```bash
+rg --version
+```
 
-SearcherKit supports knowledge bases hosted on Elasticsearch. The Elasticsearch
-client is included in the default installation. You need an active Elasticsearch
-(`version < 9.0.0`) instance to use the `elasticsearch` source. To deploy a local
-Elasticsearch knowledge base, see [Build Elasticsearch knowledge base](04-advanced-usage/03-source-advanced-usage.qmd).
+The default installation includes the Elasticsearch and Anthropic clients.
+Some deployment and training workflows require additional services or optional
+dependencies; their task guides list the relevant requirements.
 
-### 🧠 Search with embeddings
+## Run your first search
 
-SearcherKit supports embedding-based search for elasticsearch source. To deploy a local embedding model, see [Serve embedding model](./02-basics/02-source.qmd).
+The packaged `file_search` configuration connects an OpenAI-compatible model
+endpoint to `search` and `visit` tools over a local directory.
 
-## 🖥️ Begin search
+Set the model endpoint and the directory to search:
 
-SearcherKit provides a command-line interface `searcherkit ...` to use the package.
-The TUI and its dependencies are included in the default installation.
+::: {.panel-tabset}
+### Bash
 
-First, prepare a config file specifying the model, tools and search sources.
+```bash
+export LLM_MODEL="YOUR_MODEL"
+export LLM_API_KEY="YOUR_API_KEY"
+export LLM_BASE_URL="https://your-endpoint.example/v1"
+export FILE_SEARCH_ROOT="./docs"
+```
 
-### 🤖 Configure LLM Endpoints
+### PowerShell
 
-Configure the LLM model name, endpoint URL, and API key under the
-`agent.llm_client` section. The Anthropic client is included in the default
-installation; specify `type: anthropic` to connect to an Anthropic-compatible
-endpoint.
+```powershell
+$env:LLM_MODEL = "YOUR_MODEL"
+$env:LLM_API_KEY = "YOUR_API_KEY"
+$env:LLM_BASE_URL = "https://your-endpoint.example/v1"
+$env:FILE_SEARCH_ROOT = ".\docs"
+```
+:::
+
+Start the interactive terminal UI:
+
+```bash
+searcherkit tui --config-name file_search
+```
+
+The agent can now search files under `FILE_SEARCH_ROOT`, open relevant results,
+and use their contents to answer your questions.
+
+See [Search files with SearcherKit](01-searching/01-search-files.qmd) for the
+complete workflow, output locations, and access restrictions.
+
+## Understand the configuration
+
+A SearcherKit run is described by YAML. The smallest useful configuration
+connects four parts:
+
+- an LLM client that communicates with the model endpoint;
+- a parser that converts messages and tool calls;
+- one or more sources that retrieve documents;
+- tools that expose selected source operations to the model.
 
 ```{.yaml filename="config.yaml"}
 agent:
   llm_client:
-    type: openai # openai or anthropic
-    model: MODEL_NAME # specify the model name, e.g. "qwen3-8b"
-    api_key: API_KEY # specify the API key
-    base_url: BASE_URL # specify the base URL
-```
-
-### 🔎 Configure search sources
-
-Configure the search sources to specify where you want to search from.
-
-```{.yaml filename="config.py"}
-agent:
+    type: openai
+    model: ${oc.env:LLM_MODEL}
+    api_key: ${oc.env:LLM_API_KEY,EMPTY}
+    base_url: ${oc.env:LLM_BASE_URL}
+  parser:
+    type: upstream
   sources:
     - type: file
-      name: file_source
-      root_path: /path/to/search/from  # specify the root path for file search
-
-    - type: elasticsearch
-      name: elasticsearch_source
-      hosts: ["http://127.0.0.1:9200"]
-      index: elasticsearch_index
-      es_max_concurrency: 1024
-
-    - type: web
-      name: web_source
-      serper_api_key: API_KEY
-      jina_api_key: API_KEY
-```
-
-For advanced configuration, see [Source and Tool](02-basics/02-source.qmd)
-
-### 🛠️ Configure tools
-
-`SearcherKit` provides two tools out-of-the-box.
-
-`search` tool takes search query(s) and an optional `top_k`. It returns a list of documents related to the query(s) with the length of `top_k`
-
-`visit` tool takes document_id(s) and an optional `goal` string. It returns the full text of the document(s) with provided id(s). If `summarizer` is provided, it returns a summary of the document about the topic provided in `goal`. (See [Summerizer](./02-basics/03-tool.qmd))
-
-To use the tools, specify which source the tools will search & visit from
-
-Use `type: custom` and specify `target` for custom tools. On making new custom tools see [Custom Tools](04-advanced-usage/01-custom-modules.qmd)
-
-```{.yaml filename="config.yaml"}
-agent:
+      name: project_docs
+      root_path: ./docs
   tools:
     - type: search
       name: search
-      source:
-        - file_1
-
+      source: [project_docs]
     - type: visit
       name: visit
-      source:
-        - file_1
+      source: [project_docs]
+  system_prompt: >-
+    Search for evidence when needed and give a concise final answer.
+  max_turn: 10
 
-    - type: custom
-      target: pkg://import.string.to::ToolClass # or file://file.path.to::ToolClass
-      extra:
-        param1: value1
+output_path: outputs/first-run
 ```
 
+Here, both tools refer to the source by its unique name, `project_docs`. The
+`upstream` parser expects the provider to return structured tool calls. Models
+that encode tool calls in text may require a model-specific parser.
 
-### ▶️ Start the agent
-
-Save the configuration file to any directory. E.g. `/path/to/config/config_name.yaml`. Here's an example of a full config.
-
-```{.yaml filename="/path/to/config/config_name.yaml"}
-agent:
-  sources:
-    - type: file
-      name: file_source
-      root_path: /path/to/search/from
-
-  tools:
-    - type: search
-      name: search
-      source:
-        - file_1
-
-    - type: visit
-      name: visit
-      source:
-        - file_1
-
-  # specify system prompt for the agent
-  system_prompt: "Use the available search and visit tools when they can verify the answer. Put the final answer in <answer></answer> tags."
-
-  llm_retry_config:
-    exceptions:
-      - pkg://searcherkit.llm.parsers:ParsingError
-
-output_path: outputs/agent_history
-
-logging:
-  global_file: ${output_path}/run.log
-  trace:
-    enabled: true
-    dir: ${output_path}/traces
-    format: text
-    level: DEBUG
-    filename_template: "{sample_id}_{trace_id}.log"
-```
-
-- See [config.yaml](../../src/searcherkit/config/config.yaml) for full configuration.
-- See [searcherkit.yaml](../../src/searcherkit/config/searcherkit.yaml) for a more detailed configuration for `elasticsearch` source.
-
-Use the `inspect` command to check if the config is legal
+If this file is saved as `configs/demo/config.yaml`, validate and run it with:
 
 ```bash
-searcherkit inspect --config-path /path/to/config --config-name config_name
+searcherkit inspect --config-path configs/demo --config-name config
+searcherkit tui --config-path configs/demo --config-name config
 ```
 
-If the config is correct, the following message would be shown:
-
-```
-Config validation passed. No issues found.
-```
-
-Finally, to run the agent. start searcherkit TUI with the command:
+Hydra-style overrides let you change values without editing the file:
 
 ```bash
-searcherkit tui --config-path /path/to/config --config-name config_name
+searcherkit tui --config-path configs/demo --config-name config \
+  agent.llm_client.model=Qwen3-8B \
+  output_path=outputs/qwen3
 ```
 
-To run agent tasks in batch, specify input dataset with `dataloader.source` and output directory with `output_path`, then run with `run` command:
+Read [LLM integration](03-customizing/02-LLM-integration.qmd) for clients and
+parsers, and [Sources and tools](03-customizing/03-sources-and-tools.qmd) for
+retrieval and model-visible tool schemas.
 
-```bash
-searcherkit run \
-  --config-path /path/to/config \
-  --config-name config_name \
-  +dataloader.source /path/to/dataset.jsonl \
-  +output_path /output/directory
-```
+## Choose what to do next
 
-See [Run and Evaluate](./02-basics/05-run-and-evaluation.qmd) for details
+| Goal | Next page |
+| --- | --- |
+| Search a local directory interactively | [Search files with SearcherKit](01-searching/01-search-files.qmd) |
+| Search the public web interactively | [Search the web with SearcherKit](<01-searching/02-search-web copy.qmd>) |
+| Search an Elasticsearch knowledge base | [Search with Elasticsearch](01-searching/03-search-with-elasticsearch.qmd) |
+| Run a dataset and evaluate its answers | [Run and evaluate](01-searching/04-run-and-evaluate.qmd) |
+| Generate data or train a model | [Training overview](02-training/01-training-overview.qmd) |
+| Understand the runtime components | [System architecture](03-customizing/01-searcherkit-architecture.qmd) |
+| Connect a model and choose a message format | [LLM integration](03-customizing/02-LLM-integration.qmd) |
+| Configure retrieval and model-visible tools | [Sources and tools](03-customizing/03-sources-and-tools.qmd) |
+| Learn the interactive controls and records | [Interactive TUI](04-interface/02-interactive-tui.qmd) |
+| Configure retries, logs, limits, and resume behavior | [Retrying and logging](03-customizing/04-retrying-and-logging.qmd) |
+| Add a provider, parser, source, or tool | [Custom Modules](03-customizing/05-custom-modules.qmd) |
+| Look up commands and flags | [CLI reference](04-interface/01-cli-reference.qmd) |
 
-Finally, to evaluate the run result, use the `evaluate` command
-```bash
-export OPENAI_BASE_URL="https://127.0.0.1/v1"
-export OPENAI_API_KEY=""
-
-searcherkit evaluate \
-    /path/to/input \
-    /path/to/output \
-    --max-concurrency 128 \
-    --answer-pattern '\\boxed\{(?P<answer>[^}]*)\}'
-```
-
-See [evaluate](02-basics/05-run-and-evaluation.qmd) for details
-
-## Examples
-
-Start from `src/searcherkit/config/config.yaml` or one of the packaged model configs:
-
-| Config | Parser | Tool interface |
-| --- | --- | --- |
-| `webexplorer.yaml` | `upstream` | Batched `search(queries)` and `browse(url, query)` |
-| `websailor.yaml` | `websailor` | Batched `search(query)` and `visit(url, goal)` |
-| `tongyi_deepresearch.yaml` | `tongyi_deep_research` | Batched `search(query)` and `visit(url, goal)` |
-
-These files contain deployment-specific model paths, endpoints, index names, and high concurrency defaults. Copy one and replace those values for your environment or use hydra-style command-line overrides. The essential fields are the client, parser, sources, tools, data, and output directory.
-
-<!-- ### Elasticsearch
-
-Use docker:
-```bash
-local_path=/path/to/es/data
-docker run \
-  --name es-wiki \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  -v ${local_path}:/usr/share/elasticsearch/data \
-  -d elasticsearch:8.19.5
-
-curl http://127.0.0.1:9200
-```
-
-Without docker:
-
-- [Download](https://www.elastic.co/downloads/past-releases/elasticsearch-8-19-16)
-
-- [Offical Doc](https://www.elastic.co/downloads/elasticsearch)
-
-### Embedding Model
-
-For deploying a local embedding model, we recommend using [Text Embeddings Inference](https://github.com/huggingface/text-embeddings-inference), A blazing fast inference solution for text embeddings models.
-
-### LLM Model
-
-We recommend using [vLLM](https://github.com/vllm-project/vllm) or [SGLang](https://github.com/sgl-project/sglang) to deploy your model.
-
-For better KV Cache hit rate, we recommand replace data parallel config with dedicated server setup.
-
-For example, for a `dp=2, tp=2` setup, start 2 seperate servers with `dp=1, tp=2`.
-
-Pass the corresponding endpoint URLs in a list to the agent config:
-
-```yaml
-agent:
-  llm_client:
-    base_url:
-      - http://127.0.0.1:8001
-      - http://127.0.0.1:8002
-```
-
-The agent runner will bind each session to a single endpoint to maximize cache hits.
-
-### Deploy embedding database as search source
-```bash
-searcherkit plugins deploy browsecomp-plus \
-  --dataset_path Tevatron/browsecomp-plus-corpus \
-  --es_host http://127.0.0.1:9200 \
-  --index_name browsecomp_plus_qwen3 \
-  --dense-vector \
-  --model_name /models/Qwen3-Embedding-8B \
-  --embedding_dim 4096 \
-  --prompt_strategy qwen3 \
-  --overwrite
-```
-
-### Start the agent with a bundled recipe:
-
-```bash
-searcherkit run --config-path searcherkit
-```
-
-## CLI Usage
-
-See [CLI Reference](cli/index.qmd) for details on the command-line interface. -->
+The API Reference is generated from package docstrings. Use it for exact Python
+signatures after the guide has identified the component that owns the behavior
+you want to use or extend.

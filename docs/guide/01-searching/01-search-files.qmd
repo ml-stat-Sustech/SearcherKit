@@ -1,0 +1,104 @@
+---
+title: Search Files
+---
+
+SearcherKit provides a out-of-the-box local file search pipeline for agents to answer questions about files in a local directory, with the config `file_search`.
+
+```text
+question -> LLM -> search -> ripgrep matches
+                -> visit  -> complete file content
+                -> LLM -> final answer
+```
+
+To use it, you should
+- Install the required dependencies
+- Configure enviroment variables for LLM and file search root
+- Run searchagent tui with the `file_search` config.
+
+## Install SearcherKit
+
+Install the package
+
+```bash
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+pip install -e .
+```
+SearcherKit uses [ripgrep](https://github.com/BurntSushi/ripgrep) to search through local files. Install with the [Installation Guide](https://github.com/BurntSushi/ripgrep#installation). 
+
+To ensure that riggrep is available, run:
+```bash
+rg --version
+```
+
+## Configure the environment
+
+SearcherKit with the `file_search` config uses the following environment variables.
+
+| Variable | Meaning |
+| --- | --- |
+| `LLM_MODEL` | Model name sent to the endpoint |
+| `LLM_API_KEY` | Endpoint credential; use `EMPTY` only when the server permits it |
+| `LLM_BASE_URL` | OpenAI-compatible API base URL |
+| `FILE_SEARCH_ROOT` | Directory that `search` and `visit` may access; defaults to `./docs` |
+
+For a one-time setup, define the variables in the terminal session where you
+will start SearcherKit. The values remain available until that terminal is
+closed.
+
+::: {.panel-tabset}
+### Bash
+
+```bash
+export LLM_MODEL="YOUR_MODEL"
+export LLM_API_KEY="YOUR_API_KEY"
+export LLM_BASE_URL="https://your-endpoint.example/v1"
+export FILE_SEARCH_ROOT="./docs"
+```
+
+### PowerShell
+
+```powershell
+$env:LLM_MODEL = "YOUR_MODEL"
+$env:LLM_API_KEY = "YOUR_API_KEY"
+$env:LLM_BASE_URL = "https://your-endpoint.example/v1"
+$env:FILE_SEARCH_ROOT = ".\docs"
+```
+:::
+
+<details>
+<summary>Click to expand for persistant env var configuration</summary>
+
+To keep the configuration across terminal sessions, create a `.env` file in
+the directory where you run SearcherKit:
+
+```dotenv
+LLM_MODEL=YOUR_MODEL
+LLM_API_KEY=YOUR_API_KEY
+LLM_BASE_URL=https://your-endpoint.example/v1
+FILE_SEARCH_ROOT=./docs
+```
+
+SearcherKit loads `.env` by default. Use `--env-file path/to/another.env` to load a
+different file. Variables already defined in the terminal take precedence over
+values in the dotenv file. 
+
+</details>
+
+## Start to search files
+
+```bash
+searcherkit tui --config-name file_search
+```
+
+The source searches exact text fragments with smart case. Search results use
+paths relative to `FILE_SEARCH_ROOT`; the visit tool reads those relative paths.
+Paths outside the configured root are rejected.
+
+Use `/tool-detail` to inspect tool arguments and results. Interactive records,
+the global log, and trace logs are written under
+`outputs/file-search-tui/interactive`.
+
+For general controls and record behavior, see
+[Use the Interactive TUI](../04-interface/02-interactive-tui.qmd). For the complete
+source/tool model, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).

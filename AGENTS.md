@@ -16,6 +16,18 @@
   transports.
 - Always check `great-docs.yml` in any code changes for documentation configuration and consistency.
 
+## Documentation Rules
+- Use repository-relative links for links between project documentation files.
+  Do not replace internal documentation links with GitHub, deployed-site, or
+  machine-local absolute URLs.
+- Prefix ordered documentation page filenames with a two-digit sequence and a
+  hyphen, for example `01-search-files.qmd` and `02-search-web.qmd`. Keep the
+  sequence consistent with the intended sidebar and reading order.
+- Keep `index.qmd` as the unnumbered directory entry-point exception. Number
+  the other pages in that directory when their relative order matters.
+- After renaming a documentation page, update every relative link and search
+  the repository for the stale filename before building the docs.
+
 ## Testing Rules
 - New tests should cover three concerns when they apply: config initialization,
   functional behavior, and retry behavior.

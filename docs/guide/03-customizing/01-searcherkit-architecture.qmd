@@ -1,0 +1,119 @@
+---
+title: SearcherKit Architecture
+---
+
+SearcherKit separates model communication, agent reasoning, retrieval, tool
+presentation, and batch execution. This separation is the central design idea
+behind both the code and its configuration.
+
+## Execution flow
+
+```text
+dataset or TUI
+      |
+      v
+ AgentRunner ---- checkpoint, logs, per-task retry
+      |
+      v
+ SearchAgent ---- turn, token, and time budgets
+      |
+      +---- Parser <----> LLM Client <----> model endpoint
+      |
+      +---- Tool ----> Source ----> file, web, or Elasticsearch
+      |
+      `---- Tool ----> MCP server
+```
+
+`AgentRunner` owns workload concerns such as concurrency, checkpointing, output
+files, and whole-task retries. `SearchAgent` owns one trajectory: it formats the
+conversation, calls the model, dispatches tools, and asks for a final answer as
+configured limits approach.
+
+## Core concepts
+
+### LLM client and parser
+
+The client performs provider or inference-server I/O. The parser translates
+between SearcherKit messages and a model's chat or tool-call format. Keeping
+them separate lets an OpenAI-compatible endpoint serve models with different
+prompt and tool-call conventions.
+
+Use the `upstream` parser when the provider returns native tool calls. Use a
+model-specific parser when tool calls are encoded in model text.
+
+### Source and tool
+
+A source retrieves documents. A tool is the model-visible action that uses a
+source or another service. Multiple tools can share a source, and a tool can
+present a deliberately small JSON Schema even when its implementation accepts
+more parameters.
+
+Built-in source families are local files, web search and fetch, and
+Elasticsearch. Built-in tool families include search, visit, multi-source
+variants, summarization, and MCP-backed tools.
+
+### Config and factories
+
+Runtime objects support structured configuration as well as normal Python
+construction. Hydra composes YAML for CLI workflows; factory functions convert
+the resulting config into clients, parsers, sources, and tools. Custom modules
+are referenced by their real import paths rather than compatibility aliases.
+
+### Outputs and traces
+
+Batch execution writes one durable history record per sample, trace logs for
+individual trajectories, a global run log, and aggregate summary data. These
+artifacts are the handoff between running, evaluation, debugging, conversion,
+and training workflows.
+
+### Training integrations
+
+Training reuses the same agent, parser, tools, sources, and trajectory format as
+normal inference. `searcherkit.training` adapts those runtime components to a
+training framework.
+
+```text
+AReaL or Slime
+      |
+      v
+ Rollout worker ---- submit task, provide LLM endpoint, collect token sequence.
+      |
+      v
+ SearchAgent ---- turn, token, and time budgets
+      |
+      ...
+```
+
+The supervised fine-tuning path converts saved trajectories into the target
+dataset format and launches training from structured persistant config. 
+
+The reinforcement-learning integrations run `SearchAgent` inside framework-owned
+rollout workers, preserving conversation and tool behavior while translating
+framework requests, responses, rewards, and trajectory metadata at the
+integration boundary.
+
+Framework-specific adapters live under `searcherkit.training.areal` and
+`searcherkit.training.slime`; reusable training-agent and reward logic stays in
+`searcherkit.training`. Shell launchers and cluster-specific defaults live in
+`scripts/`. See the [training overview](../02-training/01-training-overview.qmd),
+[SFT guide](../02-training/04-sft.qmd), [AReaL guide](../02-training/02-rl-areal.qmd),
+and [slime guide](../02-training/03-rl-slime.qmd) for configuration and launch
+details.
+
+## Ownership map
+
+| Concern | Owning package |
+| --- | --- |
+| Reasoning loop and final-answer control | `searcherkit.agent` |
+| Provider API transport | `searcherkit.llm` |
+| Model message and tool-call formats | `searcherkit.llm.parsers` |
+| Search backend adapters | `searcherkit.sources` |
+| Model-callable actions | `searcherkit.tools` |
+| Batch, checkpoints, traces, evaluation | `searcherkit.runtime` |
+| Config composition and user commands | `searcherkit.cli` |
+| Dataset conversion and index deployment | `searcherkit.plugins` |
+| SFT and RL integrations | `searcherkit.training` and `scripts/` |
+
+This ownership map should also guide documentation changes: explain a concept
+once in the guide, keep command syntax in the CLI reference, and keep exact
+Python signatures in the generated API Reference.

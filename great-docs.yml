@@ -23,18 +23,14 @@ dynamic: false
 # User Guide
 # ----------
 # Great Docs copies these pages into the generated User Guide and builds its
-# navbar/sidebar entries from their front matter.
-user_guide: docs/guide
+# navbar/sidebar entries from their front matter. The guide is organized by
+# reader journey: start, understand, follow task guides, extend, and operate.
+user_guide: null
 
-# Custom Sections
-# ---------------
-# SearcherKit uses argparse rather than Click, so its CLI reference is a
-# hand-written custom section instead of Great Docs' automatic CLI section.
 sections:
-  - title: CLI
-    dir: docs/cli
+  - title: Tutorial
+    dir: docs/guide
     index: false
-    navbar_after: User Guide
 
 # API Discovery Settings
 # ----------------------

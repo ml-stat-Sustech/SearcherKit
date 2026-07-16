@@ -1,7 +1,7 @@
 [project]
 name = "searcherkit"
 version = "0.1.0"
-description = "Pluggable search agent runtime for offline web sources and multiple LLM providers."
+description = "Pluggable search agent runtime for multiple sources and LLM providers."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

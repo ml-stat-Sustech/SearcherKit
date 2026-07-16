@@ -1,0 +1,55 @@
+---
+title: Retrying and Logging
+---
+
+Search-agent runs combine several independent services and long-lived tasks.
+Reliable operation depends on bounding each failure domain and preserving enough
+evidence to resume or diagnose a run.
+
+## Retry at the correct boundary
+
+SearcherKit has separate retry scopes:
+
+| Scope | Use for |
+| --- | --- |
+| LLM retry | Transient provider failures or recoverable parse failures |
+| Tool retry | Temporary source, MCP, or tool failures |
+| Task retry | Restarting an entire trajectory |
+
+Only list exceptions that are genuinely recoverable. Authentication errors,
+invalid model names, malformed permanent config, and deterministic schema
+errors should surface immediately. Test both eventual success and exhausted
+retry behavior.
+
+## Bound agent execution
+
+Configure turn, token, and time budgets together. Reminder prompts near those
+limits should tell the model to stop using tools and produce the required final
+answer format. A caller may still enforce a hard timeout around the whole run.
+
+## Preserve observability
+
+For production-scale runs, keep:
+
+- a global log for lifecycle and aggregate failures;
+- one trace log per trajectory;
+- structured message histories and timing data;
+- checkpoint state and a run summary;
+- model, dataset, config, and code revisions outside the output directory.
+
+Avoid logging secrets or complete credentials. Prefer stable sample and trace
+identifiers so a summary failure can be followed into the relevant history and
+trace.
+
+## Diagnose in layers
+
+1. Run `searcherkit inspect` to rule out config shape errors.
+2. Use `searcherkit tui` or a one-item dataset to test one trajectory.
+3. Check model and retrieval services independently.
+4. Read the per-trace log to identify the failing boundary.
+5. Increase concurrency gradually while watching queue depth, latency, retries,
+   and failure rate.
+
+For batch regressions, separate task completion from answer quality. A run can
+complete successfully while producing invalid tool calls, repeated searches,
+truncated context, or an answer format the evaluator cannot extract.

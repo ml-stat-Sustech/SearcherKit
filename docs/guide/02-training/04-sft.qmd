@@ -1,0 +1,60 @@
+---
+title: Supervised Fine-Tuning
+---
+
+SearcherKit's SFT path converts agent trajectories into MS-Swift records and
+launches `swift sft` from validated structured YAML. Keep trajectory generation,
+conversion, training, serving, and evaluation as separate stages.
+
+Install ms-swift according to [its manual](https://swift.readthedocs.io/zh-cn/latest/GetStarted/SWIFT-installation.html). Install SearcherKit into the same training environment.
+
+## Convert trajectories
+
+```bash
+searcherkit plugins convert \
+  data/openseeker.jsonl \
+  outputs/sft/ms_swift.jsonl
+```
+
+Use `--max-records` for a small validation set. Inspect several rows before
+training and confirm that system, user, assistant, tool-call, and tool-result
+messages are formatted correctly for the selected model template.
+
+See `scripts/sft/sft_convert.sh` for conversion setting references.
+
+## Configure MS-Swift
+
+Edit `scripts/sft/sft_training.yaml`. Put semantic training choices in YAML:
+
+- model and chat or agent template;
+- loss scale and full or adapter training mode;
+- maximum context and sequence-parallel settings;
+- batch size, accumulation, learning rate, and epochs;
+- DeepSpeed, checkpoint, logging, and reporting settings.
+
+MS-Swift flags belong under `backend.extra_args`, check [MS-Swift Documentation](https://swift.readthedocs.io/zh-cn/latest/Instruction/Command-line-parameters.html) for details
+
+## Validate before launch
+
+```bash
+python -m searcherkit.training.sft \
+  --config scripts/sft/sft_training.yaml \
+  --dry-run
+```
+
+The dry run resolves the YAML and prints the generated `swift sft` command. Run
+it in the same dedicated environment that contains MS-Swift, the intended CUDA
+toolchain, and SearcherKit.
+
+## Train
+
+```bash
+SFT_MODEL=/models/Qwen3-8B \
+SFT_TRAIN_DATASET=outputs/sft/ms_swift.jsonl \
+SFT_OUTPUT_DIR=outputs/sft/model \
+bash scripts/sft/sft_train.sh
+```
+
+The wrapper prepares repository paths and CUDA library locations before calling
+`python -m searcherkit.training.sft`. Treat its host-specific defaults as
+overridable deployment settings, not portable model configuration.

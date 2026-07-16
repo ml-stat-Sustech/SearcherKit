@@ -1,0 +1,71 @@
+# Interactive public-web search with Serper and Jina Reader.
+defaults:
+  - _self_
+
+agent:
+  llm_client:
+    type: openai
+    model: ${oc.env:LLM_MODEL}
+    api_key: ${oc.env:LLM_API_KEY,EMPTY}
+    base_url: ${oc.env:LLM_BASE_URL}
+    default_kwargs:
+      temperature: 0.2
+      max_completion_tokens: 4096
+
+  parser:
+    type: upstream
+
+  sources:
+    - type: web
+      name: public_web
+      serper_api_key: ${oc.env:SERPER_API_KEY}
+      serper_endpoint: https://google.serper.dev/search
+      serper_timeout: 30
+      jina_api_key: ${oc.env:JINA_API_KEY,null}
+      jina_base_url: https://r.jina.ai/
+      jina_timeout: 60
+      web_max_concurrency: 8
+      web_retry_config:
+        max_tries: 3
+
+  tools:
+    - type: search
+      name: search
+      description: Search the public web for current and verifiable information.
+      source: [public_web]
+      response_char_limit: 20000
+    - type: visit
+      name: visit
+      description: Read a web page from a URL returned by search.
+      source: [public_web]
+      response_char_limit: 50000
+
+  system_prompt: |
+    You answer questions using public web evidence.
+    Search when the answer depends on external, current, or verifiable facts.
+    Visit the most relevant result pages before drawing conclusions.
+    Compare multiple sources when one source may be incomplete or biased.
+    State uncertainty when the available evidence is insufficient.
+
+  max_turn: 16
+  max_tokens: 32768
+  max_tokens_prompt_margin: 4096
+  max_tokens_prompt: |
+    The context limit is close. Stop calling tools and answer from the evidence already collected.
+  llm_retry_config:
+    max_tries: 3
+  tool_retry_config:
+    max_tries: 3
+    exceptions:
+      - pkg://searcherkit.common.errors:RecoverableError
+
+output_path: outputs/web-search-tui
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"

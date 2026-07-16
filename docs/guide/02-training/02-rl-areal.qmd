@@ -1,0 +1,63 @@
+---
+title: RL with AReaL
+---
+
+The AReaL integration uses SearcherKit for agent conversation, tool execution,
+limits, errors, and trajectory metadata. AReaL owns distributed scheduling,
+rollout generation, optimization, checkpoints, and experiment tracking.
+
+## Prerequisites
+
+Install AReaL according to [its manual](https://areal-ai.io/en/tutorial/installation.html), then install SearcherKit
+into that environment. Every participating node must be able to access the
+model, tokenizer, dataset, name-resolution storage, output paths, and retrieval
+services referenced by the config.
+
+The main entry points are:
+
+| Algorithm | Python entry point | Example Script |
+| --- | --- | --- |
+| GRPO | `searcherkit.training.areal.train_dist` | `scripts/areal/train_dist_areal.sh` |
+| IGPO | `searcherkit.training.areal.train_igpo` | `scripts/areal/train_dist_areal_igpo.sh` |
+
+## Configure the rollout agent
+
+Start with `src/searcherkit/config/training/train_areal.yaml` for GRPO or
+`train_dist_areal_igpo.yaml` for IGPO. 
+
+Configure `workflow.agent` and `eval_workflow.agent` to define agents. For other configurations, check [AReaL Manual](https://areal-ai.io/en/cli_reference.html)
+
+## Run training
+
+The launch scripts contain cluster-specific defaults. Override hardware related configuration, paths, and experiment name.
+
+```bash
+bash scripts/areal/train_dist_areal.sh \
+    cluster.n_nodes=2 \
+    actor.backend=fsdp:d4c2 \
+    rollout.backend=sglang:d8 \
+    rollout.max_concurrent_rollouts=256 \
+    actor.path=Qwen/Qwen3-8B \
+    trial_name=experiment_name \
+    train_dataset.path=/path/to/dataset \
+```
+
+## IGPO
+
+IGPO recipe contains SearcherKit's reproduction of the [IGPO reward](https://arxiv.org/abs/2510.14967). Run with the `searcherkit.training.areal.train_igpo` entry point or start from the `train_dist_areal_igpo.sh`
+
+```bash
+bash scripts/areal/train_dist_areal_igpo.sh \
+  actor.path=/models/Qwen3-8B \
+  ...
+```
+
+## Failure and reward accounting
+
+During the training, retrying should only be carried for external, recoverable error like tool invoking timeouts. Handle model related errors like `LLMError` and return a low score to allow RL engine to punish such action.
+
+Uncaught error, like exhausted retries and fatal errors would cause the rollout trajectory to be discarded. If such problem should be processed, caught the exception within workflow.
+
+Monitor rollout completion, exception categories, outcome and format scores,
+overlength and truncation penalties, tool calls, repeated queries, context
+tokens, KL, clipping, entropy, loss, and gradient norm.

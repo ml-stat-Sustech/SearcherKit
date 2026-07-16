@@ -1,0 +1,99 @@
+---
+title: LLM Integration
+---
+
+SearcherKit separates model transport from model format. The LLM client talks
+to a provider or inference server; the parser translates messages and tool
+calls between that provider-facing representation and SearcherKit's internal
+message types.
+
+## Request and response path
+
+```text
+SearchAgent history
+    -> Parser.to_model()
+    -> Client.complete_with_usage()
+    -> provider response
+    -> Parser.from_model()
+    -> assistant and tool-call messages
+```
+
+This split matters when two models use the same OpenAI-compatible endpoint but
+different chat templates or textual tool-call formats. Change the parser when
+the format changes; change the client when API transport changes.
+
+## Built-in clients
+
+| `type` | Use case |
+| --- | --- |
+| `openai` | OpenAI and OpenAI-compatible chat completion endpoints |
+| `anthropic` | Anthropic-compatible message endpoints |
+| `vllm` or `vllm_server` | vLLM integration selected through the client factory |
+
+```yaml
+agent:
+  llm_client:
+    type: openai
+    model: Qwen3-8B
+    api_key: ${oc.env:LLM_API_KEY,EMPTY}
+    base_url: ${oc.env:LLM_BASE_URL,http://127.0.0.1:8001/v1}
+    concurrency_limit: 128
+    default_kwargs:
+      temperature: 0.6
+      top_p: 0.95
+      max_completion_tokens: 8192
+```
+
+`default_kwargs` are included in each generation request. Keep provider-only
+options here rather than teaching the parser about HTTP payload details.
+
+`base_url` may also be a list of compatible endpoints. SearcherKit keeps a
+session on one endpoint to improve cache locality; all listed endpoints must
+serve the same model and generation contract.
+
+## Built-in parsers
+
+| `type` | Use case |
+| --- | --- |
+| `upstream` | Provider-native tool calls |
+| `tongyi_deep_research` | Tongyi DeepResearch textual tool-call format |
+| `webexplorer` | WebExplorer prompt and response format |
+| `websailor` | WebSailor prompt and response format |
+
+```yaml
+agent:
+  parser:
+    type: upstream
+```
+
+Use `upstream` when the inference server parses model tool-call text and returns
+structured provider tool calls. For vLLM or SGLang deployments, configure the
+server's tool-call and reasoning parsers to match the model template.
+
+## Streaming
+
+Interactive execution enables `stream_llm` and consumes client stream chunks.
+Parsers may provide a live-delta splitter so reasoning and final content can be
+displayed separately without changing the stored final message. Batch execution
+continues to use the complete response interface.
+
+## Retry boundaries
+
+Configure retry for failures that can succeed on another attempt, such as
+temporary provider failures or a nondeterministic `ParsingError`:
+
+```yaml
+agent:
+  llm_retry_config:
+    max_tries: 5
+    max_time: 3600
+    exceptions:
+      - pkg://searcherkit.llm.parsers:ParsingError
+```
+
+Invalid credentials, unknown model names, and permanent request errors should
+surface immediately. When retries are exhausted, the final concrete error is
+propagated to the agent or task boundary.
+
+To implement a new transport or model format, see
+[Custom Moduoles](../03-customizing/05-custom-modules.qmd).

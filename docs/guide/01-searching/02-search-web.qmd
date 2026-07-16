@@ -1,0 +1,115 @@
+---
+title: Search Webpages
+---
+
+SearcherKit provides a web search pipeline for agents to answer questions about web pages, with the config `file_search`. It search the public web through
+Google Serper and read result pages through Jina Reader. The LLM selects
+queries and URLs, then synthesizes an answer from visited evidence.
+
+```text
+question -> LLM -> search -> Serper results
+                -> visit  -> Jina Reader page text
+                -> LLM -> final answer
+```
+
+To use it, you should 
+- Abtain API keys for required services
+- Configure enviroment variables for LLM and file search root
+- Run searchagent tui with the `web_search` config.
+
+## Install SearcherKit
+
+Install the package 
+
+```bash
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+pip install -e .
+```
+
+#### Prepare required services
+
+Prepare an LLM endpoint, a [Serper](https://serper.dev/) API key, and optionally
+a Jina Reader API key. The machine must be able to reach the LLM endpoint,
+`google.serper.dev`, and `r.jina.ai`.
+
+## Configure the environment
+
+SearcherKit with `web_search` config take the following enviroment variables.
+
+| Variable | Meaning |
+| --- | --- |
+| `LLM_MODEL` | Model name sent to the endpoint |
+| `LLM_API_KEY` | LLM endpoint credential |
+| `LLM_BASE_URL` | OpenAI-compatible API base URL |
+| `SERPER_API_KEY` | Required credential for web search |
+| `JINA_API_KEY` | Optional credential for Jina Reader |
+
+For a one-time setup, define the variables in the terminal session where you
+will start SearcherKit. The values remain available until that terminal is
+closed.
+
+::: {.panel-tabset}
+### Bash
+
+```bash
+export LLM_MODEL="YOUR_MODEL"
+export LLM_API_KEY="YOUR_API_KEY"
+export LLM_BASE_URL="https://your-endpoint.example/v1"
+export SERPER_API_KEY="YOUR_SERPER_API_KEY"
+export JINA_API_KEY="YOUR_JINA_API_KEY"
+```
+
+### PowerShell
+
+```powershell
+$env:LLM_MODEL = "YOUR_MODEL"
+$env:LLM_API_KEY = "YOUR_API_KEY"
+$env:LLM_BASE_URL = "https://your-endpoint.example/v1"
+$env:SERPER_API_KEY="YOUR_SERPER_API_KEY"
+$env:JINA_API_KEY="YOUR_JINA_API_KEY"
+```
+:::
+
+<details>
+<summary>Click to expand for persistant env var configuration</summary>
+
+To keep the configuration across terminal sessions, create a `.env` file in
+the directory where you run SearcherKit:
+
+```dotenv
+LLM_MODEL=YOUR_MODEL
+LLM_API_KEY=YOUR_API_KEY
+LLM_BASE_URL=https://your-endpoint.example/v1
+SERPER_API_KEY="YOUR_SERPER_API_KEY"
+JINA_API_KEY="YOUR_JINA_API_KEY"
+```
+
+SearcherKit loads `.env` by default. Use `--env-file path/to/another.env` to load a
+different file. Variables already defined in the terminal take precedence over
+values in the dotenv file. 
+</details>
+
+## Start the TUI
+
+```bash
+searcherkit tui --config-name web_search
+```
+
+Use `/tool-detail` to inspect search queries, selected URLs, and page text.
+Interactive records and traces are written under
+`outputs/web-search-tui/interactive`.
+
+For general controls and record behavior, see
+[Use the Interactive TUI](../04-interface/02-interactive-tui.qmd). For web source
+fields, retry behavior, and tool schemas, see
+[Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
+
+## Common failuares and solutions
+
+| Symptom | Check |
+| --- | --- |
+| 401 or 403 from search | `SERPER_API_KEY` and account permissions |
+| 401 or 403 while visiting | `JINA_API_KEY` or Jina access policy |
+| Model rejects tool calls | Model chat template and server tool-call parser |
+| Timeout or connection failure | Endpoint URL, DNS, proxy, firewall, and service health |

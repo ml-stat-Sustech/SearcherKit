@@ -1,0 +1,63 @@
+# Interactive local-file search with an OpenAI-compatible model.
+defaults:
+  - _self_
+
+agent:
+  llm_client:
+    type: openai
+    model: ${oc.env:LLM_MODEL}
+    api_key: ${oc.env:LLM_API_KEY,EMPTY}
+    base_url: ${oc.env:LLM_BASE_URL}
+    default_kwargs:
+      temperature: 0.2
+      max_completion_tokens: 4096
+
+  parser:
+    type: upstream
+
+  sources:
+    - type: file
+      name: local_files
+      root_path: ${oc.env:FILE_SEARCH_ROOT,./docs}
+      file_encoding: utf-8
+
+  tools:
+    - type: search
+      name: search
+      description: Search local files for an exact text fragment or keyword.
+      source: [local_files]
+      response_char_limit: 20000
+    - type: visit
+      name: visit
+      description: Read a local file returned by search using its relative path.
+      source: [local_files]
+      response_char_limit: 40000
+
+  system_prompt: |
+    You answer questions about the configured local files.
+    Search before answering when the files may contain relevant evidence.
+    Use visit to read the most relevant files instead of relying only on snippets.
+    Do not invent file contents or paths.
+
+  max_turn: 12
+  max_tokens: 32768
+  max_tokens_prompt_margin: 4096
+  max_tokens_prompt: |
+    The context limit is close. Stop calling tools and answer from the evidence already collected.
+  llm_retry_config:
+    max_tries: 3
+  tool_retry_config:
+    max_tries: 3
+    exceptions:
+      - pkg://searcherkit.common.errors:RecoverableError
+
+output_path: outputs/file-search-tui
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"

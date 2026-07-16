@@ -1,0 +1,133 @@
+---
+title: Sources and Tools
+---
+
+A source is a retrieval adapter. A tool is a model-visible action. Keeping them
+separate lets the same corpus support search, visit, or a custom interaction
+without putting model-facing schemas into the storage layer.
+
+## Source contract
+
+Every `DataSource` provides asynchronous `search`, `fetch`, and `close`
+operations. Sources return provider-neutral `Document` and `SearchResult`
+objects.
+
+| `type` | Backend |
+| --- | --- |
+| `file` | Full-text search and file reads under a local root; requires `rg` |
+| `web` | Serper search and Jina page fetching |
+| `elasticsearch` | BM25, vector, or hybrid retrieval |
+| `custom` | A project-defined `DataSource` class |
+
+Each source needs a unique name. Source-backed tools refer to these names:
+
+```yaml
+agent:
+  sources:
+    - type: file
+      name: project_docs
+      root_path: ./docs
+  tools:
+    - type: search
+      name: search_docs
+      source: [project_docs]
+    - type: visit
+      name: visit_doc
+      source: [project_docs]
+```
+
+## Elasticsearch retrieval
+
+Elasticsearch supports `bm25`, `vector`, and `hybrid` search modes. Vector and
+hybrid search require an embedding endpoint and a populated vector field.
+
+```yaml
+agent:
+  sources:
+    - type: elasticsearch
+      name: corpus
+      hosts: [http://127.0.0.1:9200]
+      index: documents
+      search_fields: [title, text]
+      title_field: title
+      text_field: text
+      url_field: url
+      vector_search_mode: hybrid
+      vector_field: text_vector
+      embedding_model: Qwen3-Embedding-8B
+      embedding_base_url: http://127.0.0.1:8004/v1
+      embedding_api_key: EMPTY
+      embedding_prefix: |-
+        Instruct: Given a web search query, retrieve relevant passages that answer the query
+        Query:
+      es_max_concurrency: 256
+      embedding_max_concurrency: 256
+```
+
+Check whether the embedding server applies query prompts automatically. Apply
+`embedding_prefix` exactly once, and use the same embedding model and vector
+dimension that were used to build the index.
+
+Highlighting builds compact snippets from matching fragments. Tune fragment
+size, fragment count, and `snippet_chars` against the context budget rather
+than returning entire documents from search.
+
+## Model-visible tool contract
+
+The tool name, description, and `inputSchema` are visible to the model. The
+schema should expose only arguments the model can use correctly.
+
+```yaml
+agent:
+  tools:
+    - type: search
+      name: search_web
+      description: Search the indexed web corpus for relevant evidence.
+      source: [corpus]
+      inputSchema:
+        type: object
+        properties:
+          keywords:
+            type: string
+            description: A focused search query.
+        required: [keywords]
+        additionalProperties: false
+      argument_mapping:
+        keywords: query
+      raise_argument_validation_error: false
+```
+
+`argument_mapping` translates model-visible names to implementation arguments.
+When validation errors are not raised, the tool returns an actionable schema
+error to the model so it can correct the call.
+
+## Built-in tools
+
+SearcherKit registers `search`, `visit`, `multi_source_search`,
+`multi_source_visit`, and `mcp`. MCP tools share the same initialization,
+validation, concurrency, and shutdown lifecycle as native tools.
+
+Large search or visit results can be passed through a summarizer model:
+
+```yaml
+agent:
+  tools:
+    - type: visit
+      name: visit
+      source: [corpus]
+      summary_goal_key: goal
+      summarizer:
+        model: Qwen3-8B
+        base_url: http://127.0.0.1:8010/v1
+        api_key: EMPTY
+        max_chars: 40000
+        max_concurrency: 128
+        default_kwargs:
+          max_tokens: 1024
+        retry_config:
+          max_tries: 3
+```
+
+Summarization reduces context growth but adds latency, cost, and another failure
+boundary. Use it when documents are substantially larger than the evidence the
+agent needs.

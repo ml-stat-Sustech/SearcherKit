@@ -1,0 +1,312 @@
+---
+title: Search with Elasticsearch
+---
+
+SearcherKit can use an Elasticsearch index as a private knowledge base. The
+agent searches the index for relevant passages, optionally fetches complete
+documents, and then answers from the retrieved evidence.
+
+```text
+question -> LLM -> search -> Elasticsearch matches
+                -> visit  -> indexed document
+                -> LLM -> final answer
+```
+
+This guide starts with BM25 because it needs only Elasticsearch. Vector and
+hybrid retrieval are covered after the basic pipeline is working.
+
+## Install SearcherKit
+
+Install the package
+
+```bash
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+pip install -e .
+```
+
+You need a running Elasticsearch service and an OpenAI-compatible LLM
+endpoint. Check [Elasticsearch Documentation](https://www.elastic.co/guide/en/elasticsearch/reference/8.19/search-with-elasticsearch.html) to setup your own elasticsearch service. 
+
+With a valid elasticsearch endpoint, confirm that Elasticsearch is reachable before continuing:
+```bash
+curl http://your.elasticsearch.endpoint:port
+```
+
+## Prepare an index
+
+The default installation includes the Elasticsearch client. To build an index with SearcherKit's deployment plugins, install the indexing dependencies:
+
+```bash
+pip install -e ".[indexing]"
+```
+
+An Elasticsearch source works with an existing index. SearcherKit includes
+deployment plugins for MediaWiki dumps and BrowseComp Plus corpora. Both create
+documents with `title`, `text`, `url`, and `links` fields.
+
+To index a local MediaWiki dump for BM25 search:
+
+```bash
+searcherkit plugins deploy local-wiki \
+  --wiki_dump_path data/wiki.xml.bz2 \
+  --es_host http://127.0.0.1:9200 \
+  --index_name wiki_local \
+  --overwrite
+```
+
+To index BrowseComp Plus instead:
+
+```bash
+searcherkit plugins deploy browsecomp-plus \
+  --dataset_path data/browsecomp_plus_corpus.jsonl \
+  --es_host http://127.0.0.1:9200 \
+  --index_name browsecomp_plus \
+  --overwrite
+```
+
+`--overwrite` deletes and recreates an index with the same name. Omit it when
+you do not want an existing index replaced.
+
+If you manage the index outside SearcherKit, map the source fields in the
+configuration below. At minimum, the fields in `search_fields` must be
+searchable. The field used by `document_id_field` and `fetch_field` must
+identify a document unambiguously.
+
+## Configure the environment
+
+Set the LLM connection values in the shell that will run SearcherKit:
+
+::: {.panel-tabset}
+### Bash
+
+```bash
+export LLM_MODEL="YOUR_MODEL"
+export LLM_API_KEY="YOUR_API_KEY"
+export LLM_BASE_URL="https://your-endpoint.example/v1"
+```
+
+### PowerShell
+
+```powershell
+$env:LLM_MODEL = "YOUR_MODEL"
+$env:LLM_API_KEY = "YOUR_API_KEY"
+$env:LLM_BASE_URL = "https://your-endpoint.example/v1"
+```
+:::
+
+<details>
+<summary>Click to expand for persistant env var configuration</summary>
+
+To keep these values across terminal sessions, put them in a `.env` file in
+the directory where you run SearcherKit:
+
+```dotenv
+LLM_MODEL=YOUR_MODEL
+LLM_API_KEY=YOUR_API_KEY
+LLM_BASE_URL=https://your-endpoint.example/v1
+```
+
+SearcherKit loads `.env` by default. Values already defined in the shell take
+precedence.
+</details>
+
+## Create a BM25 search configuration
+
+Create `elasticsearch_search.yaml` in the repository root:
+
+```yaml
+defaults:
+  - _self_
+
+agent:
+  llm_client:
+    type: openai
+    model: ${oc.env:LLM_MODEL}
+    api_key: ${oc.env:LLM_API_KEY,EMPTY}
+    base_url: ${oc.env:LLM_BASE_URL}
+    default_kwargs:
+      temperature: 0.2
+      max_completion_tokens: 4096
+
+  parser:
+    type: upstream
+
+  sources:
+    - type: elasticsearch
+      name: knowledge_base
+      hosts: [http://127.0.0.1:9200]
+      index: wiki_local
+      search_fields: [title^2, text]
+      title_field: title
+      text_field: text
+      url_field: url
+      document_id_field: url
+      fetch_field: url
+      vector_search_mode: bm25
+      highlight: true
+      highlight_fragment_size: 256
+      highlight_number_of_fragments: 5
+      snippet_chars: 2048
+      request_timeout: 30
+      es_max_concurrency: 8
+
+  tools:
+    - type: search
+      name: search
+      description: Search the private knowledge base for relevant evidence.
+      source: [knowledge_base]
+      response_char_limit: 20000
+    - type: visit
+      name: visit
+      description: Read a document returned by search using its URL.
+      source: [knowledge_base]
+      response_char_limit: 50000
+
+  system_prompt: |
+    You answer questions using evidence from the private knowledge base.
+    Search before answering, and visit the most relevant documents when the
+    search snippets do not contain enough context. Do not invent evidence.
+
+  max_turn: 16
+  max_tokens: 32768
+  max_tokens_prompt_margin: 4096
+  max_tokens_prompt: |
+    The context limit is close. Stop calling tools and answer from the evidence already collected.
+  llm_retry_config:
+    max_tries: 3
+  tool_retry_config:
+    max_tries: 3
+    exceptions:
+      - pkg://searcherkit.common.errors:RecoverableError
+
+output_path: outputs/elasticsearch-search-tui
+
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
+```
+
+The source name is internal to SearcherKit. The `search` and `visit` tools use
+`source: [knowledge_base]` to select that source. For an index without a stable
+URL field, remove `document_id_field` and `fetch_field`; search results will use
+the Elasticsearch `_id`, and `visit` will fetch by `_id`.
+
+## Validate and start the TUI
+
+Validate the configuration before connecting to the services:
+
+```bash
+searcherkit inspect --config-path . --config-name elasticsearch_search
+```
+
+Then start the interactive interface:
+
+```bash
+searcherkit tui --config-path . --config-name elasticsearch_search
+```
+
+Use `/tool-detail` to inspect queries, result snippets, document identifiers,
+and fetched content. Interactive records and trace logs are written under
+`outputs/elasticsearch-search-tui/interactive` and
+`outputs/elasticsearch-search-tui/traces`.
+
+For a non-interactive smoke test, pass one question directly:
+
+```bash
+searcherkit tui --config-path . --config-name elasticsearch_search \
+  --query "What topics are covered by this knowledge base?"
+```
+
+## Enable vector or hybrid retrieval
+
+Vector search embeds each query and compares it with a dense-vector field in
+the index. Hybrid search combines vector retrieval with BM25. Both modes require:
+
+- a dense-vector field populated during indexing;
+- the same embedding model and vector dimension at indexing and query time;
+- an OpenAI-compatible embeddings endpoint available to SearcherKit.
+
+For example, build a Qwen3 vector index from a wiki dump:
+
+```bash
+searcherkit plugins deploy local-wiki \
+  --wiki_dump_path data/wiki.xml.bz2 \
+  --es_host http://127.0.0.1:9200 \
+  --index_name wiki_qwen3 \
+  --dense-vector \
+  --model_name Qwen/Qwen3-Embedding-8B \
+  --embedding_dim 4096 \
+  --prompt_strategy qwen3 \
+  --overwrite
+```
+
+Check the model's actual embedding dimension rather than assuming `4096` for a
+different model or configuration.
+
+Replace the Elasticsearch source in the YAML with:
+
+```yaml
+  sources:
+    - type: elasticsearch
+      name: knowledge_base
+      hosts: [http://127.0.0.1:9200]
+      index: wiki_qwen3
+      search_fields: [title^2, text]
+      title_field: title
+      text_field: text
+      url_field: url
+      document_id_field: url
+      fetch_field: url
+      vector_search_mode: hybrid
+      vector_field: text_vector
+      embedding_model: Qwen/Qwen3-Embedding-8B
+      embedding_base_url: http://127.0.0.1:8004/v1
+      embedding_api_key: EMPTY
+      embedding_prefix: |-
+        Instruct: Given a web search query, retrieve relevant passages that answer the query
+        Query:
+      highlight: true
+      highlight_fragment_size: 256
+      highlight_number_of_fragments: 5
+      snippet_chars: 2048
+      es_max_concurrency: 8
+      embedding_max_concurrency: 8
+      embedding_retry_config:
+        max_tries: 3
+```
+
+::: {.callout-tip}
+`highlight: true` is valid with `bm25` and `hybrid`. Set `highlight: false` for
+pure `vector` mode because Elasticsearch highlighting depends on a text query.
+:::
+
+::: {.callout-caution}
+Some embedding servers apply a query instruction themselves. Configure
+`embedding_prefix` only when the server does not, so that the instruction is
+applied exactly once. Document embeddings must use the model's document prompt
+convention; query embeddings must use its query prompt convention.
+:::
+
+## Common failures and solutions
+
+| Symptom | Check |
+| --- | --- |
+| Connection refused or timeout | Elasticsearch host, port, TLS settings, proxy, firewall, and service health |
+| Index not found | The configured `index` name and the result of `curl http://127.0.0.1:9200/_cat/indices?v` |
+| Search returns no matches | `search_fields`, analyzers, indexed content, and whether the query language matches the corpus |
+| `visit` cannot find a result | `document_id_field` and `fetch_field`; use `_id` by omitting both when no stable field exists |
+| Vector dimension error | Index mapping dimension versus the embedding endpoint's returned vector dimension |
+| Authentication failure | Elasticsearch `client_kwargs`, embedding API key, or LLM API key |
+| Vector mode rejects the config | `embedding_model`, `embedding_api_key`, `vector_field`, and `highlight: false` |
+| Model rejects tool calls | Model chat template, provider tool-call support, and parser configuration |
+
+For the complete source field reference and model-visible tool schemas, see
+[Sources and Tools](../03-customizing/03-sources-and-tools.qmd). For TUI controls
+and saved record behavior, see
+[Use the Interactive TUI](../04-interface/02-interactive-tui.qmd).
