@@ -87,6 +87,9 @@ class Client(abc.ABC):
     ) -> tuple[dict[str, Any], "CompletionUsage | None"]:
         """Return one assistant message and provider usage metadata when available."""
 
+    async def close(self) -> None:
+        """Release resources owned by the provider client."""
+
     async def stream_complete_with_usage(
         self,
         messages: Iterable[dict[str, Any]],

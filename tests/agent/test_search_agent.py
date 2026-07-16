@@ -133,6 +133,7 @@ def test_final_answer(agent_factory: Any) -> None:
 
         assert [message.role for message in history] == ["system", "user", "assistant"]
         assert history[-1].content == upstream_parsed_endpoint.FINAL_CONTENT
+        assert all(client.is_closed() for client in agent.client.clients)
 
     asyncio.run(run())
 
@@ -292,6 +293,7 @@ def test_llm_retry_failure() -> None:
                 await agent.run("Retry.", session_id=0)
 
             assert len(router.calls) == 2
+            assert all(client.is_closed() for client in agent.client.clients)
 
     asyncio.run(run())
 
