@@ -19,7 +19,7 @@ def _clean_plugin_args(args: Sequence[str]) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="searcherkit plugins",
+        prog="searcher plugins",
         description="Discover and run SearcherKit plugin utilities.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -59,12 +59,12 @@ def _deploy(plugin: str, plugin_args: Sequence[str]) -> None:
     if plugin == "local-wiki":
         from searcherkit.plugins.local_wiki.deploy_elasticsearch import main as deploy_main
 
-        deploy_main(args, prog="searcherkit plugins deploy local-wiki")
+        deploy_main(args, prog="searcher plugins deploy local-wiki")
         return
     if plugin == "browsecomp-plus":
         from searcherkit.plugins.browsecomp_plus.deploy_elasticsearch import main as deploy_main
 
-        deploy_main(args, prog="searcherkit plugins deploy browsecomp-plus")
+        deploy_main(args, prog="searcher plugins deploy browsecomp-plus")
         return
     raise ValueError(f"unknown plugin: {plugin}")
 
@@ -74,7 +74,7 @@ def _convert(convert_args: Sequence[str]) -> int:
 
     return convert_main(
         _clean_plugin_args(convert_args),
-        prog="searcherkit plugins convert",
+        prog="searcher plugins convert",
     )
 
 

@@ -9,7 +9,7 @@
 #
 # Run from the repository root without loading an existing .env override:
 #   env -u LLM_PROVIDER -u LLM_MODEL -u LLM_API_KEY -u LLM_BASE_URL \
-#     uv run --extra tui python -m searcherkit tui --env-file "" \
+#     uv run --extra tui searcher tui --env-file "" \
 #       --config-name examples/ollama_model_select_tui
 #
 # In the TUI, use slash completion to compare status-line effects:

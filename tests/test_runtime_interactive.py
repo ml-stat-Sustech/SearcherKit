@@ -10,7 +10,7 @@ import pytest
 from searcherkit.agent.search_agent import SearchAgentConfig
 from searcherkit.common.messages import ToolCall, assistant, tool
 from searcherkit.llm.base import ClientConfig, LLMStreamChunk
-from searcherkit.llm.parsers import QwenParser
+from searcherkit.llm import TongyiDeepResearchParser
 from searcherkit.common.errors import RecoverableError
 from searcherkit.runtime.interactive import (
     InteractiveQueryConfig,
@@ -182,7 +182,7 @@ def test_interactive_query_runner_enables_streaming_for_default_agent(tmp_path) 
         def build_agent():
             agent = SearchAgent(
                 llm_client=client,
-                parser=QwenParser(),
+                parser=TongyiDeepResearchParser(),
                 tools=[],
                 stream_llm=True,
             )
@@ -221,7 +221,7 @@ def test_interactive_query_runner_streaming_uses_parser_for_live_deltas_without_
         events: list[LiveEvent] = []
         result = await InteractiveQueryRunner(
             config=InteractiveQueryConfig(record_dir=str(tmp_path)),
-            build_agent=lambda: SearchAgent(llm_client=TaggedStreamingClient(), parser=QwenParser(), tools=[], stream_llm=True),
+            build_agent=lambda: SearchAgent(llm_client=TaggedStreamingClient(), parser=TongyiDeepResearchParser(), tools=[], stream_llm=True),
         ).run_query("hello", live_event_sink=events.append)
 
         assistant_deltas = [event for event in events if event.kind == "assistant_delta"]

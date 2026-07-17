@@ -17,7 +17,7 @@ stack.
 - 🧠 **Search agent, all-in-one** — Covers scaffold, training, evaluation & user interface. Kickstart your search agent journey
 
 
-- 🌐 **Retrieve from various sources** — Integrate with search sources from files, knowledge bases and web pages. Attach to any 
+- 🌐 **Retrieve from various sources** — Integrate with search sources from files, knowledge bases and web pages.
 
 - ⚡ **Lightweight, efficient and developer friendly** — `SearcherKit` focus on scaffold/harness level without heavy dependencies. Can be easily integrated into your existing projects as a library. Invoke `searcherkit` functions with full async execution pipeline to accelerate your project.
 

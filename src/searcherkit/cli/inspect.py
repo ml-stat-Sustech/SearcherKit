@@ -112,7 +112,7 @@ def validate_config(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="searcherkit inspect",
+        prog="searcher inspect",
         description="Recursively validate config fields against structured types.",
     )
     parser.add_argument(

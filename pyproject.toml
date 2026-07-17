@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-searcherkit = "searcherkit.cli.main:main"
+searcher = "searcherkit.cli.main:main"
 
 [project.optional-dependencies]
 indexing = [

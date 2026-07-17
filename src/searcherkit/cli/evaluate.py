@@ -6,5 +6,5 @@ from searcherkit.runtime.evaluate import evaluate_main
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    evaluate_main(argv, prog="searcherkit evaluate")
+    evaluate_main(argv, prog="searcher evaluate")
     return 0

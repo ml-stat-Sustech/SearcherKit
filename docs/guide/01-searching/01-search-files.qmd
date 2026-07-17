@@ -88,7 +88,7 @@ values in the dotenv file.
 ## Start to search files
 
 ```bash
-searcherkit tui --config-name file_search
+searcher tui --config-name file_search
 ```
 
 The source searches exact text fragments with smart case. Search results use

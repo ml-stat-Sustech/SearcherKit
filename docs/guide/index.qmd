@@ -80,7 +80,7 @@ pip install -e .
 Confirm that the command is available:
 
 ```bash
-searcherkit --help
+searcher --help
 ```
 
 Local-file search uses [ripgrep](https://github.com/BurntSushi/ripgrep) for
@@ -124,7 +124,7 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 Start the interactive terminal UI:
 
 ```bash
-searcherkit tui --config-name file_search
+searcher tui --config-name file_search
 ```
 
 The agent can now search files under `FILE_SEARCH_ROOT`, open relevant results,
@@ -177,14 +177,14 @@ that encode tool calls in text may require a model-specific parser.
 If this file is saved as `configs/demo/config.yaml`, validate and run it with:
 
 ```bash
-searcherkit inspect --config-path configs/demo --config-name config
-searcherkit tui --config-path configs/demo --config-name config
+searcher inspect --config-path configs/demo --config-name config
+searcher tui --config-path configs/demo --config-name config
 ```
 
 Hydra-style overrides let you change values without editing the file:
 
 ```bash
-searcherkit tui --config-path configs/demo --config-name config \
+searcher tui --config-path configs/demo --config-name config \
   agent.llm_client.model=Qwen3-8B \
   output_path=outputs/qwen3
 ```

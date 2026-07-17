@@ -10,7 +10,7 @@ import uvloop
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="searcherkit",
+        prog="searcher",
         description="Run SearcherKit, evaluate outputs, and manage bundled plugins.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

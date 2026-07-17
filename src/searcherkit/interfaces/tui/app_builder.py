@@ -49,7 +49,7 @@ class TuiApplicationBuilder:
             from prompt_toolkit.widgets import TextArea
         except ImportError as exc:
             raise ImportError(
-                "searcherkit tui requires prompt-toolkit. Install it with "
+                "searcher tui requires prompt-toolkit. Install it with "
                 "`pip install prompt-toolkit` or add the project tui extra."
             ) from exc
 

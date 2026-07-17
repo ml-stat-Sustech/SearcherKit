@@ -48,7 +48,7 @@ documents with `title`, `text`, `url`, and `links` fields.
 To index a local MediaWiki dump for BM25 search:
 
 ```bash
-searcherkit plugins deploy local-wiki \
+searcher plugins deploy local-wiki \
   --wiki_dump_path data/wiki.xml.bz2 \
   --es_host http://127.0.0.1:9200 \
   --index_name wiki_local \
@@ -58,7 +58,7 @@ searcherkit plugins deploy local-wiki \
 To index BrowseComp Plus instead:
 
 ```bash
-searcherkit plugins deploy browsecomp-plus \
+searcher plugins deploy browsecomp-plus \
   --dataset_path data/browsecomp_plus_corpus.jsonl \
   --es_host http://127.0.0.1:9200 \
   --index_name browsecomp_plus \
@@ -202,13 +202,13 @@ the Elasticsearch `_id`, and `visit` will fetch by `_id`.
 Validate the configuration before connecting to the services:
 
 ```bash
-searcherkit inspect --config-path . --config-name elasticsearch_search
+searcher inspect --config-path . --config-name elasticsearch_search
 ```
 
 Then start the interactive interface:
 
 ```bash
-searcherkit tui --config-path . --config-name elasticsearch_search
+searcher tui --config-path . --config-name elasticsearch_search
 ```
 
 Use `/tool-detail` to inspect queries, result snippets, document identifiers,
@@ -219,7 +219,7 @@ and fetched content. Interactive records and trace logs are written under
 For a non-interactive smoke test, pass one question directly:
 
 ```bash
-searcherkit tui --config-path . --config-name elasticsearch_search \
+searcher tui --config-path . --config-name elasticsearch_search \
   --query "What topics are covered by this knowledge base?"
 ```
 
@@ -235,7 +235,7 @@ the index. Hybrid search combines vector retrieval with BM25. Both modes require
 For example, build a Qwen3 vector index from a wiki dump:
 
 ```bash
-searcherkit plugins deploy local-wiki \
+searcher plugins deploy local-wiki \
   --wiki_dump_path data/wiki.xml.bz2 \
   --es_host http://127.0.0.1:9200 \
   --index_name wiki_qwen3 \

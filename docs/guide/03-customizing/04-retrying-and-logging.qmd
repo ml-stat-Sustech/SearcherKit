@@ -43,8 +43,8 @@ trace.
 
 ## Diagnose in layers
 
-1. Run `searcherkit inspect` to rule out config shape errors.
-2. Use `searcherkit tui` or a one-item dataset to test one trajectory.
+1. Run `searcher inspect` to rule out config shape errors.
+2. Use `searcher tui` or a one-item dataset to test one trajectory.
 3. Check model and retrieval services independently.
 4. Read the per-trace log to identify the failing boundary.
 5. Increase concurrency gradually while watching queue depth, latency, retries,

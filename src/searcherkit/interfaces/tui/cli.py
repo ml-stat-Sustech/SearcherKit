@@ -23,7 +23,7 @@ _SUPPORTED_LLM_PROVIDERS = frozenset({"openai", "anthropic", "vllm", "vllm_serve
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="searcherkit tui",
+        prog="searcher tui",
         description="Run ad hoc SearcherKit queries in a prompt-toolkit TUI.",
     )
     parser.add_argument(

@@ -4,41 +4,41 @@ title: CLI Reference
 
 The SearcherKit command-line interface is used to run configurations, evaluate outputs, inspect configurations, and manage plugins.
 
-## `searcherkit run`
+## `searcher run`
 
 Run a SearcherKit configuration.
 
 ```bash
-searcherkit run
-searcherkit run --config-path recipe/webexplorer --config-name webexplorer
+searcher run
+searcher run --config-path recipe/webexplorer --config-name webexplorer
 ```
 
 Additional arguments are passed as Hydra-style overrides:
 
 ```bash
-searcherkit run \
+searcher run \
   --config-path recipe/webexplorer \
   --config-name webexplorer \
   agent.llm_client.model=demo
 ```
 
-## `searcherkit evaluate`
+## `searcher evaluate`
 
 Evaluate saved run records using an LLM judge.
 
 ```bash
-searcherkit evaluate outputs/webexplorer outputs/webexplorer_eval \
+searcher evaluate outputs/webexplorer outputs/webexplorer_eval \
   --max-concurrency 32
 ```
 
 The evaluation process uses the `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables.
 
-## `searcherkit inspect`
+## `searcher inspect`
 
 Recursively validate configuration fields against their corresponding structured config types without running the agent.
 
 ```bash
-searcherkit inspect \
+searcher inspect \
   --config-path webexplorer \
   --config-name webexplorer
 ```
@@ -48,24 +48,24 @@ searcherkit inspect \
 Hydra-style overrides are also supported:
 
 ```bash
-searcherkit inspect \
+searcher inspect \
   --config-path websailor \
   --config-name websailor \
   agent.llm_client.model=demo
 ```
 
-## `searcherkit plugins`
+## `searcher plugins`
 
 List plugins or run plugin deployment tools.
 
 ```bash
-searcherkit plugins list
+searcher plugins list
 ```
 
 Deploy a local Wiki index:
 
 ```bash
-searcherkit plugins deploy local-wiki \
+searcher plugins deploy local-wiki \
   --wiki_dump_path data/wiki.xml.bz2 \
   --es_host http://127.0.0.1:9200 \
   --index_name wiki_local \
@@ -75,7 +75,7 @@ searcherkit plugins deploy local-wiki \
 Deploy BrowseComp Plus:
 
 ```bash
-searcherkit plugins deploy browsecomp-plus \
+searcher plugins deploy browsecomp-plus \
   --dataset_path data/browsecomp_plus_corpus.jsonl \
   --es_host http://127.0.0.1:9200 \
   --index_name browsecomp_plus \

@@ -22,7 +22,7 @@ async def _run_config(cfg) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="searcherkit run",
+        prog="searcher run",
         description="Run a SearcherKit batch from a config file.",
     )
     parser.add_argument(

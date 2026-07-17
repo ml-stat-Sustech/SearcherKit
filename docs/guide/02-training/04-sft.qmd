@@ -11,7 +11,7 @@ Install ms-swift according to [its manual](https://swift.readthedocs.io/zh-cn/la
 ## Convert trajectories
 
 ```bash
-searcherkit plugins convert \
+searcher plugins convert \
   data/openseeker.jsonl \
   outputs/sft/ms_swift.jsonl
 ```

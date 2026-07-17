@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from searcherkit.common.messages import tool
 from searcherkit.llm.parsers import Parser, UpstreamParser
-from searcherkit.llm.parsers.qwen import QwenParser
+from searcherkit.llm.parsers import TongyiDeepResearchParser
 
 
 def _parts(parser: Parser, chunks: list[str]) -> list[tuple[str, str]]:
@@ -27,7 +27,7 @@ def test_plain_parser_live_delta_splitter_emits_content() -> None:
 
 def test_qwen_live_delta_splitter_interprets_thinking_and_tool_calls_across_chunks() -> None:
     parts = _parts(
-        QwenParser(),
+        TongyiDeepResearchParser(),
         [
             "pre <thi",
             "nk>reason",
@@ -52,13 +52,13 @@ def test_upstream_parser_streaming_uses_plain_content_splitter() -> None:
 
 
 def test_qwen_live_delta_splitter_handles_closing_tag_across_chunks() -> None:
-    parts = _parts(QwenParser(), ["<think>reason</thi", "nk>answer"])
+    parts = _parts(TongyiDeepResearchParser(), ["<think>reason</thi", "nk>answer"])
 
     assert parts == [("thinking", "reason"), ("content", "answer")]
 
 
 def test_qwen_live_delta_splitter_flushes_incomplete_tag_as_content() -> None:
-    parts = _parts(QwenParser(), ["before <thi"])
+    parts = _parts(TongyiDeepResearchParser(), ["before <thi"])
 
     assert parts == [("content", "before "), ("content", "<thi")]
 
@@ -66,7 +66,7 @@ def test_qwen_live_delta_splitter_flushes_incomplete_tag_as_content() -> None:
 def test_qwen_parser_preserves_answer_tag_for_toolless_assistant_message() -> None:
     message = next(
         iter(
-            QwenParser().from_model(
+            TongyiDeepResearchParser().from_model(
                 [
                     {
                         "role": "assistant",
@@ -84,7 +84,7 @@ def test_qwen_parser_preserves_answer_tag_for_toolless_assistant_message() -> No
 def test_qwen_parser_keeps_answer_tags_when_tool_calls_are_present() -> None:
     message = next(
         iter(
-            QwenParser().from_model(
+            TongyiDeepResearchParser().from_model(
                 [
                     {
                         "role": "assistant",
@@ -104,7 +104,7 @@ def test_qwen_parser_keeps_answer_tags_when_tool_calls_are_present() -> None:
 
 
 def test_qwen_parser_renders_upstream_tool_response_mapping() -> None:
-    [message] = QwenParser().to_model([tool({"call-a": "first", "call-b": "second"})])
+    [message] = TongyiDeepResearchParser().to_model([tool({"call-a": "first", "call-b": "second"})])
 
     assert message == {
         "role": "user",

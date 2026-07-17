@@ -19,7 +19,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def _run_conversion_cli(args: list[str]) -> dict[str, int]:
     stdout = StringIO()
     with redirect_stdout(stdout):
-        status = conversion_main(args, prog="searcherkit plugins convert")
+        status = conversion_main(args, prog="searcher plugins convert")
     assert status == 0
     return json.loads(stdout.getvalue())
 

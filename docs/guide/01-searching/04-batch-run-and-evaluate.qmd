@@ -97,7 +97,7 @@ First inspect the composed configuration. This catches invalid fields and Hydra
 overrides before the batch starts:
 
 ```bash
-searcherkit inspect --config-name searcherkit \
+searcher inspect --config-name searcherkit \
   dataloader.source=data/questions.jsonl \
   output_path=outputs/searcherkit
 ```
@@ -105,7 +105,7 @@ searcherkit inspect --config-name searcherkit \
 Then run the batch with the same overrides:
 
 ```bash
-searcherkit run --config-name searcherkit \
+searcher run --config-name searcherkit \
   dataloader.source=data/questions.jsonl \
   max_concurrency=128 \
   output_path=outputs/searcherkit
@@ -114,7 +114,7 @@ searcherkit run --config-name searcherkit \
 Use `--debug` before the Hydra overrides for verbose global logging:
 
 ```bash
-searcherkit run --debug --config-name searcherkit \
+searcher run --debug --config-name searcherkit \
   dataloader.source=data/questions.jsonl \
   output_path=outputs/searcherkit
 ```
@@ -125,7 +125,7 @@ queue depth of each external service.
 
 ### The run output
 
-Executing `searcherkit run` creates output in the following structure:
+Executing `searcher run` creates output in the following structure:
 
 ```text
 outputs/searcherkit/
@@ -147,7 +147,7 @@ history, per-sample statistics, and timing data. `summary.json` reports aggregat
 
 ### Evaluate
 
-`searcherkit evaluate` extracts the final answer from each saved trajectory, asks an
+`searcher evaluate` extracts the final answer from each saved trajectory, asks an
 LLM judge to compare it with the reference answer, writes one judgment per sample,
 and produces aggregate accuracy statistics.
 
@@ -201,7 +201,7 @@ to the judge. Use the same extraction pattern across runs to keep scores compara
 ### Run the evaluation
 
 ```bash
-searcherkit evaluate \
+searcher evaluate \
   outputs/searcherkit/history \
   outputs/searcherkit-eval \
   --answer-pattern '<answer>(?P<answer>.*?)</answer>' \
