@@ -1796,6 +1796,8 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
     import openai
     from types import SimpleNamespace
 
+    instances = []
+
     class FakeModels:
         async def list(self):
             return SimpleNamespace(
@@ -1809,6 +1811,11 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = FakeModels()
+            self.close_count = 0
+            instances.append(self)
+
+        async def close(self):
+            self.close_count += 1
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1828,12 +1835,15 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
         "models:openai/llama3.2:1b",
     ]
     assert {option.base_url for option in result.options} == {"http://127.0.0.1:11434/v1"}
+    assert [client.close_count for client in instances] == [1]
 
 
 def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
     import asyncio
     import openai
     from types import SimpleNamespace
+
+    instances = []
 
     class FakeModels:
         async def list(self):
@@ -1843,6 +1853,11 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = FakeModels()
+            self.close_count = 0
+            instances.append(self)
+
+        async def close(self):
+            self.close_count += 1
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1858,19 +1873,27 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
 
     assert [option.command_name for option in result.options] == ["models:vllm/same-model"]
     assert result.options[0].base_url == "http://a/v1"
+    assert [client.close_count for client in instances] == [1, 1]
 
 
 def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None:
     import asyncio
     import openai
 
+    instances = []
+
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = self
+            self.close_count = 0
+            instances.append(self)
 
         async def list(self):
             raise ValueError("no models")
+
+        async def close(self):
+            self.close_count += 1
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1887,6 +1910,7 @@ def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None
     assert result.options == []
     assert result.failed is True
     assert "Model discovery failed for openai" in result.message
+    assert [client.close_count for client in instances] == [1]
 
 
 def test_discover_model_options_unsupported_provider_returns_no_commands() -> None:
