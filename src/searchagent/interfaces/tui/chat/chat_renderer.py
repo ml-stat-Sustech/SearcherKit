@@ -16,6 +16,8 @@ from searchagent.interfaces.tui.ui.formatting import (
 )
 from searchagent.runtime.trace import preview_query
 
+STREAMING_CURSOR = "▌"
+
 
 class ChatRenderer:
     """Turns a snapshot of chat entries into styled prompt-toolkit display parts."""
@@ -105,6 +107,8 @@ class ChatRenderer:
                 indent=thinking_indent,
             )
             parts.append(("class:reasoning-body", wrapped_thinking))
+            if entry.role == "thinking" and entry.status == "running":
+                parts.append(("class:streaming-cursor", STREAMING_CURSOR))
             if not wrapped_thinking.endswith("\n"):
                 parts.append(("class:reasoning-body", "\n"))
         if entry.body:
@@ -137,6 +141,8 @@ class ChatRenderer:
             indent=body_indent,
         )
         parts.append(("class:assistant-body", wrapped))
+        if entry.status == "streaming":
+            parts.append(("class:streaming-cursor", STREAMING_CURSOR))
         if not wrapped.endswith("\n"):
             parts.append(("class:assistant-body", "\n"))
         parts.append(("", "\n"))

@@ -267,7 +267,12 @@ class SearchAgentTui:
             key=key,
             parts=parts,
             lines=lines,
-            plain_lines=["".join(text for _, text in line) for line in lines],
+            # The streaming cursor is display-only chrome; keep it out of
+            # plain lines so mouse selection copies clean text.
+            plain_lines=[
+                "".join(text for style, text in line if style != "class:streaming-cursor")
+                for line in lines
+            ],
         )
         self._chat_layout_cache = layout
         return layout

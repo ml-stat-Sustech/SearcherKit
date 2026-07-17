@@ -1038,6 +1038,29 @@ def test_tui_kicker_shows_live_activity_phases() -> None:
     assert "searching..." not in kicker
 
 
+
+def test_tui_streaming_cursor_shows_while_streaming_and_stays_out_of_plain_lines() -> None:
+    app = _make_app()
+    app.chat_history.clear()
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_delta", message="think", data={"turn": 1, "field": "thinking", "delta": "think"}
+    ))
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_delta", message="body", data={"turn": 1, "field": "content", "delta": "body"}
+    ))
+
+    rendered = _render_text(app)
+    assert rendered.count("▌") == 2  # thinking + content both streaming
+    assert "▌" not in "\n".join(app._render_chat_plain_lines())
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_message", message="assistant",
+        data={"turn": 1, "thinking": "think", "content": "body", "tool_calls": []},
+    ))
+    assert "▌" not in _render_text(app)
+
+
 def test_tui_detail_scroll_can_move_up_and_return_to_tail() -> None:
     app = _make_app()
     app.chat_history._entries = [
