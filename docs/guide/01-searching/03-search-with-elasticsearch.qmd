@@ -17,13 +17,32 @@ hybrid retrieval are covered after the basic pipeline is working.
 
 ### Install SearcherKit
 
-Install the package
+SearcherKit requires Python 3.12 or later. Install the package in a virtual
+environment:
+
+:::: {.panel-tabset}
+#### pip
 
 ```bash
 git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -e .
 ```
+
+#### uv
+
+```bash
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+uv venv --python 3.12
+source .venv/bin/activate  # macOS/Linux
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+uv pip install -e .
+```
+::::
 
 You need a running Elasticsearch service and an OpenAI-compatible LLM
 endpoint. Check [Elasticsearch Documentation](https://www.elastic.co/guide/en/elasticsearch/reference/8.19/search-with-elasticsearch.html) to setup your own elasticsearch service. 

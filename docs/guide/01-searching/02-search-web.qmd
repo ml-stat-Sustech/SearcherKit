@@ -19,13 +19,32 @@ To use it, you should
 
 ### Install SearcherKit
 
-Install the package 
+SearcherKit requires Python 3.12 or later. Install the package in a virtual
+environment:
+
+:::: {.panel-tabset}
+#### pip
 
 ```bash
 git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -e .
 ```
+
+#### uv
+
+```bash
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+uv venv --python 3.12
+source .venv/bin/activate  # macOS/Linux
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+uv pip install -e .
+```
+::::
 
 ##### Prepare required services
 

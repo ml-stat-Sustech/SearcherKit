@@ -3,12 +3,8 @@ title: Getting started with SearcherKit
 ---
 
 SearcherKit is a modular runtime for building, running, evaluating, and
-training search agents. It connects a language model to retrieval sources and
-model-visible tools, while keeping agent logic, provider APIs, parsing,
-execution, and observability as separate components.
-
-Use this page to install SearcherKit and run your first local-file search. You
-can then follow a task guide or explore the system concepts in more detail.
+training search agents. It connects an LLM to tools that search local files,
+the web, Elasticsearch, and MCP services.
 
 ### How SearcherKit works
 
@@ -16,66 +12,47 @@ can then follow a task guide or explore the system concepts in more detail.
 dataset or TUI
       |
       v
- AgentRunner ---- checkpoint, logs, per-task retry
+ AgentRunner ---- logs, retries, checkpoints
       |
       v
- SearchAgent ---- turn, token, and time budgets
+ SearchAgent
       |
-      +---- Parser <----> LLM Client <----> model endpoint
-      |
-      +---- Tool ----> Source ----> file, web, or Elasticsearch
-      |
-      `---- Tool ----> MCP server
+      +---- Parser <----> LLM Client
+      `---- Tool ----> Source or MCP service
 ```
 
-At the center of this flow are three modules with different responsibilities:
-
-- **Sources** connect SearcherKit to information. A source knows how to search
-  and fetch documents from one backend, such as a local directory, the web, or
-  an Elasticsearch index. It returns the same provider-neutral document types
-  regardless of the backend.
-- **Tools** turn capabilities into actions the model can call. A tool defines
-  the model-visible name, description, and input schema, then delegates the
-  work to one or more sources (or to an external service such as MCP). This
-  keeps storage details out of the model's interface.
-- **The LLM** drives the reasoning loop. The LLM client sends requests to the
-  model endpoint, while the parser translates messages and tool calls between
-  the model's format and SearcherKit's internal format. The model decides
-  whether to call a tool, inspect its result, continue searching, or return a
-  final answer.
-
-A typical turn therefore forms a loop:
-
-```bash
-question -> LLM -> tool call -> Tool -> Source -> documents
-              ^                                  |
-              `----------- tool result <---------'
-```
-
-Configuration defines how these modules are assembled. Under `agent`, each
-source is declared with a `type`, a unique `name`, and backend-specific
-settings. Each source-backed tool refers to one or more of those names, which
-explicitly defines where the tool retrieves information. The `llm_client` and
-`parser` entries select the model endpoint and the message/tool-call format
-used to communicate with it.
-
-At startup, SearcherKit composes the YAML configuration and uses factories to
-construct the configured LLM client, parser, sources, and tools. It then gives
-the tool definitions to the LLM and keeps the instantiated sources behind the
-tools. In other words, config is not just a list of settings: it is the wiring
-that determines which model can call which tools, which sources those tools can
-reach, and which limits govern the agent loop. The same wiring is used whether
-the run starts from the TUI or a dataset.
+The LLM decides when to call a tool; tools delegate retrieval to sources and
+return results to the agent. YAML configuration selects the LLM client, parser,
+tools, sources, and runtime limits for both interactive and batch runs.
 
 ### Install SearcherKit
 
-Clone the repository and install the package in editable mode:
+SearcherKit requires Python 3.12 or later. Clone the repository, create and
+activate a virtual environment, and install the package in editable mode:
+
+:::: {.panel-tabset}
+#### pip
 
 ```bash
 git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -e .
 ```
+
+#### uv
+
+```bash
+git clone https://github.com/ml-stat-Sustech/searcherkit.git
+cd searcherkit
+uv venv --python 3.12
+source .venv/bin/activate  # macOS/Linux
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+uv pip install -e .
+```
+::::
 
 Confirm that the command is available:
 

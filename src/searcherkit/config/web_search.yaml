@@ -32,11 +32,27 @@ agent:
     - type: search
       name: search
       description: Search the public web for current and verifiable information.
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+        required:
+          - query
       source: [public_web]
       response_char_limit: 20000
     - type: visit
       name: visit
       description: Read a web page from a URL returned by search.
+      inputSchema:
+        type: object
+        properties:
+          url:
+            type: string
+        required:
+          - url
+      argument_mapping:
+        url: document_id
       source: [public_web]
       response_char_limit: 50000
 

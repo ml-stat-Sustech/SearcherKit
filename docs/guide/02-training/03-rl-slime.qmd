@@ -1,5 +1,5 @@
 ---
-title: RL with slime
+title: RL with Slime
 ---
 
 The slime integration uses SearcherKit as the custom agent rollout and reward

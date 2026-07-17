@@ -1,8 +1,5 @@
 # 🔎 SearcherKit
 
-> Build, evaluate, and train search agents without locking your research to a
-> single model, corpus, tool protocol, or training framework.
-
 SearcherKit is a modular runtime for search-intensive agents. It brings agent
 rollouts, heterogeneous search sources, tool execution, model adapters,
 benchmark recipes, evaluation, and training integration into one coherent

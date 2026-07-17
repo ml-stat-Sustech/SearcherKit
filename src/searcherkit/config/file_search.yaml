@@ -25,11 +25,27 @@ agent:
     - type: search
       name: search
       description: Search local files for an exact text fragment or keyword.
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+        required:
+          - query
       source: [local_files]
       response_char_limit: 20000
     - type: visit
       name: visit
       description: Read a local file returned by search using its relative path.
+      inputSchema:
+        type: object
+        properties:
+          url:
+            type: string
+        required:
+          - url
+      argument_mapping:
+        url: document_id
       source: [local_files]
       response_char_limit: 40000
 

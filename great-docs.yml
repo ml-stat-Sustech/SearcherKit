@@ -7,6 +7,8 @@
 # Example: project 'py-yaml12' with module name 'yaml12'
 # module: yaml12
 
+display_name: "SearcherKit"
+
 # Docstring Parser
 # ----------------
 # The docstring format used in your package (numpy, google, or sphinx)
@@ -46,7 +48,7 @@ sections:
           - training/training-overview.qmd
           - training/rl-areal.qmd
           - training/rl-slime.qmd
-          - training/sft.qmd
+          - training/sft-with-msswift.qmd
       - section: Customizing
         contents:
           - customizing/project-architecture.qmd
