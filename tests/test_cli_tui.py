@@ -1222,10 +1222,15 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
                 ]
             )
 
+    closed_clients = []
+
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = FakeModels()
+
+        async def close(self):
+            closed_clients.append(self)
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1245,6 +1250,7 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
         "models:openai/llama3.2:1b",
     ]
     assert {option.base_url for option in result.options} == {"http://127.0.0.1:11434/v1"}
+    assert len(closed_clients) == 1
 
 
 def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
@@ -1256,10 +1262,15 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
         async def list(self):
             return SimpleNamespace(data=[SimpleNamespace(id="same-model")])
 
+    closed_clients = []
+
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = FakeModels()
+
+        async def close(self):
+            closed_clients.append(self)
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1275,11 +1286,14 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
 
     assert [option.command_name for option in result.options] == ["models:vllm/same-model"]
     assert result.options[0].base_url == "http://a/v1"
+    assert len(closed_clients) == 2
 
 
 def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None:
     import asyncio
     import openai
+
+    closed_clients = []
 
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
@@ -1288,6 +1302,9 @@ def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None
 
         async def list(self):
             raise ValueError("no models")
+
+        async def close(self):
+            closed_clients.append(self)
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1304,6 +1321,7 @@ def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None
     assert result.options == []
     assert result.failed is True
     assert "Model discovery failed for openai" in result.message
+    assert len(closed_clients) == 1
 
 
 def test_discover_model_options_unsupported_provider_returns_no_commands() -> None:
