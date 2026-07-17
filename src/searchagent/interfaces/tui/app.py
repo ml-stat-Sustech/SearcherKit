@@ -331,15 +331,32 @@ class SearchAgentTui:
         ]
 
     def render_kicker(self) -> list[tuple[str, str]]:
-        """One-line live progress label from the current agent activity."""
-        if not self.query_controller.is_running():
-            return [("class:running-kicker", "")]
-        return [
-            (
-                "class:running-kicker",
-                f" {self._spinner_marker()} {self.chat_history.current_activity()}...\n",
+        """One-line live progress label, plus a hint when content hides below the viewport."""
+        parts: list[tuple[str, str]] = []
+        if self.query_controller.is_running():
+            parts.append(
+                ("class:running-kicker", f" {self._spinner_marker()} {self.chat_history.current_activity()}...")
             )
-        ]
+        below = self._lines_below_viewport()
+        if below:
+            if parts:
+                parts.append(("class:running-kicker", " · "))
+            parts.append(("class:new-below", f"↓ {below} more (PgDn to bottom)"))
+        if not parts:
+            return [("class:running-kicker", "")]
+        parts.append(("class:running-kicker", "\n"))
+        return parts
+
+    def _lines_below_viewport(self) -> int:
+        if self.view_state.chat_scroll_top is None:
+            return 0
+        lines = self._chat_layout().lines
+        view_height = self.chat_view_height()
+        scroll_top = self._current_chat_scroll_top(
+            content_lines=len(lines),
+            view_height=view_height,
+        )
+        return max(0, len(lines) - scroll_top - view_height)
 
     def render_slash_candidates(self) -> list[tuple[str, str]]:
         return self.slash_menu_renderer.render(self.slash_menu.menu_state)

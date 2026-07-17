@@ -1039,6 +1039,28 @@ def test_tui_kicker_shows_live_activity_phases() -> None:
 
 
 
+
+def test_tui_kicker_hints_lines_below_only_when_scrolled_up() -> None:
+    app = _make_app()
+    app.chat_history._entries = [
+        ConversationEntry(role="assistant", title=f"Assistant {index}", body="line", style="class:assistant")
+        for index in range(30)
+    ]
+    app.view_state.show_thinking = False
+    app._pt_app = None
+    app.view_state.chat_scroll_top = None
+
+    assert "more" not in "".join(text for _, text in app.render_kicker())
+
+    app._scroll_chat(-1000)
+    kicker = "".join(text for _, text in app.render_kicker())
+    assert "↓" in kicker
+    assert "more (PgDn to bottom)" in kicker
+
+    app._scroll_chat(1000)
+    assert "more" not in "".join(text for _, text in app.render_kicker())
+
+
 def test_tui_streaming_cursor_shows_while_streaming_and_stays_out_of_plain_lines() -> None:
     app = _make_app()
     app.chat_history.clear()

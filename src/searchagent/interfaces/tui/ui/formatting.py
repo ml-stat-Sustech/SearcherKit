@@ -253,6 +253,7 @@ def _tui_style() -> Any:
             "slash-menu": "ansibrightblack",
             "slash-selected": "reverse",
             "running-kicker": "ansibrightblack",
+            "new-below": "ansiyellow",
             "streaming-cursor": "ansicyan",
             "meta": "ansibrightblack",
             "turn": "ansibrightblack",
