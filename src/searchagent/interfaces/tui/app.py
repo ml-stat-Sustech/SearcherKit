@@ -311,10 +311,10 @@ class SearchAgentTui:
         )
         parts: list[tuple[str, str]] = []
         for index in range(view_height):
-            char = "#" if thumb_start <= index < thumb_start + thumb_size else "|"
-            parts.append(
-                ("class:scrollbar-thumb" if char == "#" else "class:scrollbar-track", f"{char}\n")
-            )
+            if thumb_start <= index < thumb_start + thumb_size:
+                parts.append(("class:scrollbar-thumb", "█\n"))
+            else:
+                parts.append(("class:scrollbar-track", "│\n"))
         return parts
 
     def render_status(self) -> list[tuple[str, str]]:

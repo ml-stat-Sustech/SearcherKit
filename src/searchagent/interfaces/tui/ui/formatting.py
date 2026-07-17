@@ -244,7 +244,7 @@ def _tui_style() -> Any:
             "selected": "reverse",
             "separator": "ansibrightblack",
             "scrollbar-track": "ansibrightblack",
-            "scrollbar-thumb": "reverse",
+            "scrollbar-thumb": "ansicyan",
             "status": "reverse",
             "status-label": "reverse bold",
             "status-model": "reverse ansicyan bold",

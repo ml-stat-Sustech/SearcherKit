@@ -995,11 +995,11 @@ def test_tui_scrollbar_uses_visible_to_content_ratio() -> None:
     app._scroll_chat(-1000)
     top_text = "".join(text for _, text in app.render_scrollbar())
 
-    assert "#" in bottom_text
-    assert bottom_text.count("#") > 1
-    assert bottom_text.count("#") < bottom_text.count("|")
+    assert "█" in bottom_text
+    assert bottom_text.count("█") > 1
+    assert bottom_text.count("█") < bottom_text.count("│")
     assert top_text != bottom_text
-    assert top_text.startswith("#")
+    assert top_text.startswith("█")
 
 
 
