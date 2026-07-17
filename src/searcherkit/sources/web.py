@@ -101,7 +101,7 @@ class WebSource(DataSource):
 
     async def _client_session(self) -> ClientSession:
         if self._client is None or self._client.closed:
-            self._client = ClientSession()
+            self._client = ClientSession(trust_env=True)
         return self._client
 
     def _limit_request(self) -> Any:

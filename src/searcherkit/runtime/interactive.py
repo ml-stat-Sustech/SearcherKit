@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+import traceback
 from typing import Any, Literal
 
 from searcherkit.runtime.interactive_selection import active_model_event_data, infer_active_source
@@ -252,7 +253,7 @@ class InteractiveQueryRunner:
                 error = _error_payload(exc)
                 await emit(
                     "run_failed",
-                    f"Interactive query run failed: {exc}",
+                    f"Interactive query run failed: \n{"\n".join(traceback.format_exception(exc))}",
                     {"run_id": self.run_id, "trace_id": trace_id, "record_path": str(record_path), "error": error, "elapsed": elapsed},
                 )
                 payload = build_payload(
