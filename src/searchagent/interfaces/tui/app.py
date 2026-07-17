@@ -21,7 +21,7 @@ from searchagent.interfaces.tui.ui.input_field import InputField
 from searchagent.interfaces.tui.ui.layout_geometry import FallbackSize, LayoutGeometry, TerminalSize
 from searchagent.interfaces.tui.ui.selection_manager import SelectionManager, _apply_line_selection
 from searchagent.interfaces.tui.ui.status_bar import build_status_bar
-from searchagent.interfaces.tui.ui.view_state import TuiViewState
+from searchagent.interfaces.tui.ui.view_state import SPINNER_FRAMES, TuiViewState
 from searchagent.runtime.interactive import InteractiveQueryConfig
 
 
@@ -326,17 +326,21 @@ class SearchAgentTui:
         ]
 
     def render_kicker(self) -> list[tuple[str, str]]:
-        """One-line live progress label (blank when idle)."""
+        """One-line live progress label from the current agent activity."""
         if not self.query_controller.is_running():
             return [("class:running-kicker", "")]
-        return [("class:running-kicker", f" {self._spinner_marker()} searching...\n")]
+        return [
+            (
+                "class:running-kicker",
+                f" {self._spinner_marker()} {self.chat_history.current_activity()}...\n",
+            )
+        ]
 
     def render_slash_candidates(self) -> list[tuple[str, str]]:
         return self.slash_menu_renderer.render(self.slash_menu.menu_state)
 
     def _spinner_marker(self) -> str:
-        frames = ("[|]", "[/]", "[-]", "[\\]")
-        return frames[self.view_state.spinner_frame % len(frames)]
+        return SPINNER_FRAMES[self.view_state.spinner_frame % len(SPINNER_FRAMES)]
 
     def copy_chat_selection_to_clipboard(self) -> None:
         text = self.chat_selection.text()

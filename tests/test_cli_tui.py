@@ -1002,6 +1002,42 @@ def test_tui_scrollbar_uses_visible_to_content_ratio() -> None:
     assert top_text.startswith("#")
 
 
+
+def test_tui_kicker_shows_live_activity_phases() -> None:
+    app = _make_app()
+    app.view_state.chat_scroll_top = None
+
+    # Idle: no run, no scrollback hint -> blank line.
+    assert "".join(text for _, text in app.render_kicker()).strip() == ""
+
+    app.query_controller.running = True
+    app.chat_history.clear()
+    assert "working..." in "".join(text for _, text in app.render_kicker())
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_delta", message="hmm", data={"turn": 1, "field": "thinking", "delta": "hmm"}
+    ))
+    assert "thinking..." in "".join(text for _, text in app.render_kicker())
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_delta", message="plan", data={"turn": 1, "field": "content", "delta": "plan"}
+    ))
+    assert "writing..." in "".join(text for _, text in app.render_kicker())
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_message", message="assistant",
+        data={"turn": 1, "thinking": "hmm", "content": "plan",
+              "tool_calls": [{"id": "c1", "name": "search", "arguments": {"query": "q"}}]},
+    ))
+    app.chat_history.append_event(LiveEvent(
+        kind="tool_call_started", message="search",
+        data={"id": "c1", "name": "search", "arguments": {"query": "q"}, "turn": 1},
+    ))
+    kicker = "".join(text for _, text in app.render_kicker())
+    assert "running search..." in kicker
+    assert "searching..." not in kicker
+
+
 def test_tui_detail_scroll_can_move_up_and_return_to_tail() -> None:
     app = _make_app()
     app.chat_history._entries = [

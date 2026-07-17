@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 
 from searchagent.interfaces.tui.ui.selection_types import ChatSelection
 
+SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+
 
 @dataclass
 class TuiViewState:

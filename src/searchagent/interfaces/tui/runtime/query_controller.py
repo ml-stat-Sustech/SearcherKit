@@ -14,7 +14,7 @@ from searchagent.interfaces.tui.runtime.provider_errors import (
 )
 from searchagent.runtime.interactive_selection import active_model_label, apply_active_model
 from searchagent.runtime.interactive_selection import SelectionState
-from searchagent.interfaces.tui.ui.view_state import TuiViewState
+from searchagent.interfaces.tui.ui.view_state import SPINNER_FRAMES, TuiViewState
 from searchagent.common.errors import SearchAgentError
 from searchagent.runtime.interactive import InteractiveQueryConfig, InteractiveQueryRunner
 from searchagent.common.live_events import LiveEvent
@@ -121,13 +121,12 @@ class QueryController:
         return self.running or self._chat_history.has_unfinished_thinking_or_tool()
 
     async def _spinner_loop(self) -> None:
-        frames = ("[|]", "[/]", "[-]", "[\\]")
         try:
             while self._should_spin():
                 await asyncio.sleep(0.12)
                 self._view_state.spinner_frame = (
                     getattr(self._view_state, "spinner_frame", 0) + 1
-                ) % len(frames)
+                ) % len(SPINNER_FRAMES)
                 self._on_refresh_needed()
         except asyncio.CancelledError:
             return
