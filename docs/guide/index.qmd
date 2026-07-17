@@ -10,9 +10,9 @@ execution, and observability as separate components.
 Use this page to install SearcherKit and run your first local-file search. You
 can then follow a task guide or explore the system concepts in more detail.
 
-## How SearcherKit works
+### How SearcherKit works
 
-```text
+```bash
 dataset or TUI
       |
       v
@@ -46,7 +46,7 @@ At the center of this flow are three modules with different responsibilities:
 
 A typical turn therefore forms a loop:
 
-```text
+```bash
 question -> LLM -> tool call -> Tool -> Source -> documents
               ^                                  |
               `----------- tool result <---------'
@@ -67,7 +67,7 @@ that determines which model can call which tools, which sources those tools can
 reach, and which limits govern the agent loop. The same wiring is used whether
 the run starts from the TUI or a dataset.
 
-## Install SearcherKit
+### Install SearcherKit
 
 Clone the repository and install the package in editable mode:
 
@@ -94,7 +94,7 @@ The default installation includes the Elasticsearch and Anthropic clients.
 Some deployment and training workflows require additional services or optional
 dependencies; their task guides list the relevant requirements.
 
-## Run your first search
+### Run your first search
 
 The packaged `file_search` configuration connects an OpenAI-compatible model
 endpoint to `search` and `visit` tools over a local directory.
@@ -102,7 +102,7 @@ endpoint to `search` and `visit` tools over a local directory.
 Set the model endpoint and the directory to search:
 
 ::: {.panel-tabset}
-### Bash
+#### Bash
 
 ```bash
 export LLM_MODEL="YOUR_MODEL"
@@ -111,7 +111,7 @@ export LLM_BASE_URL="https://your-endpoint.example/v1"
 export FILE_SEARCH_ROOT="./docs"
 ```
 
-### PowerShell
+#### PowerShell
 
 ```powershell
 $env:LLM_MODEL = "YOUR_MODEL"
@@ -133,7 +133,7 @@ and use their contents to answer your questions.
 See [Search files with SearcherKit](01-searching/01-search-files.qmd) for the
 complete workflow, output locations, and access restrictions.
 
-## Understand the configuration
+### Understand the configuration
 
 A SearcherKit run is described by YAML. The smallest useful configuration
 connects four parts:
@@ -189,26 +189,26 @@ searcher tui --config-path configs/demo --config-name config \
   output_path=outputs/qwen3
 ```
 
-Read [LLM integration](03-customizing/02-LLM-integration.qmd) for clients and
+Read [LLM integration](03-customizing/02-llm-integration.qmd) for clients and
 parsers, and [Sources and tools](03-customizing/03-sources-and-tools.qmd) for
 retrieval and model-visible tool schemas.
 
-## Choose what to do next
+### Choose what to do next
 
 | Goal | Next page |
 | --- | --- |
 | Search a local directory interactively | [Search files with SearcherKit](01-searching/01-search-files.qmd) |
-| Search the public web interactively | [Search the web with SearcherKit](<01-searching/02-search-web copy.qmd>) |
+| Search the public web interactively | [Search the web with SearcherKit](01-searching/02-search-web.qmd) |
 | Search an Elasticsearch knowledge base | [Search with Elasticsearch](01-searching/03-search-with-elasticsearch.qmd) |
-| Run a dataset and evaluate its answers | [Run and evaluate](01-searching/04-run-and-evaluate.qmd) |
+| Run a dataset and evaluate its answers | [Run and evaluate](01-searching/04-batch-run-and-evaluate.qmd) |
 | Generate data or train a model | [Training overview](02-training/01-training-overview.qmd) |
-| Understand the runtime components | [System architecture](03-customizing/01-searcherkit-architecture.qmd) |
-| Connect a model and choose a message format | [LLM integration](03-customizing/02-LLM-integration.qmd) |
+| Understand the runtime components | [System architecture](03-customizing/01-project-architecture.qmd) |
+| Connect a model and choose a message format | [LLM integration](03-customizing/02-llm-integration.qmd) |
 | Configure retrieval and model-visible tools | [Sources and tools](03-customizing/03-sources-and-tools.qmd) |
-| Learn the interactive controls and records | [Interactive TUI](04-interface/02-interactive-tui.qmd) |
+| Learn the interactive controls and records | [Interactive TUI](04-interface/02-use-the-interactive-tui.qmd) |
 | Configure retries, logs, limits, and resume behavior | [Retrying and logging](03-customizing/04-retrying-and-logging.qmd) |
-| Add a provider, parser, source, or tool | [Custom Modules](03-customizing/05-custom-modules.qmd) |
-| Look up commands and flags | [CLI reference](04-interface/01-cli-reference.qmd) |
+| Add a provider, parser, source, or tool | [Custom Modules](03-customizing/05-customized-modules.qmd) |
+| Look up commands and flags | [CLI reference](04-interface/01-use-the-cli-interface.qmd) |
 
 The API Reference is generated from package docstrings. Use it for exact Python
 signatures after the guide has identified the component that owns the behavior

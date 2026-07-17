@@ -7,7 +7,7 @@ evaluation. Treat data generation, filtering, conversion, training, serving,
 and evaluation as separate reproducible stages.
 
 
-## Choose a training guide
+### Choose a training guide
 
 | Goal | Guide |
 | --- | --- |
@@ -15,7 +15,7 @@ and evaluation as separate reproducible stages.
 | Run GRPO or IGPO through AReaL | [RL with AReaL](02-rl-areal.qmd) |
 | Run synchronous or asynchronous RL through slime | [RL with slime](03-rl-slime.qmd) |
 
-## Supervised fine-tuning
+### Supervised fine-tuning
 
 The SFT scripts under `scripts/sft/` cover two distinct stages:
 
@@ -39,7 +39,7 @@ reporting credentials in environment variables. Keep semantic training choices
 such as template, loss scale, context length, optimizer settings, and
 distributed strategy in versioned YAML.
 
-## Reinforcement learning
+### Reinforcement learning
 
 The `scripts/areal/` and `scripts/slime/` directories are framework adapters,
 while reusable reward and training-agent logic belongs in
@@ -48,7 +48,7 @@ definition, rollout config, dataset revision, framework revision, and produced
 checkpoint. See the [AReaL](02-rl-areal.qmd) and [slime](03-rl-slime.qmd) guides for
 their distinct ownership boundaries and launch paths.
 
-## Evaluate a checkpoint
+### Evaluate a checkpoint
 
 Serve the checkpoint behind an OpenAI-compatible endpoint, then point the
 existing agent configuration at the served model:

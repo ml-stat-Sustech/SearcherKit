@@ -1,12 +1,12 @@
 ---
-title: Sources and Tools
+title: Sources & Tools
 ---
 
 A source is a retrieval adapter. A tool is a model-visible action. Keeping them
 separate lets the same corpus support search, visit, or a custom interaction
 without putting model-facing schemas into the storage layer.
 
-## Source contract
+### Source contract
 
 Every `DataSource` provides asynchronous `search`, `fetch`, and `close`
 operations. Sources return provider-neutral `Document` and `SearchResult`
@@ -36,7 +36,7 @@ agent:
       source: [project_docs]
 ```
 
-## Elasticsearch retrieval
+### Elasticsearch retrieval
 
 Elasticsearch supports `bm25`, `vector`, and `hybrid` search modes. Vector and
 hybrid search require an embedding endpoint and a populated vector field.
@@ -72,7 +72,7 @@ Highlighting builds compact snippets from matching fragments. Tune fragment
 size, fragment count, and `snippet_chars` against the context budget rather
 than returning entire documents from search.
 
-## Model-visible tool contract
+### Model-visible tool contract
 
 The tool name, description, and `inputSchema` are visible to the model. The
 schema should expose only arguments the model can use correctly.
@@ -101,7 +101,7 @@ agent:
 When validation errors are not raised, the tool returns an actionable schema
 error to the model so it can correct the call.
 
-## Built-in tools
+### Built-in tools
 
 SearcherKit registers `search`, `visit`, `multi_source_search`,
 `multi_source_visit`, and `mcp`. MCP tools share the same initialization,

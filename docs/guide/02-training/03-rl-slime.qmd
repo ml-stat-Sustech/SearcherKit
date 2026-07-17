@@ -6,14 +6,14 @@ The slime integration uses SearcherKit as the custom agent rollout and reward
 layer. slime owns SGLang rollout workers, Megatron training workers, Ray
 placement, weight synchronization, and checkpoints.
 
-## Prerequisites
+### Prerequisites
 
 Install slime according to [its manual](https://thudm.github.io/slime/get_started/quick_start.html). Install SearcherKit into the same training environment. The cluster must share access to model checkpoints, datasets, SearcherKit agent config, retrieval services, and output paths.
 
 `src/searcherkit/config/training/train_slime.yaml` defines the SearcherKit agent
 used during rollout. Select another config with `SEARCHERKIT_AGENT_CONFIG`.
 
-## Integration hooks
+### Integration hooks
 
 | Responsibility | Path |
 | --- | --- |
@@ -22,7 +22,7 @@ used during rollout. Select another config with `SEARCHERKIT_AGENT_CONFIG`.
 | slime training entry points | `searcherkit.training.slime.train_dist` and `train_async` |
 | IGPO advantage calculation | `searcherkit.training.slime.igpo` |
 
-## Run training
+### Run training
 
 The launch script contains cluster-specific defaults for an eight-GPU node:
 four GPUs for Megatron actor training and four GPUs for SGLang rollout. Override

@@ -1,5 +1,5 @@
 ---
-title: Batch Run and Evaluate
+title: Batch Run & Evaluate
 ---
 
 SearcherKit provides an asynchronous batch runtime for running SearchAgent over a
@@ -11,7 +11,7 @@ the complete workflow:
 3. Monitor or resume the batch.
 4. Evaluate the saved trajectories.
 
-## Prepare the input data
+### Prepare the input data
 
 The default data loader reads JSONL or Parquet files. Set the source format and the
 fields that contain the question and reference answer:
@@ -34,9 +34,9 @@ A JSONL record can be as small as:
 Set `max_items` to a small number while testing a new configuration, then change it
 to `null` for the full dataset.
 
-## Configure Agent
+### Configure Agent
 
-### Configure concurrency
+#### Configure concurrency
 
 Large batches can overload an inference server or a search backend. Each concurrency
 setting protects a different resource:
@@ -54,7 +54,7 @@ Start with conservative values and increase them while monitoring queue depth,
 latency, rate-limit responses, and retries. A higher limit does not necessarily
 increase throughput.
 
-### Configure LLM endpoint
+#### Configure LLM endpoint
 
 For self-hosted LLM endpoint, to encourage KV cache hit. Avoid using data parallel and let SearcherKit handle the scheduling between inference instances.
 
@@ -79,7 +79,7 @@ List all their endpoints under `base_url`. SearcherKit keeps each agent session 
 
 Every endpoint must serve the same model with compatible generation settings.
 
-### Configure retries and resume behavior
+#### Configure retries and resume behavior
 
 Retries apply at three boundaries:
 
@@ -91,7 +91,7 @@ The packaged `searcherkit` configuration also enables checkpoint-based resume. K
 `checkpoint.resume: true` and rerun the same command after an interruption. Existing
 sample outputs are preserved unless `overwrite_output` is enabled.
 
-## Run the Agent
+### Run the Agent
 
 First inspect the composed configuration. This catches invalid fields and Hydra
 overrides before the batch starts:
@@ -123,11 +123,11 @@ For long-running jobs, monitor `summary.json`, `run.log`, the per-trace logs, an
 queue depth of each external service.
 
 
-### The run output
+#### The run output
 
 Executing `searcher run` creates output in the following structure:
 
-```text
+```bash
 outputs/searcherkit/
 ├── history/
 │   ├── 000000.json
@@ -142,16 +142,16 @@ outputs/searcherkit/
 Each file in `history/` contains the input, reference answer, complete message
 history, per-sample statistics, and timing data. `summary.json` reports aggregate completion, failure, turn, tool-call, and timing statistics. `traces/` contains per-trajectory logs while `run.log` contains global log.
 
-## Evaluate the saved trajectories
+### Evaluate the saved trajectories
 
 
-### Evaluate
+#### Evaluate
 
 `searcher evaluate` extracts the final answer from each saved trajectory, asks an
 LLM judge to compare it with the reference answer, writes one judgment per sample,
 and produces aggregate accuracy statistics.
 
-### Check the trajectory format
+#### Check the trajectory format
 
 Pass the run's `history/` directory as the evaluator input. Each JSON record must
 contain:
@@ -163,19 +163,19 @@ contain:
 The last history item should be an assistant message. Otherwise, the evaluator
 records the sample as an incorrect `No valid response` without calling the judge.
 
-### Configure the judge
+#### Configure the judge
 
 The evaluator uses an OpenAI-compatible endpoint:
 
 ::: {.panel-tabset}
-### Bash
+#### Bash
 
 ```bash
 export OPENAI_API_KEY=EMPTY
 export OPENAI_BASE_URL=http://127.0.0.1:8001/v1
 ```
 
-### PowerShell
+#### PowerShell
 
 ```powershell
 $env:OPENAI_API_KEY = "EMPTY"
@@ -183,7 +183,7 @@ $env:OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
 ```
 :::
 
-### Match the final-answer format
+#### Match the final-answer format
 
 The evaluator extracts the first answer inside `\boxed{...}` by default. The
 packaged `searcherkit` configuration instead asks SearchAgent to emit
@@ -198,7 +198,7 @@ The expression must contain a named `answer` group. If it does not match, or the
 captured answer is empty, the evaluator sends the complete final assistant response
 to the judge. Use the same extraction pattern across runs to keep scores comparable.
 
-### Run the evaluation
+#### Run the evaluation
 
 ```bash
 searcher evaluate \
@@ -216,7 +216,7 @@ The evaluator retries invalid JSON and invalid judge schemas. A valid judge resp
 must contain exactly these fields: `extracted_final_answer`, `correct_answer`,
 `reasoning`, `correct`, and `confidence`.
 
-### Resume an evaluation
+#### Resume an evaluation
 
 Each output filename matches its input filename. Existing output files are skipped,
 so rerunning the same command resumes an interrupted evaluation. Delete an individual
@@ -225,9 +225,9 @@ result file only when you need to evaluate that sample again.
 Failed requests are logged and counted in `summary.json`; they do not prevent other
 samples from completing.
 
-### Inspect the evaluation output
+#### Inspect the evaluation output
 
-```text
+```bash
 outputs/searcherkit-eval/
 ├── 000000.json
 ├── 000001.json

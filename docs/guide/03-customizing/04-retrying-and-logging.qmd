@@ -1,12 +1,12 @@
 ---
-title: Retrying and Logging
+title: Retrying & Logging
 ---
 
 Search-agent runs combine several independent services and long-lived tasks.
 Reliable operation depends on bounding each failure domain and preserving enough
 evidence to resume or diagnose a run.
 
-## Retry at the correct boundary
+### Retry at the correct boundary
 
 SearcherKit has separate retry scopes:
 
@@ -21,13 +21,13 @@ invalid model names, malformed permanent config, and deterministic schema
 errors should surface immediately. Test both eventual success and exhausted
 retry behavior.
 
-## Bound agent execution
+### Bound agent execution
 
 Configure turn, token, and time budgets together. Reminder prompts near those
 limits should tell the model to stop using tools and produce the required final
 answer format. A caller may still enforce a hard timeout around the whole run.
 
-## Preserve observability
+### Preserve observability
 
 For production-scale runs, keep:
 
@@ -41,7 +41,7 @@ Avoid logging secrets or complete credentials. Prefer stable sample and trace
 identifiers so a summary failure can be followed into the relevant history and
 trace.
 
-## Diagnose in layers
+### Diagnose in layers
 
 1. Run `searcher inspect` to rule out config shape errors.
 2. Use `searcher tui` or a one-item dataset to test one trajectory.

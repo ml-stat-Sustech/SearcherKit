@@ -7,9 +7,9 @@ to a provider or inference server; the parser translates messages and tool
 calls between that provider-facing representation and SearcherKit's internal
 message types.
 
-## Request and response path
+### Request and response path
 
-```text
+```bash
 SearchAgent history
     -> Parser.to_model()
     -> Client.complete_with_usage()
@@ -22,7 +22,7 @@ This split matters when two models use the same OpenAI-compatible endpoint but
 different chat templates or textual tool-call formats. Change the parser when
 the format changes; change the client when API transport changes.
 
-## Built-in clients
+### Built-in clients
 
 | `type` | Use case |
 | --- | --- |
@@ -51,7 +51,7 @@ options here rather than teaching the parser about HTTP payload details.
 session on one endpoint to improve cache locality; all listed endpoints must
 serve the same model and generation contract.
 
-## Built-in parsers
+### Built-in parsers
 
 | `type` | Use case |
 | --- | --- |
@@ -70,14 +70,14 @@ Use `upstream` when the inference server parses model tool-call text and returns
 structured provider tool calls. For vLLM or SGLang deployments, configure the
 server's tool-call and reasoning parsers to match the model template.
 
-## Streaming
+### Streaming
 
 Interactive execution enables `stream_llm` and consumes client stream chunks.
 Parsers may provide a live-delta splitter so reasoning and final content can be
 displayed separately without changing the stored final message. Batch execution
 continues to use the complete response interface.
 
-## Retry boundaries
+### Retry boundaries
 
 Configure retry for failures that can succeed on another attempt, such as
 temporary provider failures or a nondeterministic `ParsingError`:
@@ -96,4 +96,4 @@ surface immediately. When retries are exhausted, the final concrete error is
 propagated to the agent or task boundary.
 
 To implement a new transport or model format, see
-[Custom Moduoles](../03-customizing/05-custom-modules.qmd).
+[Custom Modules](05-customized-modules.qmd).

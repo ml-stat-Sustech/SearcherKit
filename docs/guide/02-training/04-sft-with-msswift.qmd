@@ -1,5 +1,5 @@
 ---
-title: Supervised Fine-Tuning
+title: SFT with MS-Swift
 ---
 
 SearcherKit's SFT path converts agent trajectories into MS-Swift records and
@@ -8,7 +8,7 @@ conversion, training, serving, and evaluation as separate stages.
 
 Install ms-swift according to [its manual](https://swift.readthedocs.io/zh-cn/latest/GetStarted/SWIFT-installation.html). Install SearcherKit into the same training environment.
 
-## Convert trajectories
+### Convert trajectories
 
 ```bash
 searcher plugins convert \
@@ -22,7 +22,7 @@ messages are formatted correctly for the selected model template.
 
 See `scripts/sft/sft_convert.sh` for conversion setting references.
 
-## Configure MS-Swift
+### Configure MS-Swift
 
 Edit `scripts/sft/sft_training.yaml`. Put semantic training choices in YAML:
 
@@ -34,7 +34,7 @@ Edit `scripts/sft/sft_training.yaml`. Put semantic training choices in YAML:
 
 MS-Swift flags belong under `backend.extra_args`, check [MS-Swift Documentation](https://swift.readthedocs.io/zh-cn/latest/Instruction/Command-line-parameters.html) for details
 
-## Validate before launch
+### Validate before launch
 
 ```bash
 python -m searcherkit.training.sft \
@@ -46,7 +46,7 @@ The dry run resolves the YAML and prints the generated `swift sft` command. Run
 it in the same dedicated environment that contains MS-Swift, the intended CUDA
 toolchain, and SearcherKit.
 
-## Train
+### Train
 
 ```bash
 SFT_MODEL=/models/Qwen3-8B \

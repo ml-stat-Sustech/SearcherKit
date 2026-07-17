@@ -6,7 +6,7 @@ The AReaL integration uses SearcherKit for agent conversation, tool execution,
 limits, errors, and trajectory metadata. AReaL owns distributed scheduling,
 rollout generation, optimization, checkpoints, and experiment tracking.
 
-## Prerequisites
+### Prerequisites
 
 Install AReaL according to [its manual](https://areal-ai.io/en/tutorial/installation.html), then install SearcherKit
 into that environment. Every participating node must be able to access the
@@ -20,14 +20,14 @@ The main entry points are:
 | GRPO | `searcherkit.training.areal.train_dist` | `scripts/areal/train_dist_areal.sh` |
 | IGPO | `searcherkit.training.areal.train_igpo` | `scripts/areal/train_dist_areal_igpo.sh` |
 
-## Configure the rollout agent
+### Configure the rollout agent
 
 Start with `src/searcherkit/config/training/train_areal.yaml` for GRPO or
 `train_dist_areal_igpo.yaml` for IGPO. 
 
 Configure `workflow.agent` and `eval_workflow.agent` to define agents. For other configurations, check [AReaL Manual](https://areal-ai.io/en/cli_reference.html)
 
-## Run training
+### Run training
 
 The launch scripts contain cluster-specific defaults. Override hardware related configuration, paths, and experiment name.
 
@@ -42,7 +42,7 @@ bash scripts/areal/train_dist_areal.sh \
     train_dataset.path=/path/to/dataset \
 ```
 
-## IGPO
+### IGPO
 
 IGPO recipe contains SearcherKit's reproduction of the [IGPO reward](https://arxiv.org/abs/2510.14967). Run with the `searcherkit.training.areal.train_igpo` entry point or start from the `train_dist_areal_igpo.sh`
 
@@ -52,7 +52,7 @@ bash scripts/areal/train_dist_areal_igpo.sh \
   ...
 ```
 
-## Failure and reward accounting
+### Failure and reward accounting
 
 During the training, retrying should only be carried for external, recoverable error like tool invoking timeouts. Handle model related errors like `LLMError` and return a low score to allow RL engine to punish such action.
 

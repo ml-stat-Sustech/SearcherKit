@@ -1,14 +1,14 @@
 ---
-title: SearcherKit Architecture
+title: Project Architecture
 ---
 
 SearcherKit separates model communication, agent reasoning, retrieval, tool
 presentation, and batch execution. This separation is the central design idea
 behind both the code and its configuration.
 
-## Execution flow
+### Execution flow
 
-```text
+```bash
 dataset or TUI
       |
       v
@@ -29,9 +29,9 @@ files, and whole-task retries. `SearchAgent` owns one trajectory: it formats the
 conversation, calls the model, dispatches tools, and asks for a final answer as
 configured limits approach.
 
-## Core concepts
+### Core concepts
 
-### LLM client and parser
+#### LLM client and parser
 
 The client performs provider or inference-server I/O. The parser translates
 between SearcherKit messages and a model's chat or tool-call format. Keeping
@@ -41,7 +41,7 @@ prompt and tool-call conventions.
 Use the `upstream` parser when the provider returns native tool calls. Use a
 model-specific parser when tool calls are encoded in model text.
 
-### Source and tool
+#### Source and tool
 
 A source retrieves documents. A tool is the model-visible action that uses a
 source or another service. Multiple tools can share a source, and a tool can
@@ -52,27 +52,27 @@ Built-in source families are local files, web search and fetch, and
 Elasticsearch. Built-in tool families include search, visit, multi-source
 variants, summarization, and MCP-backed tools.
 
-### Config and factories
+#### Config and factories
 
 Runtime objects support structured configuration as well as normal Python
 construction. Hydra composes YAML for CLI workflows; factory functions convert
 the resulting config into clients, parsers, sources, and tools. Custom modules
 are referenced by their real import paths rather than compatibility aliases.
 
-### Outputs and traces
+#### Outputs and traces
 
 Batch execution writes one durable history record per sample, trace logs for
 individual trajectories, a global run log, and aggregate summary data. These
 artifacts are the handoff between running, evaluation, debugging, conversion,
 and training workflows.
 
-### Training integrations
+#### Training integrations
 
 Training reuses the same agent, parser, tools, sources, and trajectory format as
 normal inference. `searcherkit.training` adapts those runtime components to a
 training framework.
 
-```text
+```bash
 AReaL or Slime
       |
       v
@@ -100,7 +100,7 @@ Framework-specific adapters live under `searcherkit.training.areal` and
 and [slime guide](../02-training/03-rl-slime.qmd) for configuration and launch
 details.
 
-## Ownership map
+### Ownership map
 
 | Concern | Owning package |
 | --- | --- |

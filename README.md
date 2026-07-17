@@ -10,48 +10,47 @@ stack.
 
 ![SearcherKit](docs/images/searcherkit_1.png){width=80% fig-align="center"}
 
-<!-- ![figure2](figure2.png) -->
+### ✨ Highlights
 
-## ✨ Highlights
+- 🧠 **One toolkit for the full search-agent lifecycle.** Build agent scaffolds, generate training rollouts, run evaluations, and serve interactive experiences in one coherent framework. Reuse the same components from early prototypes to production-oriented workflows. Spend less time connecting fragmented tools, more time improving agent capabilities.
 
-- 🧠 **Search agent, all-in-one** — Covers scaffold, training, evaluation & user interface. Kickstart your search agent journey
+- 🌐 **Connect to various search sources.** Connect web services, APIs, Elasticsearch indexes, private knowledge bases, and local files through a common source interface. Combine sources as needed without modifying agent or tool design. Build custom retrieval pipelines that can evolve with your data and use case.
 
+- ⚡ **Developer-friendly and built for large-scale experiments.** Modular providers, parsers, sources, and tools allow local models, hosted APIs, and retrieval backends can be mixed and matched. Native asynchronous execution and layered concurrency controls keep batch workloads fast and resource-aware. Checkpoint recovery and per-sample traces make long-running experiments easier to resume, inspect, and reproduce.
 
-- 🌐 **Retrieve from various sources** — Integrate with search sources from files, knowledge bases and web pages.
+- 🔥 **Training-ready, with SOTA results from reinforcement learning.** Use SearcherKit as a high-throughput rollout runtime for SFT and RL workflows. The same agent and tool configuration can power interactive sessions, offline evaluation, training-data generation, and RL rollouts. Our RL experiments achieve state-of-the-art results with an 8B model on public search benchmarks。
 
-- ⚡ **Lightweight, efficient and developer friendly** — `SearcherKit` focus on scaffold/harness level without heavy dependencies. Can be easily integrated into your existing projects as a library. Invoke `searcherkit` functions with full async execution pipeline to accelerate your project.
-
-- 🔥 **Seamless Training intergation with SOTA performace** - `SearcherKit` can function as a high-performance rollout runtime that can be seamlessly integrated into post-training workflows. Our RL training experiement yields SOTA performance. 
-
-## 🚀 Quick Start
+### 🚀 Quick Start
 
 See the [Quick Start](docs/guide/index.qmd)
 to start running your search agent.
 
-## 📖 Documentation
+### 📖 Documentation
 
 - [Quick start](docs/guide/index.qmd)
 - [Search Files](docs/guide/01-searching/01-search-files.qmd)
 - [Search Webpages](docs/guide/01-searching/02-search-web.qmd)
+
 - [Training overview](docs/guide/02-training/01-training-overview.qmd)
 
-- [SearcherKit Architecture](docs/guide/03-customizing/01-searcherkit-architecture.qmd)
+- [Project Architecture](docs/guide/03-customizing/01-project-architecture.qmd)
 
-- [CLI reference](docs/guide/04-interface/01-cli-reference.qmd)
-- [Interactive TUI](docs/guide/04-interface/02-interactive-tui.qmd)
+- [CLI reference](docs/guide/04-interface/01-use-the-cli-interface.qmd)
+- [Interactive TUI](docs/guide/04-interface/02-use-the-interactive-tui.qmd)
 
-## 🤝 Contributing
+### 🤝 Contributing
 
-SearcherKit is actively evolving. Reproduction reports, new model parsers,
-source adapters, benchmark recipes, training integrations, bug reports, and
-documentation improvements are welcome. Open an issue with the model,
-benchmark, and environment you want to support—or submit a focused pull
-request.
+SearcherKit is actively evolving. We welcome issues & PRs on reproduction reports, new model parsers, source adapters, benchmark recipes, training integrations, bug reports, and
+documentation improvements etc. 
 
 If SearcherKit helps your research or makes your agent stack easier to reason
 about, consider starring the repository. It helps more search-agent builders
 find the project.
 
-## 📜 License
+### 👤 The Team
 
-**TODO**: Add license information.
+SearcherKit is built by contributors from Department of Statistics and Data Science at SUSTech under the guidence of Assistant Professor [Wei Hongxin](https://hongxin001.github.io/). Main contributors & maintainers are [Li Hanyang](https://justinliii.github.io/), [Zhang Haotian](), [Yang Hanjie](), [Wang Shuoyuan](), [Lan Zijie]() and [Yu Zhengye]().
+
+### 📜 License
+
+SearcherKit is licensed under the [MIT License](LICENSE).

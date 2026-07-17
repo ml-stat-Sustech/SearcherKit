@@ -1,10 +1,10 @@
 ---
-title: CLI Reference
+title: Use the CLI Interface
 ---
 
 The SearcherKit command-line interface is used to run configurations, evaluate outputs, inspect configurations, and manage plugins.
 
-## `searcher run`
+### `searcher run`
 
 Run a SearcherKit configuration.
 
@@ -22,7 +22,7 @@ searcher run \
   agent.llm_client.model=demo
 ```
 
-## `searcher evaluate`
+### `searcher evaluate`
 
 Evaluate saved run records using an LLM judge.
 
@@ -33,7 +33,7 @@ searcher evaluate outputs/webexplorer outputs/webexplorer_eval \
 
 The evaluation process uses the `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables.
 
-## `searcher inspect`
+### `searcher inspect`
 
 Recursively validate configuration fields against their corresponding structured config types without running the agent.
 
@@ -54,7 +54,7 @@ searcher inspect \
   agent.llm_client.model=demo
 ```
 
-## `searcher plugins`
+### `searcher plugins`
 
 List plugins or run plugin deployment tools.
 

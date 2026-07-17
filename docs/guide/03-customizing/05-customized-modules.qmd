@@ -1,12 +1,12 @@
 ---
-title: Extend SearcherKit with Custom Modules
+title: Customized Modules
 ---
 
 Add an extension at the narrowest interface that owns the new behavior. This
 keeps provider transport, model formatting, retrieval, and tool presentation
 independently testable.
 
-## Choose an extension point
+### Choose an extension point
 
 | Need | Extend |
 | --- | --- |
@@ -20,7 +20,7 @@ independently testable.
 Do not place provider HTTP calls in parsers, retrieval code in CLI commands, or
 benchmark-specific implementation in packaged config defaults.
 
-## Construction contract
+### Construction contract
 
 Public runtime components should support normal Python parameters and their
 structured config or factory path. A custom source or tool can be selected with
@@ -40,7 +40,7 @@ agent:
         source_name: internal_corpus
 ```
 
-## Test the contract
+### Test the contract
 
 Extension tests should cover, when applicable:
 

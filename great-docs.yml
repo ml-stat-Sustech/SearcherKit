@@ -28,9 +28,36 @@ dynamic: false
 user_guide: null
 
 sections:
-  - title: Tutorial
+  - title: Quick Start
     dir: docs/guide
     index: false
+    # Great Docs strips numeric directory prefixes before building the sidebar,
+    # then sorts the cleaned directory names alphabetically. Keep the intended
+    # reader journey explicit instead of relying on the source directory names.
+    sidebar_groups:
+      - section: Searching
+        contents:
+          - searching/search-files.qmd
+          - searching/search-web.qmd
+          - searching/search-with-elasticsearch.qmd
+          - searching/batch-run-and-evaluate.qmd
+      - section: Training
+        contents:
+          - training/training-overview.qmd
+          - training/rl-areal.qmd
+          - training/rl-slime.qmd
+          - training/sft.qmd
+      - section: Customizing
+        contents:
+          - customizing/project-architecture.qmd
+          - customizing/llm-integration.qmd
+          - customizing/sources-and-tools.qmd
+          - customizing/retrying-and-logging.qmd
+          - customizing/customized-modules.qmd
+      - section: Interface
+        contents:
+          - interface/use-the-cli-interface.qmd
+          - interface/use-the-interactive-tui.qmd
 
 # API Discovery Settings
 # ----------------------

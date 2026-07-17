@@ -4,7 +4,7 @@ title: Search Files
 
 SearcherKit provides a out-of-the-box local file search pipeline for agents to answer questions about files in a local directory, with the config `file_search`.
 
-```text
+```bash
 question -> LLM -> search -> ripgrep matches
                 -> visit  -> complete file content
                 -> LLM -> final answer
@@ -15,7 +15,7 @@ To use it, you should
 - Configure enviroment variables for LLM and file search root
 - Run searchagent tui with the `file_search` config.
 
-## Install SearcherKit
+### Install SearcherKit
 
 Install the package
 
@@ -31,7 +31,7 @@ To ensure that riggrep is available, run:
 rg --version
 ```
 
-## Configure the environment
+### Configure the environment
 
 SearcherKit with the `file_search` config uses the following environment variables.
 
@@ -47,7 +47,7 @@ will start SearcherKit. The values remain available until that terminal is
 closed.
 
 ::: {.panel-tabset}
-### Bash
+#### Bash
 
 ```bash
 export LLM_MODEL="YOUR_MODEL"
@@ -56,7 +56,7 @@ export LLM_BASE_URL="https://your-endpoint.example/v1"
 export FILE_SEARCH_ROOT="./docs"
 ```
 
-### PowerShell
+#### PowerShell
 
 ```powershell
 $env:LLM_MODEL = "YOUR_MODEL"
@@ -66,9 +66,7 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 ```
 :::
 
-<details>
-<summary>Click to expand for persistant env var configuration</summary>
-
+::: {.callout-tip}
 To keep the configuration across terminal sessions, create a `.env` file in
 the directory where you run SearcherKit:
 
@@ -82,10 +80,9 @@ FILE_SEARCH_ROOT=./docs
 SearcherKit loads `.env` by default. Use `--env-file path/to/another.env` to load a
 different file. Variables already defined in the terminal take precedence over
 values in the dotenv file. 
+:::
 
-</details>
-
-## Start to search files
+### Start to search files
 
 ```bash
 searcher tui --config-name file_search
@@ -100,5 +97,5 @@ the global log, and trace logs are written under
 `outputs/file-search-tui/interactive`.
 
 For general controls and record behavior, see
-[Use the Interactive TUI](../04-interface/02-interactive-tui.qmd). For the complete
+[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd). For the complete
 source/tool model, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).

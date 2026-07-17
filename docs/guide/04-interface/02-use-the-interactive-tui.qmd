@@ -7,7 +7,7 @@ traces, and history serialization used by batch execution. Each submitted query
 is an independent agent run; visible transcript history is not added to the
 next query's model context.
 
-## Start the TUI
+### Start the TUI
 
 ```bash
 searcher inspect --config-path configs/demo --config-name config
@@ -25,7 +25,7 @@ The TUI also reads `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, and
 `LLM_BASE_URL` from `.env` by default. Select another file with `--env-file`.
 Explicit environment values are applied to the composed client config.
 
-## Run one interactive query without the full UI
+### Run one interactive query without the full UI
 
 Use `--query` to exercise the interactive streaming and recording path from a
 normal terminal:
@@ -38,7 +38,7 @@ searcher tui --config-path configs/demo --config-name config \
 This is useful for smoke tests and environments where a full-screen terminal
 application is inconvenient.
 
-## Slash commands
+### Slash commands
 
 Type `/` to open the command menu.
 
@@ -55,7 +55,7 @@ Model and source changes apply only to subsequent independent runs. Commands
 that mutate session state are rejected while a query is active; cancel the
 current query first.
 
-## Records and traces
+### Records and traces
 
 The default record directory is `outputs/interactive`, or
 `<output_path>/interactive` when the run config defines `output_path`.

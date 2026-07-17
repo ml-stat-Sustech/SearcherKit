@@ -6,7 +6,7 @@ SearcherKit can use an Elasticsearch index as a private knowledge base. The
 agent searches the index for relevant passages, optionally fetches complete
 documents, and then answers from the retrieved evidence.
 
-```text
+```bash
 question -> LLM -> search -> Elasticsearch matches
                 -> visit  -> indexed document
                 -> LLM -> final answer
@@ -15,7 +15,7 @@ question -> LLM -> search -> Elasticsearch matches
 This guide starts with BM25 because it needs only Elasticsearch. Vector and
 hybrid retrieval are covered after the basic pipeline is working.
 
-## Install SearcherKit
+### Install SearcherKit
 
 Install the package
 
@@ -33,7 +33,7 @@ With a valid elasticsearch endpoint, confirm that Elasticsearch is reachable bef
 curl http://your.elasticsearch.endpoint:port
 ```
 
-## Prepare an index
+### Prepare an index
 
 The default installation includes the Elasticsearch client. To build an index with SearcherKit's deployment plugins, install the indexing dependencies:
 
@@ -73,12 +73,12 @@ configuration below. At minimum, the fields in `search_fields` must be
 searchable. The field used by `document_id_field` and `fetch_field` must
 identify a document unambiguously.
 
-## Configure the environment
+### Configure the environment
 
 Set the LLM connection values in the shell that will run SearcherKit:
 
 ::: {.panel-tabset}
-### Bash
+#### Bash
 
 ```bash
 export LLM_MODEL="YOUR_MODEL"
@@ -86,7 +86,7 @@ export LLM_API_KEY="YOUR_API_KEY"
 export LLM_BASE_URL="https://your-endpoint.example/v1"
 ```
 
-### PowerShell
+#### PowerShell
 
 ```powershell
 $env:LLM_MODEL = "YOUR_MODEL"
@@ -95,9 +95,7 @@ $env:LLM_BASE_URL = "https://your-endpoint.example/v1"
 ```
 :::
 
-<details>
-<summary>Click to expand for persistant env var configuration</summary>
-
+::: {.callout-tip}
 To keep these values across terminal sessions, put them in a `.env` file in
 the directory where you run SearcherKit:
 
@@ -109,9 +107,9 @@ LLM_BASE_URL=https://your-endpoint.example/v1
 
 SearcherKit loads `.env` by default. Values already defined in the shell take
 precedence.
-</details>
+:::
 
-## Create a BM25 search configuration
+### Create a BM25 search configuration
 
 Create `elasticsearch_search.yaml` in the repository root:
 
@@ -197,7 +195,7 @@ The source name is internal to SearcherKit. The `search` and `visit` tools use
 URL field, remove `document_id_field` and `fetch_field`; search results will use
 the Elasticsearch `_id`, and `visit` will fetch by `_id`.
 
-## Validate and start the TUI
+### Validate and start the TUI
 
 Validate the configuration before connecting to the services:
 
@@ -223,7 +221,7 @@ searcher tui --config-path . --config-name elasticsearch_search \
   --query "What topics are covered by this knowledge base?"
 ```
 
-## Enable vector or hybrid retrieval
+### Enable vector or hybrid retrieval
 
 Vector search embeds each query and compares it with a dense-vector field in
 the index. Hybrid search combines vector retrieval with BM25. Both modes require:
@@ -293,7 +291,7 @@ applied exactly once. Document embeddings must use the model's document prompt
 convention; query embeddings must use its query prompt convention.
 :::
 
-## Common failures and solutions
+### Common failures and solutions
 
 | Symptom | Check |
 | --- | --- |
@@ -309,4 +307,4 @@ convention; query embeddings must use its query prompt convention.
 For the complete source field reference and model-visible tool schemas, see
 [Sources and Tools](../03-customizing/03-sources-and-tools.qmd). For TUI controls
 and saved record behavior, see
-[Use the Interactive TUI](../04-interface/02-interactive-tui.qmd).
+[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
