@@ -163,20 +163,11 @@ class TuiApplicationBuilder:
             ),
             filter=Condition(slash_menu.is_active),
         )
-        running_kicker_visible = Condition(self._shell.is_running)
-        running_kicker_spacer = ConditionalContainer(
-            Window(height=1),
-            filter=running_kicker_visible,
-        )
-        running_kicker = ConditionalContainer(
-            Window(FormattedTextControl(self._shell.render_running_kicker), height=1),
-            filter=running_kicker_visible,
-        )
+        kicker = Window(FormattedTextControl(self._shell.render_kicker), height=1)
         status_window = Window(FormattedTextControl(self._shell.render_status), height=1)
         root = HSplit([
             VSplit([chat_window, scrollbar]),
-            running_kicker_spacer,
-            running_kicker,
+            kicker,
             Window(height=1, char="─"),
             text_area,
             Window(height=1, char="─"),

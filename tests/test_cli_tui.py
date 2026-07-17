@@ -1391,12 +1391,12 @@ def test_tui_dynamic_input_height_and_fixed_slash_height_share_terminal_rows() -
 
     assert app.input_view_height() == 1
     assert app.slash_candidates_height() == 5
-    assert app.chat_view_height() == 21
+    assert app.chat_view_height() == 20
 
     app.input_field.set_text("123456789\nsecond\nthird")
 
     assert app.input_view_height() == 4
-    assert app.chat_view_height() == 23
+    assert app.chat_view_height() == 22
 
 
 def test_tui_renders_slash_candidates_below_input() -> None:

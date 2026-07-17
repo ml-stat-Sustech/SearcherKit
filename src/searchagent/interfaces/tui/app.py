@@ -325,7 +325,10 @@ class SearchAgentTui:
             ("class:status-records", content.record_label),
         ]
 
-    def render_running_kicker(self) -> list[tuple[str, str]]:
+    def render_kicker(self) -> list[tuple[str, str]]:
+        """One-line live progress label (blank when idle)."""
+        if not self.query_controller.is_running():
+            return [("class:running-kicker", "")]
         return [("class:running-kicker", f" {self._spinner_marker()} searching...\n")]
 
     def render_slash_candidates(self) -> list[tuple[str, str]]:
@@ -347,7 +350,6 @@ class SearchAgentTui:
         return self.layout_geometry.input_view_height(
             self.input_field.text(),
             slash_visible=self.slash_candidates_visible(),
-            running=self.query_controller.is_running(),
         )
 
     def slash_candidates_height(self) -> int:
@@ -357,7 +359,6 @@ class SearchAgentTui:
         return self.layout_geometry.chat_view_height(
             input_height=self.input_view_height(),
             slash_visible=self.slash_candidates_visible(),
-            running=self.query_controller.is_running(),
         )
 
     def is_running(self) -> bool:
