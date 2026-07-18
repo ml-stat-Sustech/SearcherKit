@@ -19,7 +19,9 @@ class GeometryConfig:
     """Constants that parameterize the layout."""
 
     slash_menu_height: int = 5
-    kicker_height: int = 1
+    # One blank spacer above the live progress line so running text is not
+    # flush against the chat viewport. Always reserved to avoid layout jumps.
+    kicker_height: int = 2
     status_bar_height: int = 1
     input_separator_height: int = 2
     min_chat_height: int = 4

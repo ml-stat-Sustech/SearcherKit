@@ -163,10 +163,13 @@ class TuiApplicationBuilder:
             ),
             filter=Condition(slash_menu.is_active),
         )
+        # Blank spacer keeps running kicker text one row below the chat content.
+        kicker_spacer = Window(height=1)
         kicker = Window(FormattedTextControl(self._shell.render_kicker), height=1)
         status_window = Window(FormattedTextControl(self._shell.render_status), height=1)
         root = HSplit([
             VSplit([chat_window, scrollbar]),
+            kicker_spacer,
             kicker,
             Window(height=1, char="─"),
             text_area,
