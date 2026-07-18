@@ -82,7 +82,7 @@ def test_tui_hides_thinking_content_without_truncating_transcript() -> None:
     assert "Tool result: search" in text
 
 
-def test_tui_shows_thinking_by_default() -> None:
+def test_tui_hides_thinking_by_default() -> None:
     app = _make_app()
     app.chat_history._entries = [
         ConversationEntry(
@@ -96,7 +96,7 @@ def test_tui_shows_thinking_by_default() -> None:
 
     text = _render_text(app)
 
-    assert "default visible thinking" in text
+    assert "default visible thinking" not in text
 
 
 def test_tui_can_show_thinking_when_toggled() -> None:
@@ -1027,6 +1027,7 @@ def test_tui_kicker_hints_lines_below_only_when_scrolled_up() -> None:
 def test_tui_streaming_cursor_shows_while_streaming_and_stays_out_of_plain_lines() -> None:
     app = _make_app()
     app.chat_history.clear()
+    app.view_state.show_thinking = True
 
     app.chat_history.append_event(LiveEvent(
         kind="assistant_delta", message="think", data={"turn": 1, "field": "thinking", "delta": "think"}

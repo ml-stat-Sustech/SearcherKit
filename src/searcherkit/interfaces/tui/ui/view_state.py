@@ -8,7 +8,7 @@ from searcherkit.interfaces.tui.ui.selection_types import ChatSelection
 class TuiViewState:
     """Pure display state for the terminal UI."""
 
-    show_thinking: bool = True
+    show_thinking: bool = False
     show_tool_detail: bool = False
     chat_scroll_top: int | None = None
     chat_selection: ChatSelection | None = None
