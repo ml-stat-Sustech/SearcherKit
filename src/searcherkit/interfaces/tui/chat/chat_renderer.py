@@ -40,6 +40,7 @@ class ChatRenderer:
                 not entry.body.strip()
                 and not reasoning.strip()
                 and entry.role in {"assistant", "thinking"}
+                and not (entry.title == "FINAL ANSWER" and entry.status == "streaming")
             ):
                 continue
             self._append_entry_parts(

@@ -398,6 +398,49 @@ def test_tui_streams_assistant_delta_and_finalizes_existing_entry() -> None:
     assert "hello world" in finalized_text
 
 
+def test_tui_enters_final_answer_block_at_answer_tag() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="",
+            data={"turn": 1, "field": "final_answer", "delta": ""},
+        )
+    )
+    assert "FINAL ANSWER · turn 1" in _render_text(app)
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="Par",
+            data={"turn": 1, "field": "final_answer", "delta": "Par"},
+        )
+    )
+
+    streaming_text = _render_text(app)
+    assert "<answer>" not in streaming_text
+    assert "Par" in streaming_text
+    assert "FINAL ANSWER · turn 1" in streaming_text
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="answer",
+            data={"turn": 1, "content": "<answer>Paris</answer>", "tool_calls": []},
+        )
+    )
+
+    finalized_text = _render_text(app)
+    assert "FINAL ANSWER · turn 1" in finalized_text
+    assert "Paris" in finalized_text
+    assert "<answer>" not in finalized_text
+
+
 def test_tui_streams_thinking_delta_and_respects_visibility_toggle() -> None:
     app = _make_app()
     app.chat_history._entries = []

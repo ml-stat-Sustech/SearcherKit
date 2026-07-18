@@ -136,10 +136,20 @@ class ChatHistory:
         elif kind == "assistant_delta":
             data = event.data
             delta = str(data.get("delta") or event.message or "")
-            if not delta:
-                return
             turn_meta = f"turn {data.get('turn')}" if data.get("turn") else ""
             field = str(data.get("field") or "content")
+            if field == "final_answer":
+                assistant_entry = self._find_streaming_assistant_entry(turn_meta=turn_meta)
+                assert assistant_entry is not None
+                if not delta:
+                    assistant_entry.body = ""
+                assistant_entry.title = "FINAL ANSWER"
+                assistant_entry.style = "class:final-answer"
+                if delta:
+                    assistant_entry.body += delta
+                return
+            if not delta:
+                return
             if field == "thinking":
                 thinking_entry = self._find_running_thinking(turn_meta=turn_meta)
                 if thinking_entry is None:

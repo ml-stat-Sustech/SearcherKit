@@ -7,11 +7,15 @@ from typing import Any, Iterable
 
 from searcherkit.common.messages import ChatMessage, ToolCall, assistant, system, user
 from searcherkit.common.utils import get_first_or_default, get_or_default
-from searcherkit.llm.parsers.base import Parser, ParsingError
+from searcherkit.llm.parsers.base import LiveDeltaSplitter, Parser, ParsingError
+from searcherkit.llm.parsers.live_delta import AnswerTagLiveDeltaSplitter
 
 
 class UpstreamParser(Parser):
     """Parse provider-native messages with structured reasoning and tool calls."""
+
+    def create_live_delta_splitter(self) -> LiveDeltaSplitter:
+        return AnswerTagLiveDeltaSplitter()
 
     @property
     def uses_provider_tools(self) -> bool:
