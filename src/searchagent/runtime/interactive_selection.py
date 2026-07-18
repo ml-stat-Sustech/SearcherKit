@@ -305,13 +305,14 @@ async def _discover_model_options_for_endpoint(
 
     client_kwargs = dict(extra_client_kwargs or {})
     client_kwargs.setdefault("timeout", 5.0)
-    client = AsyncOpenAI(api_key=api_key or "ollama", base_url=base_url, **client_kwargs)
     try:
-        response = await client.models.list()
+        client = AsyncOpenAI(api_key=api_key or "ollama", base_url=base_url, **client_kwargs)
+        try:
+            response = await client.models.list()
+        finally:
+            await client.close()
     except (APIConnectionError, APITimeoutError, APIError, OpenAIError) as exc:
         raise ValueError(str(exc)) from exc
-    finally:
-        await client.close()
 
     response_data = getattr(response, "data", None)
     if response_data is None:

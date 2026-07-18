@@ -72,9 +72,6 @@ class StreamingClient:
         self.complete_calls = 0
         self.stream_calls = 0
 
-    async def close(self) -> None:
-        return None
-
     async def complete_with_usage(self, messages, session_id=None, **kwargs):
         self.complete_calls += 1
         return {"role": "assistant", "content": "complete"}, {"total_tokens": 11}
@@ -91,9 +88,6 @@ class StreamingClient:
 
 
 class TaggedStreamingClient:
-    async def close(self) -> None:
-        return None
-
     async def complete_with_usage(self, messages, session_id=None, **kwargs):
         return {"role": "assistant", "content": "complete"}, None
 

@@ -296,7 +296,6 @@ class SearchAgent(BaseAgent):
 
     async def close(self) -> None:
         await self.close_tools()
-        await self.client.close()
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[tuple[str, dict[str, Any]]]:
         tool_call_list = list(tool_calls)
@@ -787,4 +786,4 @@ class SearchAgent(BaseAgent):
             return self.history
         finally:
             self.live_event_sink = None
-            await self.close()
+            await self.close_tools()

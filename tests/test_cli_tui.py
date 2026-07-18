@@ -1003,43 +1003,6 @@ def test_tui_scrollbar_uses_visible_to_content_ratio() -> None:
 
 
 
-def test_tui_kicker_shows_live_activity_phases() -> None:
-    app = _make_app()
-    app.view_state.chat_scroll_top = None
-
-    # Idle: no run, no scrollback hint -> blank line.
-    assert "".join(text for _, text in app.render_kicker()).strip() == ""
-
-    app.query_controller.running = True
-    app.chat_history.clear()
-    assert "working..." in "".join(text for _, text in app.render_kicker())
-
-    app.chat_history.append_event(LiveEvent(
-        kind="assistant_delta", message="hmm", data={"turn": 1, "field": "thinking", "delta": "hmm"}
-    ))
-    assert "thinking..." in "".join(text for _, text in app.render_kicker())
-
-    app.chat_history.append_event(LiveEvent(
-        kind="assistant_delta", message="plan", data={"turn": 1, "field": "content", "delta": "plan"}
-    ))
-    assert "writing..." in "".join(text for _, text in app.render_kicker())
-
-    app.chat_history.append_event(LiveEvent(
-        kind="assistant_message", message="assistant",
-        data={"turn": 1, "thinking": "hmm", "content": "plan",
-              "tool_calls": [{"id": "c1", "name": "search", "arguments": {"query": "q"}}]},
-    ))
-    app.chat_history.append_event(LiveEvent(
-        kind="tool_call_started", message="search",
-        data={"id": "c1", "name": "search", "arguments": {"query": "q"}, "turn": 1},
-    ))
-    kicker = "".join(text for _, text in app.render_kicker())
-    assert "running search..." in kicker
-    assert "searching..." not in kicker
-
-
-
-
 def test_tui_kicker_hints_lines_below_only_when_scrolled_up() -> None:
     app = _make_app()
     app.chat_history._entries = [
@@ -1796,8 +1759,6 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
     import openai
     from types import SimpleNamespace
 
-    instances = []
-
     class FakeModels:
         async def list(self):
             return SimpleNamespace(
@@ -1807,15 +1768,15 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
                 ]
             )
 
+    closed_clients = []
+
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = FakeModels()
-            self.close_count = 0
-            instances.append(self)
 
         async def close(self):
-            self.close_count += 1
+            closed_clients.append(self)
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1835,7 +1796,7 @@ def test_discover_model_options_uses_openai_compatible_models_list(monkeypatch) 
         "models:openai/llama3.2:1b",
     ]
     assert {option.base_url for option in result.options} == {"http://127.0.0.1:11434/v1"}
-    assert [client.close_count for client in instances] == [1]
+    assert len(closed_clients) == 1
 
 
 def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
@@ -1843,21 +1804,19 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
     import openai
     from types import SimpleNamespace
 
-    instances = []
-
     class FakeModels:
         async def list(self):
             return SimpleNamespace(data=[SimpleNamespace(id="same-model")])
+
+    closed_clients = []
 
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = FakeModels()
-            self.close_count = 0
-            instances.append(self)
 
         async def close(self):
-            self.close_count += 1
+            closed_clients.append(self)
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1873,27 +1832,25 @@ def test_discover_model_options_deduplicates_by_command(monkeypatch) -> None:
 
     assert [option.command_name for option in result.options] == ["models:vllm/same-model"]
     assert result.options[0].base_url == "http://a/v1"
-    assert [client.close_count for client in instances] == [1, 1]
+    assert len(closed_clients) == 2
 
 
 def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None:
     import asyncio
     import openai
 
-    instances = []
+    closed_clients = []
 
     class FakeAsyncOpenAI:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self.models = self
-            self.close_count = 0
-            instances.append(self)
 
         async def list(self):
             raise ValueError("no models")
 
         async def close(self):
-            self.close_count += 1
+            closed_clients.append(self)
 
     monkeypatch.setattr(openai, "AsyncOpenAI", FakeAsyncOpenAI)
 
@@ -1910,7 +1867,7 @@ def test_discover_model_options_failure_returns_no_commands(monkeypatch) -> None
     assert result.options == []
     assert result.failed is True
     assert "Model discovery failed for openai" in result.message
-    assert [client.close_count for client in instances] == [1]
+    assert len(closed_clients) == 1
 
 
 def test_discover_model_options_unsupported_provider_returns_no_commands() -> None:

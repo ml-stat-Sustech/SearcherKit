@@ -21,7 +21,7 @@ from searchagent.interfaces.tui.ui.input_field import InputField
 from searchagent.interfaces.tui.ui.layout_geometry import FallbackSize, LayoutGeometry, TerminalSize
 from searchagent.interfaces.tui.ui.selection_manager import SelectionManager, _apply_line_selection
 from searchagent.interfaces.tui.ui.status_bar import build_status_bar
-from searchagent.interfaces.tui.ui.view_state import SPINNER_FRAMES, TuiViewState
+from searchagent.interfaces.tui.ui.view_state import TuiViewState
 from searchagent.runtime.interactive import InteractiveQueryConfig
 
 
@@ -335,7 +335,7 @@ class SearchAgentTui:
         parts: list[tuple[str, str]] = []
         if self.query_controller.is_running():
             parts.append(
-                ("class:running-kicker", f" {self._spinner_marker()} {self.chat_history.current_activity()}...")
+                ("class:running-kicker", f" {self._spinner_marker()} searching...")
             )
         below = self._lines_below_viewport()
         if below:
@@ -362,7 +362,8 @@ class SearchAgentTui:
         return self.slash_menu_renderer.render(self.slash_menu.menu_state)
 
     def _spinner_marker(self) -> str:
-        return SPINNER_FRAMES[self.view_state.spinner_frame % len(SPINNER_FRAMES)]
+        frames = ("|", "/", "-", "\\")
+        return frames[self.view_state.spinner_frame % len(frames)]
 
     def copy_chat_selection_to_clipboard(self) -> None:
         text = self.chat_selection.text()

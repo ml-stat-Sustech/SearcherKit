@@ -95,9 +95,6 @@ class OpenAIClient(Client):
                 op_name="openai.chat.completions.create",
             )
 
-    async def close(self) -> None:
-        await asyncio.gather(*(client.close() for client in self.clients))
-
     async def complete(
         self,
         messages: Iterable[dict[str, Any]],

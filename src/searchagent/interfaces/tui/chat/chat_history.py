@@ -247,19 +247,6 @@ class ChatHistory:
             for entry in self._entries
         )
 
-    def current_activity(self) -> str:
-        """Short live progress label for the kicker, from the newest unfinished entry."""
-        for entry in reversed(self._entries):
-            if entry.status not in {"running", "streaming"}:
-                continue
-            if entry.role == "thinking":
-                return "thinking"
-            if entry.role == "tool-interaction":
-                return f"running {entry.title or 'tool'}"
-            if entry.role == "assistant":
-                return "writing"
-        return "working"
-
     def entries(self) -> Sequence[ConversationEntry]:
         return tuple(self._entries)
 

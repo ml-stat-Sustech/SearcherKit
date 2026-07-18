@@ -130,18 +130,6 @@ def _config_client(retry_policy: RetryPolicy | None = None) -> OpenAIClient:
 
 
 @pytest.mark.parametrize("client_factory", [_direct_client, _config_client])
-def test_close_closes_provider_clients(client_factory: ClientFactory) -> None:
-    async def run() -> None:
-        client = client_factory(None)
-
-        await client.close()
-
-        assert all(provider_client.is_closed() for provider_client in client.clients)
-
-    asyncio.run(run())
-
-
-@pytest.mark.parametrize("client_factory", [_direct_client, _config_client])
 def test_complete_fn(client_factory: ClientFactory) -> None:
     async def run() -> None:
         with upstream_parsed_endpoint.context():
