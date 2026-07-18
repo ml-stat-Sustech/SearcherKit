@@ -110,7 +110,7 @@ values in the dotenv file.
 ### Start the TUI
 
 ```bash
-searcher tui --config-name web_search
+searcher tui --config-path web_search
 ```
 
 Use `/tool-detail` to inspect search queries, selected URLs, and page text.

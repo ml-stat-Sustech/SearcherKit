@@ -10,15 +10,14 @@ Run a SearcherKit configuration.
 
 ```bash
 searcher run
-searcher run --config-path recipe/webexplorer --config-name webexplorer
+searcher run --config-path webexplorer
 ```
 
 Additional arguments are passed as Hydra-style overrides:
 
 ```bash
 searcher run \
-  --config-path recipe/webexplorer \
-  --config-name webexplorer \
+  --config-path webexplorer \
   agent.llm_client.model=demo
 ```
 
@@ -39,8 +38,7 @@ Recursively validate configuration fields against their corresponding structured
 
 ```bash
 searcher inspect \
-  --config-path webexplorer \
-  --config-name webexplorer
+  --config-path webexplorer
 ```
 
 - Raise **ERROR** when unexpected field in config (not in target dataclass) or required field missing (no default value in target dataclass)
@@ -50,7 +48,6 @@ Hydra-style overrides are also supported:
 ```bash
 searcher inspect \
   --config-path websailor \
-  --config-name websailor \
   agent.llm_client.model=demo
 ```
 

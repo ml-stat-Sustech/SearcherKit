@@ -97,7 +97,7 @@ First inspect the composed configuration. This catches invalid fields and Hydra
 overrides before the batch starts:
 
 ```bash
-searcher inspect --config-name searcherkit \
+searcher inspect --config-path searcherkit \
   dataloader.source=data/questions.jsonl \
   output_path=outputs/searcherkit
 ```
@@ -105,7 +105,7 @@ searcher inspect --config-name searcherkit \
 Then run the batch with the same overrides:
 
 ```bash
-searcher run --config-name searcherkit \
+searcher run --config-path searcherkit \
   dataloader.source=data/questions.jsonl \
   max_concurrency=128 \
   output_path=outputs/searcherkit
@@ -114,7 +114,7 @@ searcher run --config-name searcherkit \
 Use `--debug` before the Hydra overrides for verbose global logging:
 
 ```bash
-searcher run --debug --config-name searcherkit \
+searcher run --debug --config-path searcherkit \
   dataloader.source=data/questions.jsonl \
   output_path=outputs/searcherkit
 ```

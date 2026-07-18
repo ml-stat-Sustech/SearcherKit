@@ -10,14 +10,14 @@ next query's model context.
 ### Start the TUI
 
 ```bash
-searcher inspect --config-path configs/demo --config-name config
-searcher tui --config-path configs/demo --config-name config
+searcher inspect --config-path configs/demo/config.yaml
+searcher tui --config-path configs/demo/config.yaml
 ```
 
 Hydra overrides can follow the command options:
 
 ```bash
-searcher tui --config-path configs/demo --config-name config \
+searcher tui --config-path configs/demo/config.yaml \
   agent.llm_client.model=Qwen3-8B
 ```
 
@@ -31,7 +31,7 @@ Use `--query` to exercise the interactive streaming and recording path from a
 normal terminal:
 
 ```bash
-searcher tui --config-path configs/demo --config-name config \
+searcher tui --config-path configs/demo/config.yaml \
   --query "Which component owns tool-call parsing?"
 ```
 
@@ -61,7 +61,7 @@ The default record directory is `outputs/interactive`, or
 `<output_path>/interactive` when the run config defines `output_path`.
 
 ```bash
-searcher tui --config-path configs/demo --config-name config \
+searcher tui --config-path configs/demo/config.yaml \
   --interactive-output-path outputs/tui-sessions
 ```
 

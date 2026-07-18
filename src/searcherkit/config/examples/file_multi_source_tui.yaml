@@ -2,7 +2,7 @@
 # TUI Active Source example using two repository-local file sources.
 #
 # Run from the repository root after installing the TUI extra:
-# uv run --extra tui searcher tui --config-name examples/file_multi_source_tui
+# searcher tui --config-path examples/file_multi_source_tui
 #
 # In the TUI, type /sources and choose one of:
 # /sources:wiki(file)

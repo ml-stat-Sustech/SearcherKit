@@ -138,9 +138,7 @@ def _config_args(command: str, dataset_path: Path, output_path: Path) -> list[st
     return [
         command,
         "--config-path",
-        str(CONFIG_PATH),
-        "--config-name",
-        "test_config",
+        str(CONFIG_PATH / "test_config.yaml"),
         f"dataloader.source={dataset_path.as_posix()}",
         f"output_path={output_path.as_posix()}",
     ]

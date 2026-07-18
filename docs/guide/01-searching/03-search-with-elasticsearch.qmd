@@ -219,13 +219,13 @@ the Elasticsearch `_id`, and `visit` will fetch by `_id`.
 Validate the configuration before connecting to the services:
 
 ```bash
-searcher inspect --config-path . --config-name elasticsearch_search
+searcher inspect --config-path elasticsearch_search.yaml
 ```
 
 Then start the interactive interface:
 
 ```bash
-searcher tui --config-path . --config-name elasticsearch_search
+searcher tui --config-path elasticsearch_search.yaml
 ```
 
 Use `/tool-detail` to inspect queries, result snippets, document identifiers,
@@ -236,7 +236,7 @@ and fetched content. Interactive records and trace logs are written under
 For a non-interactive smoke test, pass one question directly:
 
 ```bash
-searcher tui --config-path . --config-name elasticsearch_search \
+searcher tui --config-path elasticsearch_search.yaml \
   --query "What topics are covered by this knowledge base?"
 ```
 

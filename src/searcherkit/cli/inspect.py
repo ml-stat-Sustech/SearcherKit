@@ -118,9 +118,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config-path",
         default=None,
-        help="Directory containing the Hydra config. Defaults to the packaged searcherkit config directory.",
+        help="Config file path or name under the packaged searcherkit config directory. Defaults to config.yaml.",
     )
-    parser.add_argument("--config-name", default="config")
     parser.add_argument(
         "overrides",
         nargs=argparse.REMAINDER,
@@ -133,7 +132,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = compose_config(
         config_path=args.config_path,
-        config_name=args.config_name,
         overrides=args.overrides,
     )
     issues = validate_config(cfg, RunConfig)

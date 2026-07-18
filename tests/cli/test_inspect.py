@@ -11,9 +11,7 @@ FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "cli"
 
 
 def test_inspect(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = cli_main.main(
-        ["inspect", "--config-path", str(FIXTURE_DIR), "--config-name", "test_config"]
-    )
+    exit_code = cli_main.main(["inspect", "--config-path", str(FIXTURE_DIR / "test_config.yaml")])
 
     captured = capsys.readouterr()
     assert exit_code == 0
@@ -25,9 +23,7 @@ def test_inspect_invalid(capsys: pytest.CaptureFixture[str]) -> None:
         [
             "inspect",
             "--config-path",
-            str(FIXTURE_DIR),
-            "--config-name",
-            "test_config_invalid",
+            str(FIXTURE_DIR / "test_config_invalid.yaml"),
         ]
     )
 
@@ -37,6 +33,6 @@ def test_inspect_invalid(capsys: pytest.CaptureFixture[str]) -> None:
     assert "unexpected_root" in captured.out
 
 
-def test_config_path_must_be_directory() -> None:
-    with pytest.raises(FileNotFoundError, match="does not exist or is not a directory"):
-        cli_main.main(["inspect", "--config-path", str(FIXTURE_DIR / "test_config.yaml")])
+def test_config_path_must_be_file() -> None:
+    with pytest.raises(FileNotFoundError, match="config file does not exist"):
+        cli_main.main(["inspect", "--config-path", str(FIXTURE_DIR)])

@@ -182,9 +182,9 @@ recipe/
 Common commands:
 ```powershell
 python -m searcherkit --help
-python -m searcherkit run --config-path recipe\webexplorer --config-name webexplorer
-python -m searcherkit inspect --config-path recipe\webexplorer --config-name webexplorer
-python -m searcherkit inspect --config-path recipe\websailor --config-name websailor
+python -m searcherkit run --config-path webexplorer
+python -m searcherkit inspect --config-path webexplorer
+python -m searcherkit inspect --config-path websailor
 python -m searcherkit evaluate outputs\webexplorer outputs\webexplorer_eval --max-concurrency 32
 python -m searcherkit plugins list
 python -m searcherkit plugins deploy local-wiki --help
@@ -193,7 +193,7 @@ python -m searcherkit plugins deploy browsecomp-plus --help
 
 Hydra-style overrides are supported:
 ```powershell
-python -m searcherkit inspect --config-path recipe\websailor --config-name websailor agent.llm_client.model=demo
+python -m searcherkit inspect --config-path websailor agent.llm_client.model=demo
 ```
 
 ## Design Rules
@@ -220,8 +220,8 @@ Use targeted checks:
 ```powershell
 python -m compileall -q src\searcherkit recipe tests
 python -m searcherkit --help
-python -m searcherkit inspect --config-path recipe\webexplorer --config-name webexplorer
-python -m searcherkit inspect --config-path recipe\websailor --config-name websailor
+python -m searcherkit inspect --config-path webexplorer
+python -m searcherkit inspect --config-path websailor
 python -m pytest tests\cli\test_inspect.py tests\common\test_dataloader.py tests\tools\test_base.py tests\tools\test_multi_source_tools.py
 python -m pytest tests\sources\test_memory.py tests\sources\test_local_file.py
 python -m pytest tests\plugins\test_conversion.py tests\plugins\test_local_wiki.py tests\plugins\test_browsecomp_plus.py

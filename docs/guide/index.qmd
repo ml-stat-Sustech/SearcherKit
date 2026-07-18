@@ -101,7 +101,7 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 Start the interactive terminal UI:
 
 ```bash
-searcher tui --config-name file_search
+searcher tui --config-path file_search
 ```
 
 The agent can now search files under `FILE_SEARCH_ROOT`, open relevant results,
@@ -154,14 +154,14 @@ that encode tool calls in text may require a model-specific parser.
 If this file is saved as `configs/demo/config.yaml`, validate and run it with:
 
 ```bash
-searcher inspect --config-path configs/demo --config-name config
-searcher tui --config-path configs/demo --config-name config
+searcher inspect --config-path configs/demo/config.yaml
+searcher tui --config-path configs/demo/config.yaml
 ```
 
 Hydra-style overrides let you change values without editing the file:
 
 ```bash
-searcher tui --config-path configs/demo --config-name config \
+searcher tui --config-path configs/demo/config.yaml \
   agent.llm_client.model=Qwen3-8B \
   output_path=outputs/qwen3
 ```

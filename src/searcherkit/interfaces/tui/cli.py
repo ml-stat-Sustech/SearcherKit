@@ -29,9 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config-path",
         default=None,
-        help="Directory containing the Hydra config. Defaults to the packaged searcherkit config directory.",
+        help="Config file path or name under the packaged searcherkit config directory. Defaults to config.yaml.",
     )
-    parser.add_argument("--config-name", default="config", help="Config name without .yaml")
     parser.add_argument(
         "--debug",
         action="store_true",
@@ -68,7 +67,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = compose_dataclass_config(
         RunConfig,
         config_path=args.config_path,
-        config_name=args.config_name,
         overrides=args.overrides,
     )
     apply_llm_env(config.agent.llm_client)
