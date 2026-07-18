@@ -13,6 +13,8 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=prog, description="Index a MediaWiki dump into Elasticsearch")
     parser.add_argument("--wiki_dump_path", required=True, help="Path to a MediaWiki XML or XML.bz2 dump")
     parser.add_argument("--es_host", required=True, help="Elasticsearch host URL")
+    parser.add_argument("--es_username", help="Elasticsearch username")
+    parser.add_argument("--es_password", help="Elasticsearch password")
     parser.add_argument("--index_name", required=True, help="Elasticsearch index name")
     parser.add_argument("--base_url", default="https://en.wikipedia.org/wiki/", help="Base URL for page links")
     parser.add_argument("--model_name", default="", help="SentenceTransformer model name or path")
@@ -35,8 +37,12 @@ def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> None:
         raise ValueError("--model_name is required with --dense-vector")
     if cli.dense_vector and cli.embedding_dim < 1:
         raise ValueError("--embedding_dim must be >= 1 with --dense-vector")
+    if (cli.es_username is None) != (cli.es_password is None):
+        raise ValueError("--es_username and --es_password must be provided together")
 
     source = WikiDumpSource(cli.wiki_dump_path, base_url=cli.base_url)
+    auth_kwargs = ({"es_username": cli.es_username, "es_password": cli.es_password}
+                   if cli.es_username is not None else {})
     indexed = deploy_to_elasticsearch(
         documents=source.iter_documents(limit=cli.limit),
         es_host=cli.es_host,
@@ -50,6 +56,7 @@ def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> None:
         max_text_chars=cli.max_text_chars,
         shards=cli.shards,
         replicas=cli.replicas,
+        **auth_kwargs,
     )
     print(f"Indexed {indexed} wiki documents into {cli.index_name}")
 

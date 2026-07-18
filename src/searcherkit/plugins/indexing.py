@@ -88,7 +88,7 @@ def iter_batches(items: Iterable[IndexDocument], batch_size: int) -> Iterator[li
         yield batch
 
 
-def build_elasticsearch_client(hosts: str, *, request_timeout: float = 100.0) -> Any:
+def build_elasticsearch_client(hosts: str, *, username: str | None = None, password: str | None = None, request_timeout: float = 100.0) -> Any:
     try:
         from elasticsearch import Elasticsearch
     except ImportError as exc:
@@ -96,7 +96,12 @@ def build_elasticsearch_client(hosts: str, *, request_timeout: float = 100.0) ->
             "Elasticsearch deployment requires the 'elasticsearch' package. "
             "Install with `uv sync --extra elasticsearch-source` or `uv sync --extra indexing`."
         ) from exc
-    return Elasticsearch(hosts, request_timeout=request_timeout)
+    if (username is None) != (password is None):
+        raise ValueError("username and password must be provided together")
+    kwargs: dict[str, Any] = {"request_timeout": request_timeout}
+    if username is not None:
+        kwargs["basic_auth"] = (username, password)
+    return Elasticsearch(hosts, **kwargs)
 
 
 def create_elasticsearch_index(
@@ -252,6 +257,8 @@ def deploy_to_elasticsearch(
     documents: Iterable[IndexDocument],
     es_host: str,
     index_name: str,
+    es_username: str | None = None,
+    es_password: str | None = None,
     embedding_model_name: str | None = None,
     embedding_dim: int | None = None,
     prompt_strategy: str = "none",
@@ -262,7 +269,7 @@ def deploy_to_elasticsearch(
     shards: int = 1,
     replicas: int = 0,
 ) -> int:
-    client = build_elasticsearch_client(es_host)
+    client = build_elasticsearch_client(es_host, username=es_username, password=es_password)
     model = load_sentence_transformer(embedding_model_name) if embedding_model_name else None
     create_elasticsearch_index(
         client,
