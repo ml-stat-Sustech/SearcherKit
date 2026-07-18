@@ -16,3 +16,4 @@ class ConversationEntry:
     tool_id: str = ""
     arguments: dict[str, Any] = field(default_factory=dict)
     result: str = ""
+    extensions: dict[str, Any] = field(default_factory=dict)

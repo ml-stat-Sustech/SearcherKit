@@ -16,9 +16,19 @@ class ChatHistory:
 
     def __init__(self) -> None:
         self._entries: list[ConversationEntry] = []
+        self._revision = 0
+
+    @property
+    def revision(self) -> int:
+        """Return a token that changes whenever visible history may have changed."""
+        return self._revision
+
+    def _touch(self) -> None:
+        self._revision += 1
 
     def clear(self) -> None:
         self._entries = []
+        self._touch()
 
     def set_intro(
         self,
@@ -43,6 +53,7 @@ class ChatHistory:
                 style="class:meta",
             )
         ]
+        self._touch()
 
     def append(
         self,
@@ -56,6 +67,7 @@ class ChatHistory:
         self._entries.append(
             ConversationEntry(role=role, title=title, body=body, style=style, status=status)
         )
+        self._touch()
 
     def append_selection_entry(self, prefix: str, label: str) -> None:
         title = f"Active {prefix.capitalize()}"
@@ -69,6 +81,7 @@ class ChatHistory:
             self._entries[-1] = entry
         else:
             self._entries.append(entry)
+        self._touch()
 
     def append_run_error(self, title: str, body: str) -> None:
         self._entries.append(
@@ -80,6 +93,7 @@ class ChatHistory:
                 status="failed",
             )
         )
+        self._touch()
 
     def append_tui_command_error(self, body: str) -> None:
         self._entries.append(
@@ -91,6 +105,7 @@ class ChatHistory:
                 status="failed",
             )
         )
+        self._touch()
 
     def append_cancelled(self, message: str = "") -> None:
         self._entries.append(
@@ -103,13 +118,13 @@ class ChatHistory:
                 status="failed",
             )
         )
+        self._touch()
 
     def append_event(self, event: LiveEvent) -> None:
         kind = event.kind
-        if kind == "run_started":
+        if kind in {"run_started", "run_completed", "assistant_turn_started"}:
             return
-        if kind == "run_completed":
-            return
+        self._touch()
         if kind == "run_cancelled":
             self.append_cancelled(event.message)
         elif kind == "run_failed":
@@ -118,9 +133,6 @@ class ChatHistory:
             self._entries.append(
                 ConversationEntry(role="user", title="USER", body=event.message, style="class:user")
             )
-        elif kind == "assistant_turn_started":
-            # No-op: thinking entries are created lazily when thinking deltas arrive.
-            return
         elif kind == "assistant_delta":
             data = event.data
             delta = str(data.get("delta") or event.message or "")
@@ -141,7 +153,12 @@ class ChatHistory:
                     self._entries.append(thinking_entry)
                 thinking_entry.thinking += delta
             else:
+                existing = self._find_streaming_assistant_entry(turn_meta=turn_meta, create=False)
+                # Whitespace-only content is not a user-visible message; do not open a block.
+                if existing is None and not delta.strip():
+                    return
                 assistant_entry = self._find_streaming_assistant_entry(turn_meta=turn_meta)
+                assert assistant_entry is not None
                 assistant_entry.body += delta
         elif kind == "assistant_message":
             data = event.data
@@ -152,32 +169,37 @@ class ChatHistory:
             self._complete_latest_thinking(
                 turn_meta=turn_meta, reasoning=str(thinking) if thinking else ""
             )
-            body = ""
-            if content:
+            # Message = non-blank answer content. Thinking is separate.
+            # Empty content with tool calls gets a short system placeholder.
+            has_message = bool(str(content or "").strip())
+            existing = self._find_streaming_assistant_entry(turn_meta=turn_meta, create=False)
+            if has_message:
                 body = str(content)
-            if not body and tool_calls:
+            elif tool_calls:
                 body = f"Requested {len(tool_calls)} tool call(s)."
-            if body:
-                is_final = not tool_calls
-                if is_final:
-                    body = _extract_final_answer_body(body)
-                existing = self._find_streaming_assistant_entry(turn_meta=turn_meta, create=False)
-                if existing is None:
-                    self._entries.append(
-                        ConversationEntry(
-                            role="assistant",
-                            title="FINAL ANSWER" if is_final else "ASSISTANT",
-                            body=body,
-                            meta=turn_meta,
-                            style="class:final-answer" if is_final else "class:assistant",
-                        )
+            else:
+                if existing is not None:
+                    self._entries.remove(existing)
+                return
+            is_final = not tool_calls
+            if is_final:
+                body = _extract_final_answer_body(body)
+            if existing is None:
+                self._entries.append(
+                    ConversationEntry(
+                        role="assistant",
+                        title="FINAL ANSWER" if is_final else "ASSISTANT",
+                        body=body,
+                        meta=turn_meta,
+                        style="class:final-answer" if is_final else "class:assistant",
                     )
-                else:
-                    existing.title = "FINAL ANSWER" if is_final else "ASSISTANT"
-                    existing.body = body
-                    existing.meta = turn_meta
-                    existing.style = "class:final-answer" if is_final else "class:assistant"
-                    existing.status = ""
+                )
+            else:
+                existing.title = "FINAL ANSWER" if is_final else "ASSISTANT"
+                existing.body = body
+                existing.meta = turn_meta
+                existing.style = "class:final-answer" if is_final else "class:assistant"
+                existing.status = ""
         elif kind == "tool_call_started":
             data = event.data
             name = data.get("name") or "tool"
@@ -214,6 +236,7 @@ class ChatHistory:
                 entry.meta = f"turn {data.get('turn')}"
             entry.result = str(result)
             entry.body = str(result)
+            entry.extensions = dict(data.get("extensions") or {})
             failed = status in {"failed", "error"}
             entry.status = "failed" if failed else "completed"
             entry.style = "class:error" if failed else "class:tool-result"

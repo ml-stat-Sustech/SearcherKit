@@ -20,6 +20,38 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
 DOC_ID = "source_files.md"
 
 
+def _expected_search_extensions(
+    *,
+    query: str = "source-backed-tools",
+    source: str,
+) -> dict[str, object]:
+    return {
+        "searched_ids": [DOC_ID],
+        "documents": [
+            {
+                "id": DOC_ID,
+                "title": DOC_ID,
+                "url": None,
+                "query": query,
+                "source": source,
+            }
+        ],
+    }
+
+
+def _expected_visit_extensions(*, source: str) -> dict[str, object]:
+    return {
+        "documents": [
+            {
+                "id": DOC_ID,
+                "title": DOC_ID,
+                "url": None,
+                "source": source,
+            }
+        ],
+    }
+
+
 def _source_names(test_name: str) -> tuple[str, str]:
     return (
         f"tools-multi-runtime-{test_name}",
@@ -116,8 +148,8 @@ def test_multi_source_search_run(tool_factory: SearchFactory) -> None:
         summary_content, summary_extensions = summary_result
         assert DOC_ID in runtime_content
         assert DOC_ID in summary_content
-        assert runtime_extensions == {"searched_ids": [DOC_ID]}
-        assert summary_extensions == {"searched_ids": [DOC_ID]}
+        assert runtime_extensions == _expected_search_extensions(source=runtime_name)
+        assert summary_extensions == _expected_search_extensions(source=summary_name)
 
     asyncio.run(run())
 
@@ -169,8 +201,8 @@ def test_multi_source_visit_run(tool_factory: VisitFactory) -> None:
         )
         assert f"[{DOC_ID}](None)" in summary_content
         assert "evidence extraction" in summary_content
-        assert runtime_extensions == {}
-        assert summary_extensions == {}
+        assert runtime_extensions == _expected_visit_extensions(source=runtime_name)
+        assert summary_extensions == _expected_visit_extensions(source=summary_name)
 
     asyncio.run(run())
 

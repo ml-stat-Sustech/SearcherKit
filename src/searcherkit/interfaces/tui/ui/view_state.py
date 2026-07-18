@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from searcherkit.interfaces.tui.ui.selection_types import ChatSelection
 
-
 @dataclass
 class TuiViewState:
     """Pure display state for the terminal UI."""

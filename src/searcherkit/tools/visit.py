@@ -1,12 +1,32 @@
 from __future__ import annotations
 
-from typing import Mapping, overload
+from collections.abc import Mapping
+from typing import Any, overload
 import asyncio
 
 from searcherkit.common.errors import RecoverableError
 from searcherkit.sources import DataSource, Document, SourceError, build_source
 from searcherkit.tools.base import BaseTool, ToolConfig
 from searcherkit.tools.summarizer import Summarizer
+
+
+def _visit_extensions(
+    documents: list[Document],
+    *,
+    source: str | None = None,
+) -> dict[str, object]:
+    """Build tool extensions for visited documents."""
+    items: list[dict[str, object]] = []
+    for document in documents:
+        item: dict[str, object] = {
+            "id": document.id,
+            "title": document.title,
+            "url": document.url,
+        }
+        if source is not None:
+            item["source"] = source
+        items.append(item)
+    return {"documents": items}
 
 
 def _limit_response(text: str, limit: int) -> str:
@@ -89,26 +109,34 @@ class VisitTool(BaseTool):
         if self.response_char_limit is not None and self.response_char_limit <= 0:
             raise ValueError(f"response_char_limit must be positive: {self.response_char_limit}")
 
-    async def _run(self, *, document_id: str | list[str], goal: str | None = None) -> str:
+    async def _run(
+        self, *, document_id: str | list[str], goal: str | None = None
+    ) -> tuple[str, dict[str, object]]:
         """Get the content of a document."""
         try:
             if isinstance(document_id, list):
-                documents = await asyncio.gather(*[self.source.fetch(did, goal=goal) for did in document_id])
+                documents = list(
+                    await asyncio.gather(
+                        *[self.source.fetch(did, goal=goal) for did in document_id]
+                    )
+                )
             else:
                 documents = [await self.source.fetch(document_id, goal=goal)]
         except SourceError as e:
             if "not found" in str(e).lower():
-                return str(e)
+                return f"[Tool] {e}", {}
             raise RecoverableError(str(e)) from e
         except KeyError:
-            return f"Document not found: {document_id}"
+            return f"[Tool] Document not found: {document_id}", {}
         ret = []
         for document in documents:
             text = _format_document(document)
             if self.response_char_limit:
-                return _limit_response(text, self.response_char_limit)
+                return _limit_response(text, self.response_char_limit), _visit_extensions(
+                    documents
+                )
             ret.append(text)
-        return "\n=======\n".join(ret)
+        return "\n=======\n".join(ret), _visit_extensions(documents)
 
     async def close(self) -> None:
         await self.source.close()
