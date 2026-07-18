@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 from pathlib import Path
 
 import pytest
@@ -36,3 +37,17 @@ def test_inspect_invalid(capsys: pytest.CaptureFixture[str]) -> None:
 def test_config_path_must_be_file() -> None:
     with pytest.raises(FileNotFoundError, match="config file does not exist"):
         cli_main.main(["inspect", "--config-path", str(FIXTURE_DIR)])
+
+
+def test_cli_works_without_uvloop(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_import = builtins.__import__
+
+    def import_without_uvloop(name: str, *args: object, **kwargs: object) -> object:
+        if name == "uvloop":
+            raise ImportError("uvloop unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_uvloop)
+    with pytest.warns(RuntimeWarning, match="uvloop is not installed"):
+        with pytest.raises(SystemExit, match="0"):
+            cli_main.main(["--help"])

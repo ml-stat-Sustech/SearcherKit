@@ -3,9 +3,24 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import warnings
 from typing import Sequence
 
-import uvloop
+
+def _configure_event_loop() -> None:
+    """Use uvloop when available, otherwise retain asyncio's default loop."""
+    try:
+        import uvloop
+    except ImportError:
+        warnings.warn(
+            "uvloop is not installed; using Python's default asyncio event loop. "
+            "Install the optional uvloop dependency for improved performance.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return
+
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    _configure_event_loop()
     if argv is None:
         argv = sys.argv[1:]
     argv = list(argv)
