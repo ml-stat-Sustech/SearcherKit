@@ -5,7 +5,7 @@ rollouts, heterogeneous search sources, tool execution, model adapters,
 benchmark recipes, evaluation, and training integration into one coherent
 stack.
 
-![SearcherKit](docs/images/searcherkit_1.png){width=80% fig-align="center"}
+![SearcherKit](docs/images/searcherkit_1.png)
 
 ### ✨ Highlights
 

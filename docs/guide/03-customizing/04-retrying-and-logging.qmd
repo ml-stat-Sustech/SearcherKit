@@ -1,55 +1,127 @@
 ---
-title: Retrying & Logging
+title: Retrying and Logging
 ---
 
-Search-agent runs combine several independent services and long-lived tasks.
-Reliable operation depends on bounding each failure domain and preserving enough
-evidence to resume or diagnose a run.
+During agent execution, failures may occur at every stage, including model output, environment access, and tool execution. Many agent runtimes provide a limited number of retry opportunities for these operations. SearcherKit provides a unified retry policy and executor that can be defined through configuration files, making it easy to configure retry behavior for different failure boundaries.
 
-### Retry at the correct boundary
+### Retry Policies and Retry Functions
 
-SearcherKit has separate retry scopes:
+Retry behavior is represented by `RetryPolicy`. Its main configuration fields are:
 
-| Scope | Use for |
+| Field | Meaning |
 | --- | --- |
-| LLM retry | Transient provider failures or recoverable parse failures |
-| Tool retry | Temporary source, MCP, or tool failures |
-| Task retry | Restarting an entire trajectory |
+| `max_tries` | Maximum number of attempts, including the initial call; `3` means at most three calls |
+| `max_time` | Maximum time allowed for all attempts, in seconds; `null` means no total time limit |
+| `exceptions` | List of concrete exception types that trigger a retry; exceptions not listed are raised immediately |
+| `giveup` | A function that receives an exception and returns a Boolean; returning `true` stops retrying |
+| `factor` | Time coefficient for exponential backoff |
+| `base` | Base of the exponential backoff; the wait time grows exponentially |
+| `jitter` | Random jitter added to the wait time; defaults to `backoff.full_jitter`, and can be set to `null` to disable it |
 
-Only list exceptions that are genuinely recoverable. Authentication errors,
-invalid model names, malformed permanent config, and deterministic schema
-errors should surface immediately. Test both eventual success and exhausted
-retry behavior.
+The default policy retries only `RecoverableError`. Each backoff and final abandonment is written to the log, including the operation name, attempt count, wait time, and exception.
 
-### Bound agent execution
+Example configuration:
 
-Configure turn, token, and time budgets together. Reminder prompts near those
-limits should tell the model to stop using tools and produce the required final
-answer format. A caller may still enforce a hard timeout around the whole run.
+```yaml
+common:
+  retry:
+    max_tries: 3
+    max_time: 60
+    exceptions:
+      - pkg://searcherkit.common.errors:RecoverableError
+    factor: 1
+    base: 2
+    jitter: pkg://backoff:full_jitter
+```
 
-### Preserve observability
+#### Retrying with `retry_async` and `retry_sync`
 
-For production-scale runs, keep:
+Use `retry_sync` to add retry behavior to a synchronous function. For an asynchronous function, use `retry_async`:
 
-- a global log for lifecycle and aggregate failures;
-- one trace log per trajectory;
-- structured message histories and timing data;
-- checkpoint state and a run summary;
-- model, dataset, config, and code revisions outside the output directory.
+```python
+from searcherkit.common.retry import retry_async
 
-Avoid logging secrets or complete credentials. Prefer stable sample and trace
-identifiers so a summary failure can be followed into the relevant history and
-trace.
+content = await retry_async(
+    fetch_remote,
+    "https://example.test/page",
+    policy=policy,
+    op_name="source.fetch",
+)
+```
 
-### Diagnose in layers
+#### Wrapping Functions with `wrap_async` and `wrap_sync`
 
-1. Run `searcher inspect` to rule out config shape errors.
-2. Use `searcher tui` or a one-item dataset to test one trajectory.
-3. Check model and retrieval services independently.
-4. Read the per-trace log to identify the failing boundary.
-5. Increase concurrency gradually while watching queue depth, latency, retries,
-   and failure rate.
+When a function with retry behavior needs to be called repeatedly, use `wrap_sync` to wrap it and return a retry-enabled function. All calls use the retry policy supplied when the function was wrapped. Use the corresponding `wrap_async` for asynchronous functions:
 
-For batch regressions, separate task completion from answer quality. A run can
-complete successfully while producing invalid tool calls, repeated searches,
-truncated context, or an answer format the evaluator cannot extract.
+```python
+from searcherkit.common.errors import RecoverableError
+from searcherkit.common.retry import RetryPolicy, wrap_async
+
+policy = RetryPolicy(
+    max_tries=3,
+    exceptions=(RecoverableError,),
+    factor=1,
+    base=2,
+)
+
+async def fetch_remote(url: str) -> str:
+    ...
+
+fetch_with_retry = wrap_async(
+    fetch_remote,
+    policy=policy,
+    op_name="source.fetch",
+)
+content = await fetch_with_retry("https://example.test/page")
+```
+
+When all retries are exhausted, the final exception is propagated.
+
+#### Built-in Retry Policies
+
+SearcherKit provides the following built-in retry points:
+
+| Scope | Configuration | Purpose |
+| --- | --- | --- |
+| LLM retry | `agent.llm_retry_config` | Temporary provider failures or recoverable parsing failures |
+| Tool retry | `agent.tool_retry_config` | Temporary search-source, MCP, or tool failures |
+| Task retry | `task_retry_policy` | Restart the complete trajectory |
+
+### Logging
+
+SearcherKit separates logs into run-level logs and trajectory-level logs. A typical batch run produces the following output:
+
+```text
+outputs/searcherkit/
+├── history/000000.json
+├── traces/000000_<trace-id>.log
+├── run.log
+└── summary.json
+```
+
+Logging is configured as follows:
+
+```yaml
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text       # text or json
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
+```
+
+`history/` stores the input, reference answer, message history, per-sample statistics, and timing data. `summary.json` stores the batch summary. `run.log` is the global text log and includes the timestamp, source file and line number, level, and the `scope`, `run`, `sample`, `trace`, and `turn` contexts. Trajectory text logs are named `{sample_id}_{trace_id}.log`. When JSON format is selected, each trajectory contains `run`, `sample`, `execution`, `stats`, `tool_interactions`, and `events`.
+
+#### Context-aware `logger`
+
+SearcherKit provides a context-aware logger that can attach the current task, turn, and sample information to log records. Use `log_context` to set the current logging context, then use a standard `logger` to record messages:
+
+```python
+from searcherkit.common.log import get_logger, log_context
+
+logger = get_logger(__name__)
+with log_context(scope="trace", run_id="run-1", sample_id=0, trace_id="abc", turn=2):
+    logger.info("Calling the tool")
+```

@@ -35,10 +35,80 @@ agent:
   tools:
     - type: custom
       name: lookup
-      target: file://my_project.tools:LookupTool
+      target: pkg://my_project.tools:LookupTool
       extra:
         source_name: internal_corpus
 ```
+
+`pkg://` targets resolve an installed Python module in the form
+`pkg://package.module:attribute`. `file://` targets load a Python file and use
+the form `file:///absolute/path/module.py:attribute`. A custom source receives
+`SourceConfig`; a custom tool receives `ToolConfig`, and fields under `extra`
+are passed as additional keyword arguments.
+
+### Custom source
+
+Implement the three asynchronous `DataSource` operations. `search` returns
+ranked `SearchResult` values, `fetch` returns a complete `Document`, and
+`close` releases clients and connection pools:
+
+```python
+from searcherkit.sources import DataSource, Document, SearchResult, SourceConfig
+
+class InternalSource(DataSource):
+    def __init__(self, *, config: SourceConfig) -> None:
+        self.endpoint = config.client_kwargs["endpoint"]
+        self.client = make_client(self.endpoint)
+
+    async def search(self, query: str, *, top_k: int = 10) -> list[SearchResult]:
+        rows = await self.client.search(text=query, limit=top_k)
+        return [
+            SearchResult(
+                document=Document(id=str(row["id"]), title=row.get("title"),
+                                  text=row["text"], url=row.get("url")),
+                score=float(row["score"]) if row.get("score") is not None else None,
+                snippet=row.get("snippet"),
+            )
+            for row in rows
+        ]
+
+    async def fetch(self, document_id: str, *, goal: str | None = None) -> Document:
+        row = await self.client.fetch(document_id)
+        return Document(id=str(row["id"]), title=row.get("title"), text=row["text"])
+
+    async def close(self) -> None:
+        await self.client.close()
+```
+
+### Custom tool
+
+Subclass `BaseTool` and implement `_run`. Tool metadata and the JSON schema can
+be inferred from the signature or specified in configuration:
+
+```python
+from searcherkit.tools import BaseTool, ToolConfig
+from searcherkit.sources import build_source
+
+class LookupTool(BaseTool):
+    def __init__(self, *, config: ToolConfig, source_name: str) -> None:
+        super().__init__(config=config)
+        self.source = build_source(source_name)
+
+    async def _run(self, *, query: str, limit: int = 5) -> tuple[str, dict[str, object]]:
+        results = await self.source.search(query, top_k=limit)
+        content = "\n\n".join(
+            f"[{item.document.id}] {item.document.title or ''}\n{item.document.text}"
+            for item in results
+        )
+        return content, {"result_count": len(results)}
+
+    async def close(self) -> None:
+        await self.source.close()
+```
+
+The corresponding `extra.source_name` is passed to the constructor. Use
+`argument_mapping` when the model-facing argument name differs from the Python
+parameter name.
 
 ### Test the contract
 

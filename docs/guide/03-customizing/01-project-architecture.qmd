@@ -44,20 +44,14 @@ model-specific parser when tool calls are encoded in model text.
 #### Source and tool
 
 A source retrieves documents. A tool is the model-visible action that uses a
-source or another service. Multiple tools can share a source, and a tool can
-present a deliberately small JSON Schema even when its implementation accepts
-more parameters.
+source or another service. Multiple tools can share a source, and a single tool could utilize multiple sources.
 
 Built-in source families are local files, web search and fetch, and
-Elasticsearch. Built-in tool families include search, visit, multi-source
-variants, summarization, and MCP-backed tools.
+Elasticsearch. Built-in tool families include search, visit,  and MCP-backed tools.
 
 #### Config and factories
 
-Runtime objects support structured configuration as well as normal Python
-construction. Hydra composes YAML for CLI workflows; factory functions convert
-the resulting config into clients, parsers, sources, and tools. Custom modules
-are referenced by their real import paths rather than compatibility aliases.
+One of the key features of SeaercherKit is that most of its compoments can be both instantiated normally, or through a config. Hydra composes YAML for CLI, then the configs are used to create agents. Thus SearcherKit could pin-down an agentic workflow with a single persistant config file.
 
 #### Outputs and traces
 
@@ -96,7 +90,7 @@ Framework-specific adapters live under `searcherkit.training.areal` and
 `searcherkit.training.slime`; reusable training-agent and reward logic stays in
 `searcherkit.training`. Shell launchers and cluster-specific defaults live in
 `scripts/`. See the [training overview](../02-training/01-training-overview.qmd),
-[SFT guide](../02-training/04-sft.qmd), [AReaL guide](../02-training/02-rl-areal.qmd),
+[SFT guide](../02-training/04-sft-with-msswift.qmd), [AReaL guide](../02-training/02-rl-areal.qmd),
 and [slime guide](../02-training/03-rl-slime.qmd) for configuration and launch
 details.
 

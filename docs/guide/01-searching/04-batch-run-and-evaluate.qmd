@@ -87,9 +87,7 @@ Retries apply at three boundaries:
 - `agent.tool_retry_config` retries recoverable tool failures.
 - `task_retry_policy` retries an entire dataset sample.
 
-The packaged `searcherkit` configuration also enables checkpoint-based resume. Keep
-`checkpoint.resume: true` and rerun the same command after an interruption. Existing
-sample outputs are preserved unless `overwrite_output` is enabled.
+See [Retry and Logging](../03-customizing/04-retrying-and-logging.qmd) on how to config retry behaviour.
 
 ### Run the Agent
 
