@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from searcherkit.cli.config import ConfigError
+from searcherkit.common.config import ConfigError
 from searcherkit.training.sft.config import SFTTrainingConfig, load_training_config
 
 

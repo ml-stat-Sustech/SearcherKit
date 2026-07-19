@@ -7,7 +7,7 @@ from typing import Any, Sequence, get_args, get_origin
 
 from omegaconf import DictConfig
 
-from searcherkit.cli.config import compose_config
+from searcherkit.common.config import compose_config
 from searcherkit.runtime.runner import RunConfig
 
 

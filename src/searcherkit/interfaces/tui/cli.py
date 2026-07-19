@@ -8,7 +8,7 @@ import warnings
 from pathlib import Path
 from typing import Any, Sequence
 
-from searcherkit.cli.config import compose_dataclass_config
+from searcherkit.common.config import compose_dataclass_config
 from searcherkit.common.live_events import LiveEvent
 from searcherkit.common.log import disable_console_logging, setup_logger
 from searcherkit.llm.base import ClientConfig

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from searcherkit.cli.config import resolve_config_file
+from searcherkit.common.config import resolve_config_file
 
 
 def test_resolve_config_file_defaults_to_packaged_config(tmp_path: Path) -> None:
