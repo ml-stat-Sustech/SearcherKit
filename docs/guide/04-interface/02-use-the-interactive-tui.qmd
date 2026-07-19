@@ -2,7 +2,7 @@
 title: 使用交互式 TUI
 ---
 
-终端 UI 使用与批处理相同的智能体、解析器、搜索源、工具、追踪和历史记录序列化机制来运行临时查询。每次提交的查询都是一次独立的智能体运行；界面中可见的历史对话不会加入下一次查询的模型上下文。
+终端 UI 使用与批处理相同的智能体、解析器、搜索源、工具、追踪和历史记录序列化机制来运行临时查询。可用于 debug 或快速体验、展示。
 
 ### 启动 TUI
 
@@ -18,18 +18,11 @@ searcher tui --config-path configs/demo/config.yaml \
   agent.llm_client.model=Qwen3-8B
 ```
 
-TUI 默认还会从 `.env` 读取 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_API_KEY` 和 `LLM_BASE_URL`。可用 `--env-file` 选择其他文件。显式设置的环境变量值会应用到组合出的客户端配置。
+命令执行后，TUI界面如下：
 
-### 不启动完整 UI 运行单次交互查询
+![TUI](../../images/tui.png)
 
-在普通终端中使用 `--query` 即可测试交互式流传输和记录流程：
-
-```bash
-searcher tui --config-path configs/demo/config.yaml \
-  --query "Which component owns tool-call parsing?"
-```
-
-这适合冒烟测试，也适用于不便运行全屏终端应用的环境。
+在下方输入问题后回车即可运行。每次输入之间的上下文互不共享。
 
 ### 斜杠命令
 
@@ -45,6 +38,17 @@ searcher tui --config-path configs/demo/config.yaml \
 | `/quit` | 退出 TUI |
 
 模型和搜索源的更改只影响后续独立运行。查询执行期间，修改会话状态的命令会被拒绝；请先取消当前查询。
+
+### 不启动完整 UI 运行单次交互查询
+
+在普通终端中使用 `--query` 即可测试交互式流传输和记录流程：
+
+```bash
+searcher tui --config-path configs/demo/config.yaml \
+  --query "Which component owns tool-call parsing?"
+```
+
+这适合快速测试，也适用于不便运行全屏终端应用的环境。
 
 ### 记录与追踪
 
