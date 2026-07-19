@@ -72,6 +72,11 @@ def _client() -> OpenAIClient:
         model="gpt-test",
         api_key="test-key",
         base_url=upstream_parsed_endpoint.BASE_URL,
+        retry_policy=RetryPolicy(
+            max_tries=1,
+            exceptions=(APITimeoutError,),
+            jitter=None,
+        ),
         max_retries=0,
     )
 

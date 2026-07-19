@@ -123,7 +123,12 @@ def test_argument_mapping_translates_default_input_schema(tool_factory: ToolFact
     async def run() -> None:
         tool = tool_factory(test_name="default-schema-argument-mapping")
 
-        assert tool.inputSchema["properties"]["q"]["type"] == "string"
+        assert tool.inputSchema["properties"]["q"] == {
+            "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "string"},
+            ]
+        }
         assert "query" not in tool.inputSchema["properties"]
         assert tool.inputSchema["properties"]["top_k"]["type"] == "integer"
         assert tool.inputSchema["required"] == ["q"]
@@ -145,7 +150,12 @@ def test_input_schema_is_derived_from_run_signature() -> None:
 
     assert tool.description == "Search the configured data source."
     assert tool.inputSchema is not None
-    assert tool.inputSchema["properties"]["query"]["type"] == "string"
+    assert tool.inputSchema["properties"]["query"] == {
+        "anyOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"type": "string"},
+        ]
+    }
     assert tool.inputSchema["properties"]["top_k"]["type"] == "integer"
     assert tool.inputSchema["required"] == ["query"]
     assert tool.inputSchema["additionalProperties"] is False

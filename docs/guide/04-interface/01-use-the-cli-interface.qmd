@@ -124,6 +124,13 @@ Common arguments:
 | `--overwrite` | `false` | Replace an existing index. |
 | `--dense-vector` | `false` | Enable dense-vector indexing. |
 
+`browsecomp-plus` arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--dataset_path PATH` | Required | Hugging Face dataset name or local JSON, JSONL, or Parquet path. |
+| `--split TEXT` | `train` | Dataset split. |
+
 `local-wiki` arguments:
 
 | Argument | Default | Purpose |
@@ -140,13 +147,6 @@ searcher plugins deploy local-wiki \
   --index_name wiki_local \
   --overwrite
 ```
-
-`browsecomp-plus` arguments:
-
-| Argument | Default | Purpose |
-| --- | --- | --- |
-| `--dataset_path PATH` | Required | Hugging Face dataset name or local JSON, JSONL, or Parquet path. |
-| `--split TEXT` | `train` | Dataset split. |
 
 Add `--dense-vector --model_name Qwen3-Embedding-0.6B --embedding_dim 1024`
 to enable dense-vector indexing.

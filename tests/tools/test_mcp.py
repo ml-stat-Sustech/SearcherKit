@@ -4,10 +4,16 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from searcherkit.tools.mcp import MCPTool
 
 
-def test_mcp_tool_defers_default_metadata_until_init(caplog: Any) -> None:
+def test_mcp_tool_defers_default_metadata_until_init(
+    caplog: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(logging.getLogger("searcherkit"), "propagate", True)
     caplog.set_level(logging.WARNING, logger="searcherkit.tools.mcp")
 
     tool = MCPTool(
