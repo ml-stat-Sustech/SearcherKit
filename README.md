@@ -39,13 +39,13 @@ SearcherKit 是面向搜索智能体的模块化运行时。它将智能体执�
 
 ### 🤝 参与贡献
 
-SearcherKit 正在持续演进。欢迎提交 issue 和 PR，包括复现报告、新格式解析器、搜索源适配器、运行配方、训练集成、错误报告和文档改进等。
+SearcherKit 正在持续开发中。欢迎提交 issue 和 PR，包括复现报告、新格式解析器、搜索源适配器、运行配方、训练集成、错误报告和文档改进等。
 
-如果 SearcherKit 对你的研究有所帮助，或让智能体技术栈更易理解，欢迎Star这个仓库让更多开发者看到。
+如果 SearcherKit 对你的研究有所帮助，欢迎 ⭐ 这个仓库让更多人看到。
 
 ### 👤 团队
 
-SearcherKit 由南方科技大学统计与数据科学系的贡献者在[Wei Hongxin](https://hongxin001.github.io/)助理教授指导下开发。
+SearcherKit 由南方科技大学和香港中文大学（深圳）的[魏鸿鑫](https://hongxin001.github.io/)助理教授和[荆炳义](https://sai.cuhk.edu.cn/en/teacher/162)教授团队开发。
 
 主要贡献者和维护者包括 [Li Hanyang](https://justinliii.github.io/)、[Zhang Haotian]()、[Yang Hanjie]()、[Wang Shuoyuan]()、[Lan Zijie]() 和 [Yu Zhengye]()。
 
