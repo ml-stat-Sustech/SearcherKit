@@ -11,6 +11,37 @@ from searcherkit.sources import DataSource, SearchResult, SourceError, build_sou
 from searcherkit.tools.base import BaseTool, ToolConfig
 from searcherkit.tools.summarizer import Summarizer
 
+
+def _search_extensions(
+    *,
+    queries: list[str],
+    result_groups: list[list[SearchResult]],
+    source: str | None = None,
+) -> dict[str, object]:
+    """Build tool extensions for search hits.
+
+    ``documents`` keeps per-hit identity/title/url and the query that produced
+    the hit (and optional source). ``searched_ids`` remains a flat id list for
+    existing callers.
+    """
+    documents: list[dict[str, object]] = []
+    for query, group in zip(queries, result_groups, strict=True):
+        for result in group:
+            item: dict[str, object] = {
+                "id": result.document.id,
+                "title": result.document.title,
+                "url": result.document.url,
+                "query": query,
+            }
+            if source is not None:
+                item["source"] = source
+            documents.append(item)
+    return {
+        "searched_ids": [document["id"] for document in documents],
+        "documents": documents,
+    }
+
+
 def _format_results(results: list[SearchResult]) -> str:
     text = ""
     for i, result in enumerate(results, start=1):
@@ -99,9 +130,14 @@ class SearchTool(BaseTool):
         """Search the configured data source."""
         try:
             if isinstance(query, list):
-                results = await asyncio.gather(*[self.source.search(q, top_k=top_k) for q in query], return_exceptions=False)
+                queries = list(query)
+                results = await asyncio.gather(
+                    *[self.source.search(q, top_k=top_k) for q in queries],
+                    return_exceptions=False,
+                )
             else:
-                results = [await self.source.search(query, top_k=top_k)] 
+                queries = [query]
+                results = [await self.source.search(query, top_k=top_k)]
         except SourceError as e:
             raise RecoverableError(str(e)) from e
         ret = []
@@ -110,9 +146,10 @@ class SearchTool(BaseTool):
             if self.response_char_limit is not None:
                 text = _limit_response(text, self.response_char_limit)
             ret.append(text)
-        return "\n=======\n".join(ret), {
-            "searched_ids": [r.document.id for result in results for r in result],
-        }
+        return "\n=======\n".join(ret), _search_extensions(
+            queries=queries,
+            result_groups=list(results),
+        )
 
     async def close(self) -> None:
         await self.source.close()

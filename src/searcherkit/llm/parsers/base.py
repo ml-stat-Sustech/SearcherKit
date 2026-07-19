@@ -26,7 +26,7 @@ class ParsingError(LLMError):
 class LiveDeltaPart:
     """One parser-interpreted text fragment for Step-Level Live View."""
 
-    field: Literal["content", "thinking"]
+    field: Literal["content", "thinking", "final_answer"]
     text: str
 
 

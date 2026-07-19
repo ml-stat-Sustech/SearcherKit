@@ -207,7 +207,10 @@ def test_interactive_query_runner_enables_streaming_for_default_agent(tmp_path) 
             "assistant_message",
             "run_completed",
         ]
-        assert [event["kind"] for event in record["events"]] == [event.kind for event in events]
+        assert [event["kind"] for event in record["events"]] == [
+            event.kind for event in events if event.kind != "assistant_delta"
+        ]
+        assert all(event["kind"] != "assistant_delta" for event in record["events"])
         assert record["history"][-1]["content"] == "hello"
         assert agent_holder[0].context_token_size == 7
 

@@ -19,7 +19,9 @@ class GeometryConfig:
     """Constants that parameterize the layout."""
 
     slash_menu_height: int = 5
-    running_kicker_height: int = 2
+    # One blank spacer above the live progress line so running text is not
+    # flush against the chat viewport. Always reserved to avoid layout jumps.
+    kicker_height: int = 2
     status_bar_height: int = 1
     input_separator_height: int = 2
     min_chat_height: int = 4
@@ -53,19 +55,18 @@ class LayoutGeometry:
         *,
         input_height: int,
         slash_visible: bool,
-        running: bool,
     ) -> int:
         reserved = (
             self._config.status_bar_height
             + self._config.input_separator_height
             + input_height
             + self._slash_height(slash_visible)
-            + self._running_kicker_height(running)
+            + self._config.kicker_height
         )
         return max(self._config.min_chat_height, self.terminal_rows() - reserved)
 
-    def input_view_height(self, text: str, *, slash_visible: bool, running: bool) -> int:
-        available = self._available_dynamic_height(slash_visible=slash_visible, running=running)
+    def input_view_height(self, text: str, *, slash_visible: bool) -> int:
+        available = self._available_dynamic_height(slash_visible=slash_visible)
         return min(
             max(1, self._input_visual_line_count(text)),
             self._config.max_input_height,
@@ -124,13 +125,13 @@ class LayoutGeometry:
         thumb_start = round((scroll_top / max_scroll) * (view_height - thumb_size))
         return thumb_start, thumb_size
 
-    def _available_dynamic_height(self, *, slash_visible: bool, running: bool) -> int:
+    def _available_dynamic_height(self, *, slash_visible: bool) -> int:
         return max(
             1,
             self.terminal_rows()
             - self._config.status_bar_height
             - self._config.input_separator_height
-            - self._running_kicker_height(running)
+            - self._config.kicker_height
             - self._slash_height(slash_visible)
             - self._config.min_chat_height,
         )
@@ -145,9 +146,6 @@ class LayoutGeometry:
 
     def _slash_height(self, visible: bool) -> int:
         return self._config.slash_menu_height if visible else 0
-
-    def _running_kicker_height(self, running: bool) -> int:
-        return self._config.running_kicker_height if running else 0
 
     def _safe_size(self) -> TerminalSize:
         try:

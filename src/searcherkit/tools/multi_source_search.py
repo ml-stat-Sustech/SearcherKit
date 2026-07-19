@@ -8,6 +8,7 @@ from typing import overload
 from searcherkit.common.errors import RecoverableError
 from searcherkit.sources import DataSource, SearchResult, SourceError, build_source
 from searcherkit.tools.base import BaseTool, ToolConfig
+from searcherkit.tools.search import _search_extensions
 
 def _format_results(results: list[SearchResult]) -> str:
     text = ""
@@ -106,9 +107,11 @@ class MultiSourceSearchTool(BaseTool):
         text = _format_results(results)
         if self.response_char_limit is not None:
             text = _limit_response(text, self.response_char_limit)
-        return text, {
-            "searched_ids": [result.document.id for result in results],
-        }
+        return text, _search_extensions(
+            queries=[query],
+            result_groups=[results],
+            source=source,
+        )
 
     async def close(self) -> None:
         for source in self.source_map.values():
