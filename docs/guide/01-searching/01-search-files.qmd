@@ -87,7 +87,7 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 ::: {.callout-tip}
 要让配置永久有效，请在运行 SearcherKit 的目录中创建 `.env` 文件：
 
-```{.dotenv, filename=.env}
+```bash
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1

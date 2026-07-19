@@ -79,7 +79,7 @@ searcher plugins deploy browsecomp-plus \
 
 `--overwrite` 会删除并重建同名索引。不希望替换现有索引时请省略该选项。
 
-如果在 SearcherKit 外部管理索引，请在下面的配置中映射搜索源字段。至少要确保 `search_fields` 中的字段可搜索。`document_id_field` 和 `fetch_field` 使用的字段必须能唯一标识文档。
+使用其他索引，请确保 `search_fields` 中的字段可搜索。`document_id_field` 和 `fetch_field` 使用的字段必须能唯一标识文档。
 
 ::: {.callout-tip}
 #### 构造向量索引
@@ -109,7 +109,6 @@ searcher plugins deploy local-wiki \
 - `--prompt_strategy qwen3` 为 Qwen3 应用文档提示词；使用不需要提示词的模型时保留默认值 `none`，E5 模型使用 `e5`。
 - `--cpu_batch_size` 使用CPU进行 BM25 索引构建时的批大小 
 - `--gpu_batch_size` 使用GPU进行向量索引构建时的批大小
-```
 :::
 
 ::: {.callout-caution}
@@ -142,7 +141,7 @@ $env:LLM_BASE_URL = "https://your-endpoint.example/v1"
 ::: {.callout-tip}
 要让配置永久有效，请在运行 SearcherKit 的目录中创建 `.env` 文件：
 
-```{.dotenv, filename=.env}
+```bash
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1
