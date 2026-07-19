@@ -12,7 +12,7 @@ SearcherKit is a modular system for building AI agents that rely heavily on sear
 - **Build and run search agents** – Define agent behavior once, then use it for prototyping, evaluation, interactive demos, and large‑scale rollout generation.
 - **Connect to any data source** – Plug in web APIs, Elasticsearch, internal knowledge bases, or local files through a unified interface. Combine sources freely without touching agent code.
 - **Scale without pain** – Async execution, flexible concurrency, checkpoint recovery, and detailed traces make batch jobs fast and debuggable. Swap models and backends easily.
-- **Train with confidence** – Use the same setup to generate SFT data and RL rollouts. Our 8B model achieved SOTA results on public search benchmarks with this stack.
+- **Training‑ready** – The same agent and tool configuration can be used for evaluation, offline analysis, and integration with training pipelines, without needing to refactor code.
 
 ---
 
