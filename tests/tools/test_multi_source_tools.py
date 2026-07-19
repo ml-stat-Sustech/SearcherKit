@@ -10,12 +10,12 @@ from searcherkit.common.errors import RecoverableError
 from searcherkit.sources import SourceConfig, add_source_cfg
 from searcherkit.sources.file import FileSource
 from searcherkit.tools import ToolConfig, build_tool
-from searcherkit.tools.multi_source_search import MultiSourceSearchTool
-from searcherkit.tools.multi_source_visit import MultiSourceVisitTool
+from searcherkit.tools.search import SearchTool
+from searcherkit.tools.visit import VisitTool
 
 
-SearchFactory = Callable[..., MultiSourceSearchTool]
-VisitFactory = Callable[..., MultiSourceVisitTool]
+SearchFactory = Callable[..., SearchTool]
+VisitFactory = Callable[..., VisitTool]
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
 DOC_ID = "source_files.md"
 
@@ -80,9 +80,9 @@ def _add_sources(test_name: str) -> tuple[str, str]:
     return runtime_name, summary_name
 
 
-def _direct_search_tool(*, test_name: str) -> MultiSourceSearchTool:
+def _direct_search_tool(*, test_name: str) -> SearchTool:
     runtime_name, summary_name = _source_names(test_name)
-    return MultiSourceSearchTool(
+    return SearchTool(
         {
             runtime_name: FileSource(root_path=SOURCE_ROOT),
             summary_name: FileSource(root_path=SOURCE_ROOT),
@@ -91,22 +91,22 @@ def _direct_search_tool(*, test_name: str) -> MultiSourceSearchTool:
     )
 
 
-def _config_search_tool(*, test_name: str) -> MultiSourceSearchTool:
+def _config_search_tool(*, test_name: str) -> SearchTool:
     source_names = list(_add_sources(test_name))
     tool = build_tool(
         ToolConfig(
-            type="multi_source_search",
+            type="search",
             name="search",
             source=source_names,
         )
     )
-    assert isinstance(tool, MultiSourceSearchTool)
+    assert isinstance(tool, SearchTool)
     return tool
 
 
-def _direct_visit_tool(*, test_name: str) -> MultiSourceVisitTool:
+def _direct_visit_tool(*, test_name: str) -> VisitTool:
     runtime_name, summary_name = _source_names(test_name)
-    return MultiSourceVisitTool(
+    return VisitTool(
         {
             runtime_name: FileSource(root_path=SOURCE_ROOT),
             summary_name: FileSource(root_path=SOURCE_ROOT),
@@ -115,16 +115,16 @@ def _direct_visit_tool(*, test_name: str) -> MultiSourceVisitTool:
     )
 
 
-def _config_visit_tool(*, test_name: str) -> MultiSourceVisitTool:
+def _config_visit_tool(*, test_name: str) -> VisitTool:
     source_names = list(_add_sources(test_name))
     tool = build_tool(
         ToolConfig(
-            type="multi_source_visit",
+            type="visit",
             name="visit",
             source=source_names,
         )
     )
-    assert isinstance(tool, MultiSourceVisitTool)
+    assert isinstance(tool, VisitTool)
     return tool
 
 
@@ -134,6 +134,7 @@ def test_multi_source_search_run(tool_factory: SearchFactory) -> None:
         test_name = "search-run"
         runtime_name, summary_name = _source_names(test_name)
         tool = tool_factory(test_name=test_name)
+        assert "source" in tool.inputSchema["required"]
 
         runtime_result = await tool.run(
             query="source-backed-tools",
@@ -180,6 +181,7 @@ def test_multi_source_visit_run(tool_factory: VisitFactory) -> None:
         test_name = "visit-run"
         runtime_name, summary_name = _source_names(test_name)
         tool = tool_factory(test_name=test_name)
+        assert "source" in tool.inputSchema["required"]
 
         runtime_result = await tool.run(
             document_id=DOC_ID,

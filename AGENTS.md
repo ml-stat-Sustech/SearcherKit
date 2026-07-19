@@ -137,8 +137,6 @@ src/searcherkit/
     |-- base.py              # Tool interface and tool-call structures
     |-- factory.py           # tool construction from config/plain params
     |-- mcp.py               # MCP-backed tool adapter
-    |-- multi_source_search.py
-    |-- multi_source_visit.py
     |-- search.py            # source-backed search tool
     |-- summarizer.py        # optional tool-output summarization
     `-- visit.py             # source-backed visit tool

@@ -196,6 +196,7 @@ def _config_tool(
 def test_run(tool_factory: ToolFactory) -> None:
     async def run() -> None:
         tool = tool_factory(test_name="run")
+        assert "source" not in tool.inputSchema["properties"]
 
         result = await tool.run(document_id=DOC_ID, goal="confirm runtime wiring")
         content, extensions = result

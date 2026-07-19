@@ -80,17 +80,17 @@ def test_apply_active_source_changes_only_built_in_source_backed_tools() -> None
         tools=[
             ToolConfig(type="search", name="search", source=["wiki"]),
             ToolConfig(type="visit", name="visit", source=["wiki"]),
-            ToolConfig(type="multi_source_search", name="search_all", source=["wiki", "bcp"]),
+            ToolConfig(type="search", name="search_all", source=["wiki", "bcp"]),
             ToolConfig(type="mcp", name="external", source=["wiki"]),
         ]
     )
 
     updated = apply_active_source(config, "bcp")
 
-    assert updated == 2
+    assert updated == 3
     assert {tool.name: tool.source for tool in config.tools} == {
         "search": ["bcp"],
         "visit": ["bcp"],
-        "search_all": ["wiki", "bcp"],
+        "search_all": ["bcp"],
         "external": ["wiki"],
     }
