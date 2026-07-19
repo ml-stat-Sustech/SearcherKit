@@ -1,12 +1,10 @@
 ---
-title: Getting started with SearcherKit
+title: SearcherKit 入门
 ---
 
-SearcherKit is a modular runtime for building, running, evaluating, and
-training search agents. It connects an LLM to tools that search local files,
-the web, Elasticsearch, and MCP services.
+SearcherKit 是用于构建、运行、评估和训练搜索智能体的模块化运行时。它将 LLM 与用于搜索本地文件、Web、Elasticsearch 及 MCP 服务的工具连接起来。
 
-### How SearcherKit works
+### SearcherKit 的工作方式
 
 ```bash
 dataset or TUI
@@ -21,14 +19,11 @@ dataset or TUI
       `---- Tool ----> Source or MCP service
 ```
 
-The LLM decides when to call a tool; tools delegate retrieval to sources and
-return results to the agent. YAML configuration selects the LLM client, parser,
-tools, sources, and runtime limits for both interactive and batch runs.
+LLM 决定何时调用工具；工具将检索委托给搜索源，并把结果返回智能体。交互式运行和批处理都通过 YAML 配置选择 LLM 客户端、解析器、工具、搜索源和运行时限制。
 
-### Install SearcherKit
+### 安装 SearcherKit
 
-SearcherKit requires Python 3.12 or later. Clone the repository, create and
-activate a virtual environment, and install the package in editable mode:
+SearcherKit 需要 Python 3.12 或更高版本。克隆仓库，创建并激活虚拟环境，然后以可编辑模式安装软件包：
 
 :::: {.panel-tabset}
 #### pip
@@ -54,29 +49,23 @@ uv pip install -e .
 ```
 ::::
 
-Confirm that the command is available:
+确认命令可用：
 
 ```bash
 searcher --help
 ```
 
-Local-file search uses [ripgrep](https://github.com/BurntSushi/ripgrep) for
-full-text matching. Install it separately and verify that `rg` is on `PATH`:
+本地文件搜索使用 [ripgrep](https://github.com/BurntSushi/ripgrep) 进行全文匹配搜索。请按照 [安装指南](https://github.com/BurntSushi/ripgrep#installation) 安装。
 
 ```bash
 rg --version
 ```
 
-The default installation includes the Elasticsearch and Anthropic clients.
-Some deployment and training workflows require additional services or optional
-dependencies; their task guides list the relevant requirements.
+### 运行搜索智能体
 
-### Run your first search
+软件包自带的 `file_search` 示例定义了通过`search` 和 `visit` 工具在本地目录搜索的智能体。
 
-The packaged `file_search` configuration connects an OpenAI-compatible model
-endpoint to `search` and `visit` tools over a local directory.
-
-Set the model endpoint and the directory to search:
+通过环境变量设置模型端点和要搜索的目录：
 
 ::: {.panel-tabset}
 #### Bash
@@ -98,27 +87,24 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 ```
 :::
 
-Start the interactive terminal UI:
+启动交互式终端 UI：
 
 ```bash
 searcher tui --config-path file_search
 ```
 
-The agent can now search files under `FILE_SEARCH_ROOT`, open relevant results,
-and use their contents to answer your questions.
+智能体现在可以搜索 `FILE_SEARCH_ROOT` 下的文件、打开相关结果，并使用其中的内容回答问题。
 
-See [Search files with SearcherKit](01-searching/01-search-files.qmd) for the
-complete workflow, output locations, and access restrictions.
+完整工作流、输出位置和访问限制见[使用 SearcherKit 搜索文件](01-searching/01-search-files.qmd)。
 
-### Understand the configuration
+### SearcherKit配置结构
 
-A SearcherKit run is described by YAML. The smallest useful configuration
-connects four parts:
+SearcherKit 的智能体和运行配置由一份 YAML 配置文件描述。最简配置包括四个部分：
 
-- an LLM client that communicates with the model endpoint;
-- a parser that converts messages and tool calls;
-- one or more sources that retrieve documents;
-- tools that expose selected source operations to the model.
+- 与模型端点通信的 **LLM 客户端（LLM Client）**；
+- 转换消息和工具调用的 **解析器（Parser）**；
+- 一个或多个用于检索文档的 **搜索源（Source）**；
+- 由智能体调用的 **工具（Tool）**。
 
 ```{.yaml filename="config.yaml"}
 agent:
@@ -147,18 +133,16 @@ agent:
 output_path: outputs/first-run
 ```
 
-Here, both tools refer to the source by its unique name, `project_docs`. The
-`upstream` parser expects the provider to return structured tool calls. Models
-that encode tool calls in text may require a model-specific parser.
+在这份配置中，两个工具都通过唯一的名称 `project_docs` 指向使用的搜索源。`upstream` 解析器要求上游LLM 服务返回结构化工具调用。少数对工具调用字符串格式由特别处理的模型可能需要专用解析器。
 
-If this file is saved as `configs/demo/config.yaml`, validate and run it with:
+将此文件保存为 `configs/demo/config.yaml`，可按如下方式验证并运行：
 
 ```bash
 searcher inspect --config-path configs/demo/config.yaml
 searcher tui --config-path configs/demo/config.yaml
 ```
 
-Hydra-style overrides let you change values without editing the file:
+Hydra 风格的配置覆盖项允许在不编辑文件的情况下覆写值：
 
 ```bash
 searcher tui --config-path configs/demo/config.yaml \
@@ -166,27 +150,23 @@ searcher tui --config-path configs/demo/config.yaml \
   output_path=outputs/qwen3
 ```
 
-Read [LLM integration](03-customizing/02-llm-integration.qmd) for clients and
-parsers, and [Sources and tools](03-customizing/03-sources-and-tools.qmd) for
-retrieval and model-visible tool schemas.
+客户端和解析器见 [LLM 集成](03-customizing/02-llm-integration.qmd)，检索与模型可见工具模式（schema）见[搜索源与工具](03-customizing/03-sources-and-tools.qmd)。
 
-### Choose what to do next
+### 选择下一步
 
-| Goal | Next page |
+| 目标 | 后续页面 |
 | --- | --- |
-| Search a local directory interactively | [Search files with SearcherKit](01-searching/01-search-files.qmd) |
-| Search the public web interactively | [Search the web with SearcherKit](01-searching/02-search-web.qmd) |
-| Search an Elasticsearch knowledge base | [Search with Elasticsearch](01-searching/03-search-with-elasticsearch.qmd) |
-| Run a dataset and evaluate its answers | [Run and evaluate](01-searching/04-batch-run-and-evaluate.qmd) |
-| Generate data or train a model | [Training overview](02-training/01-training-overview.qmd) |
-| Understand the runtime components | [System architecture](03-customizing/01-project-architecture.qmd) |
-| Connect a model and choose a message format | [LLM integration](03-customizing/02-llm-integration.qmd) |
-| Configure retrieval and model-visible tools | [Sources and tools](03-customizing/03-sources-and-tools.qmd) |
-| Learn the interactive controls and records | [Interactive TUI](04-interface/02-use-the-interactive-tui.qmd) |
-| Configure retries, logs, limits, and resume behavior | [Retrying and logging](03-customizing/04-retrying-and-logging.qmd) |
-| Add a provider, parser, source, or tool | [Custom Modules](03-customizing/05-customized-modules.qmd) |
-| Look up commands and flags | [CLI reference](04-interface/01-use-the-cli-interface.qmd) |
+| 交互式搜索本地目录 | [使用 SearcherKit 搜索文件](01-searching/01-search-files.qmd) |
+| 交互式搜索公开 Web | [使用 SearcherKit 搜索 Web](01-searching/02-search-web.qmd) |
+| 搜索 Elasticsearch 知识库 | [使用 Elasticsearch 搜索](01-searching/03-search-with-elasticsearch.qmd) |
+| 运行数据集并评估答案 | [运行与评估](01-searching/04-batch-run-and-evaluate.qmd) |
+| 生成数据或训练模型 | [训练概览](02-training/01-training-overview.qmd) |
+| 理解运行时组件 | [系统架构](03-customizing/01-project-architecture.qmd) |
+| 连接模型并选择消息格式 | [LLM 集成](03-customizing/02-llm-integration.qmd) |
+| 配置检索和模型可见工具 | [搜索源与工具](03-customizing/03-sources-and-tools.qmd) |
+| 了解交互控件和记录 | [交互式 TUI](04-interface/02-use-the-interactive-tui.qmd) |
+| 配置重试、日志、限制和恢复行为 | [重试与日志](03-customizing/04-retrying-and-logging.qmd) |
+| 添加提供商、解析器、搜索源或工具 | [自定义模块](03-customizing/05-customized-modules.qmd) |
+| 查询命令和参数 | [CLI 参考](04-interface/01-use-the-cli-interface.qmd) |
 
-The API Reference is generated from package docstrings. Use it for exact Python
-signatures after the guide has identified the component that owns the behavior
-you want to use or extend.
+API 参考由软件包文档字符串生成。通过指南确定负责目标行为的组件后，可在 API 参考中查询精确的 Python 签名。

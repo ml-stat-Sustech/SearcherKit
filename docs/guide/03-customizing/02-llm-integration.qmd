@@ -1,13 +1,10 @@
 ---
-title: LLM Integration
+title: LLM 集成
 ---
 
-SearcherKit separates model transport from model format. The LLM client talks
-to a provider or inference server; the parser translates messages and tool
-calls between that provider-facing representation and SearcherKit's internal
-message types.
+SearcherKit 将模型传输与模型格式分离。LLM 客户端与提供商或推理服务器通信；解析器负责在面向提供商的表示与 SearcherKit 内部消息类型之间转换消息和工具调用。
 
-### Request and response path
+### 请求与响应路径
 
 ```bash
 SearchAgent history
@@ -18,17 +15,12 @@ SearchAgent history
     -> assistant and tool-call messages
 ```
 
-This split matters when two models use the same OpenAI-compatible endpoint but
-different chat templates or textual tool-call formats. Change the parser when
-the format changes; change the client when API transport changes.
+### 内置客户端
 
-### Built-in clients
-
-| `type` | Use case |
+| `type` | 用途 |
 | --- | --- |
-| `openai` | OpenAI and OpenAI-compatible chat completion endpoints |
-| `anthropic` | Anthropic-compatible message endpoints |
-| `vllm` or `vllm_server` | vLLM integration selected through the client factory |
+| `openai` | OpenAI 兼容的聊天补全端点 |
+| `anthropic` | Anthropic 兼容的消息端点 |
 
 ```yaml
 agent:
@@ -44,21 +36,18 @@ agent:
       max_completion_tokens: 8192
 ```
 
-`default_kwargs` are included in each generation request. Keep provider-only
-options here rather than teaching the parser about HTTP payload details.
+`default_kwargs` 会包含在每次生成请求中。提供商专用选项应放在这里，不要让解析器了解 HTTP 载荷细节。
 
-`base_url` may also be a list of compatible endpoints. SearcherKit keeps a
-session on one endpoint to improve cache locality; all listed endpoints must
-serve the same model and generation contract.
+`base_url` 也可以是兼容端点列表。SearcherKit 会让一个会话保持在同一端点，以提高缓存局部性；列表中的所有端点必须提供相同模型并遵循相同生成约定。
 
-### Built-in parsers
+### 内置解析器
 
-| `type` | Use case |
+| `type` | 用途 |
 | --- | --- |
-| `upstream` | Provider-native tool calls |
-| `tongyi_deep_research` | Tongyi DeepResearch textual tool-call format |
-| `webexplorer` | WebExplorer prompt and response format |
-| `websailor` | WebSailor prompt and response format |
+| `upstream` | 提供商原生工具调用 |
+| `tongyi_deep_research` | 通义 DeepResearch 文本工具调用格式 |
+| `webexplorer` | WebExplorer 提示词和响应格式 |
+| `websailor` | WebSailor 提示词和响应格式 |
 
 ```yaml
 agent:
@@ -66,21 +55,18 @@ agent:
     type: upstream
 ```
 
-Use `upstream` when the inference server parses model tool-call text and returns
-structured provider tool calls. For vLLM or SGLang deployments, configure the
-server's tool-call and reasoning parsers to match the model template.
+当推理服务器解析模型的工具调用文本并返回结构化工具调用时，使用 `upstream`。
 
-### Streaming
+::: {.callout-tip}部署 vLLM 或 SGLang 时，应配置服务器的工具调用与思考解析器，使其能正常返回结构化工具调用和思考内容。
+:::
 
-Interactive execution enables `stream_llm` and consumes client stream chunks.
-Parsers may provide a live-delta splitter so reasoning and final content can be
-displayed separately without changing the stored final message. Batch execution
-continues to use the complete response interface.
+### 流式传输
 
-### Retry boundaries
+`stream_llm` 用于给TUI交互式界面提供LLM输出的流式传输功能。
 
-Configure retry for failures that can succeed on another attempt, such as
-temporary provider failures or a nondeterministic `ParsingError`:
+### 重试边界
+
+如有必要，可以为需要重试的 Exception 配置重试策略，例如临时提供商故障或LLM输出导致的非确定性 Exception：
 
 ```yaml
 agent:
@@ -91,9 +77,4 @@ agent:
       - pkg://searcherkit.llm.parsers:ParsingError
 ```
 
-Invalid credentials, unknown model names, and permanent request errors should
-surface immediately. When retries are exhausted, the final concrete error is
-propagated to the agent or task boundary.
-
-To implement a new transport or model format, see
-[Custom Modules](05-customized-modules.qmd).
+实现新的LLM 端点或模型解析器，请参阅[自定义模块](05-customized-modules.qmd)。

@@ -1,25 +1,21 @@
 ---
-title: Sources & Tools
+title: 搜索源与工具
 ---
 
-A source is a retrieval adapter. A tool is a model-visible action. Keeping them
-separate lets the same corpus support search, visit, or a custom interaction
-without putting model-facing schemas into the storage layer.
+SearcherKit 将搜索相关工具分为搜索源和工具两层。搜索源用于检索，工具则负责定义智能体可调用的内容，一般来说，工具可以接入搜索源，并对搜索源的信息在呈递给智能体前，做一些额外的处理。除此之外，SearcherKit 还预留了 MCP 工具接入点。
 
-### Source contract
+### 搜索源
 
-Every `DataSource` provides asynchronous `search`, `fetch`, and `close`
-operations. Sources return provider-neutral `Document` and `SearchResult`
-objects.
+每个 `DataSource` 都提供异步 `search`、`fetch` 和 `close` 操作。搜索源返回 `Document` 和 `SearchResult` 对象。
 
-| `type` | Backend |
+| `type` | 后端 |
 | --- | --- |
-| `file` | Full-text search and file reads under a local root; requires `rg` |
-| `web` | Serper search and Jina page fetching |
-| `elasticsearch` | BM25, vector, or hybrid retrieval |
-| `custom` | A project-defined `DataSource` class |
+| `file` | 在本地根目录下全文搜索和读取文件；需要 `rg` |
+| `web` | Serper 搜索和 Jina 页面获取 |
+| `elasticsearch` | BM25、向量或混合检索 |
+| `custom` | 项目定义的 `DataSource` 类 |
 
-Each source needs a unique name. Source-backed tools refer to these names:
+每个搜索源都需要唯一名称。基于搜索源的工具通过这些名称引用搜索源：
 
 ```yaml
 agent:
@@ -36,10 +32,9 @@ agent:
       source: [project_docs]
 ```
 
-### Elasticsearch retrieval
+### Elasticsearch 检索
 
-Elasticsearch supports `bm25`, `vector`, and `hybrid` search modes. Vector and
-hybrid search require an embedding endpoint and a populated vector field.
+Elasticsearch 支持 `bm25`、`vector` 和 `hybrid` 搜索模式。向量和混合搜索需要嵌入服务端点，以及已填充的向量字段。
 
 ```yaml
 agent:
@@ -64,18 +59,9 @@ agent:
       embedding_max_concurrency: 256
 ```
 
-Check whether the embedding server applies query prompts automatically. Apply
-`embedding_prefix` exactly once, and use the same embedding model and vector
-dimension that were used to build the index.
+### 工具
 
-Highlighting builds compact snippets from matching fragments. Tune fragment
-size, fragment count, and `snippet_chars` against the context budget rather
-than returning entire documents from search.
-
-### Model-visible tool contract
-
-The tool name, description, and `inputSchema` are visible to the model. The
-schema should expose only arguments the model can use correctly.
+工具名称、描述和 `inputSchema` 对模型可见。schema 应只暴露模型能够正确使用的参数。
 
 ```yaml
 agent:
@@ -97,17 +83,86 @@ agent:
       raise_argument_validation_error: false
 ```
 
-`argument_mapping` translates model-visible names to implementation arguments.
-When validation errors are not raised, the tool returns an actionable schema
-error to the model so it can correct the call.
+`argument_mapping` 将模型可见名称转换为实现参数。`raise_argument_validation_error` 会在模型工具调用参数错误时 raise exception。一般来说，可以在训练时将其设为 `true` 并在上游 handle，来帮助 RL 引擎惩罚错误的调用；而在运行/测试时可设为 `false`，此时工具正常返回一条含有参数错误信息的字符串，可以作为工具返回内容呈递给智能体，提示其修正工具调用内容。
 
-### Built-in tools
+### 内置工具
 
-SearcherKit registers `search`, `visit`, `multi_source_search`,
-`multi_source_visit`, and `mcp`. MCP tools share the same initialization,
-validation, concurrency, and shutdown lifecycle as native tools.
+SearcherKit 的常用内置工具是 `search`、`visit` 和 `mcp`。它们都继承统一的工具调用协议：工具名称、描述和 `inputSchema` 会发送给模型，调用参数先经过 JSON Schema 校验，再通过 `argument_mapping` 映射到实现参数。
 
-Large search or visit results can be passed through a summarizer model:
+#### `search`：检索相关文档
+
+`search` 在一个已配置的 `DataSource` 中执行检索，适合发现文档和获取候选证据。默认参数是 `query` 和 `top_k`；`query` 可以是字符串，也可以是字符串列表（列表中的查询会并发执行）。返回内容按结果列出标题、链接和 snippet，并在扩展字段中提供 `searched_ids` 便于后续的召回率分析等分析记录。
+
+```yaml
+agent:
+  tools:
+    - type: search
+      name: search_docs
+      source: [project_docs]
+      response_char_limit: 20000
+      inputSchema:
+        type: object
+        properties:
+          query:
+            type: string
+            description: A focused search query.
+          top_k:
+            type: integer
+            minimum: 1
+        required: [query]
+        additionalProperties: false
+```
+
+#### `visit`：获取文档内容
+
+`visit` 根据 `document_id` 从一个已配置的数据源获取全文，适合在 `search` 找到候选文档后读取完整上下文。`document_id` 同样支持字符串列表并发获取；可选的 `goal` 可作为摘要器的输入目标。返回内容包含文档标题、链接和正文，未找到的文档会返回明确的 not-found 信息。
+
+```yaml
+agent:
+  tools:
+    - type: visit
+      name: visit_doc
+      source: [project_docs]
+      inputSchema:
+        type: object
+        properties:
+          document_id:
+            type: string
+          goal:
+            type: string
+        required: [document_id]
+        additionalProperties: false
+```
+
+#### `mcp`：调用远程工具
+
+`mcp` 将远程 MCP 服务中的一个工具适配为 SearcherKit 工具。`endpoint` 指定服务地址，`mcp_tool_name` 指定远程工具名；`transport` 支持 `streamable-http`（默认）和 `sse`。可以配置 `auth_header` 传递认证信息，使用 `max_concurrency` 限制并发调用，并通过 `raise_on_fatal` 决定致命远程错误是抛出还是转换为工具错误结果。未显式提供 `inputSchema` 时，MCP 初始化阶段会从服务端元数据同步 schema 和描述。
+
+```yaml
+agent:
+  tools:
+    - type: mcp
+      name: remote_search
+      endpoint: https://mcp.example.com/mcp
+      transport: streamable-http
+      mcp_tool_name: search
+      auth_header: "Bearer ${MCP_TOKEN}"
+      max_concurrency: 16
+```
+
+搜索和访问工具还支持 `response_char_limit`。超过限制时，结果会被截断并附加 `[Truncated]` 标记；这是硬截断，不等同于摘要。
+
+### 摘要功能
+
+较大的搜索或访问结果可以交给摘要模型生成摘要，以便智能体提取重点、节省上下文空间，常见于多种搜索智能体的设计中。摘要器使用 OpenAI 兼容的异步接口，在请求中发送一个包含摘要目标和原始内容的提示词，并要求模型严格返回以下 JSON 对象：
+
+```json
+{"evidence": "与目标直接相关的证据", "summary": "简洁的归纳"}
+```
+
+摘要结果会被格式化为“Evidence in page”和“Summary”两段，再作为工具结果字符串返回；原工具返回的扩展信息（例如 `searched_ids`）会保留。
+
+完整配置示例：
 
 ```yaml
 agent:
@@ -128,6 +183,4 @@ agent:
           max_tries: 3
 ```
 
-Summarization reduces context growth but adds latency, cost, and another failure
-boundary. Use it when documents are substantially larger than the evidence the
-agent needs.
+`max_chars` 限制发送给摘要模型的原始内容长度；它只影响摘要请求，不改变工具本身的 `response_char_limit`。`max_concurrency` 使用信号量限制同时进行的摘要请求，`default_kwargs` 会原样合并到聊天补全请求中（例如 `temperature` 或 `max_tokens`）。`summary_goal_key` 指定从工具参数中读取摘要目标：`search` 通常使用 `query`，`visit` 通常使用 `goal`；如果使用了 `argument_mapping`，应填写映射后的实现参数名。

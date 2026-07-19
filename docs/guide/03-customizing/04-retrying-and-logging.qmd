@@ -1,55 +1,124 @@
 ---
-title: Retrying & Logging
+title: 重试与日志
 ---
 
-Search-agent runs combine several independent services and long-lived tasks.
-Reliable operation depends on bounding each failure domain and preserving enough
-evidence to resume or diagnose a run.
+在智能体执行过程中，模型输出、环境访问、和工具执行等各个环节都存在着一定的执行失败可能性。在许多智能体运行时中都会给予相关操作一定的重试机会。SearcherKit 提供了一个统一的、可由配置文件定义的重试策略配置和执行器，便于进行重试操作
 
-### Retry at the correct boundary
+### 重试策略和重试函数
 
-SearcherKit has separate retry scopes:
+重试策略由 `RetryPolicy` 表示。其中主要配置项有。
 
-| Scope | Use for |
+| 字段 | 含义 |
 | --- | --- |
-| LLM retry | Transient provider failures or recoverable parse failures |
-| Tool retry | Temporary source, MCP, or tool failures |
-| Task retry | Restarting an entire trajectory |
+| `max_tries` | 包含首次调用在内的最大尝试次数；`3` 表示最多调用三次 |
+| `max_time` | 所有尝试允许消耗的最长时间（秒）；`null` 表示不设置总时间上限 |
+| `exceptions` | 触发重试的具体异常类型列表；未列出的异常会立即抛出 |
+| `giveup` | 接收异常并返回布尔值的放弃函数；返回 `true` 时停止重试 |
+| `factor` | 指数退避的时间系数 |
+| `base` | 指数退避的底数；等待时间按指数增长 |
+| `jitter` | 对等待时间增加随机抖动，默认使用 `backoff.full_jitter`，可设为 `null` 关闭 |
 
-Only list exceptions that are genuinely recoverable. Authentication errors,
-invalid model names, malformed permanent config, and deterministic schema
-errors should surface immediately. Test both eventual success and exhausted
-retry behavior.
+默认策略只重试 `RecoverableError`。每次退避和最终放弃都会写入日志，日志包含操作名、尝试次数、等待时间和异常。
+配置示例：
 
-### Bound agent execution
+```yaml
+common:
+  retry:
+    max_tries: 3
+    max_time: 60
+    exceptions:
+      - pkg://searcherkit.common.errors:RecoverableError
+    factor: 1
+    base: 2
+    jitter: pkg://backoff:full_jitter
+```
+#### 使用 `retry_async` 和 `retry_sync` 进行重试
 
-Configure turn, token, and time budgets together. Reminder prompts near those
-limits should tell the model to stop using tools and produce the required final
-answer format. A caller may still enforce a hard timeout around the whole run.
+使用 `retry_sync` 给一个函数的执行添加重试行为，对异步函数，使用 `retry_async` 。
 
-### Preserve observability
+```python
+from searcherkit.common.retry import retry_async
 
-For production-scale runs, keep:
+content = await retry_async(
+    fetch_remote,
+    "https://example.test/page",
+    policy=policy,
+    op_name="source.fetch",
+)
+```
 
-- a global log for lifecycle and aggregate failures;
-- one trace log per trajectory;
-- structured message histories and timing data;
-- checkpoint state and a run summary;
-- model, dataset, config, and code revisions outside the output directory.
+#### 使用 `wrap_async` 和 `wrap_sync` 给函数包装重试行为
 
-Avoid logging secrets or complete credentials. Prefer stable sample and trace
-identifiers so a summary failure can be followed into the relevant history and
-trace.
+如需要重复调用带重试行为的函数，使用 `wrap_sync` 包装函数并返回带重试行为的函数，所有调用都使用包装时的重试策略；异步函数使用对应的 `wrap_async`。
 
-### Diagnose in layers
+```python
+from searcherkit.common.errors import RecoverableError
+from searcherkit.common.retry import RetryPolicy, wrap_async
 
-1. Run `searcher inspect` to rule out config shape errors.
-2. Use `searcher tui` or a one-item dataset to test one trajectory.
-3. Check model and retrieval services independently.
-4. Read the per-trace log to identify the failing boundary.
-5. Increase concurrency gradually while watching queue depth, latency, retries,
-   and failure rate.
+policy = RetryPolicy(
+    max_tries=3,
+    exceptions=(RecoverableError,),
+    factor=1,
+    base=2,
+)
 
-For batch regressions, separate task completion from answer quality. A run can
-complete successfully while producing invalid tool calls, repeated searches,
-truncated context, or an answer format the evaluator cannot extract.
+async def fetch_remote(url: str) -> str:
+    ...
+
+fetch_with_retry = wrap_async(
+    fetch_remote,
+    policy=policy,
+    op_name="source.fetch",
+)
+content = await fetch_with_retry("https://example.test/page")
+```
+
+重试耗尽后，最后一次异常会继续向上抛出。
+
+#### 内置的重试策略
+
+SearcherKit 提供以下内置的重试点：
+
+| 范围 | 配置项位置 | 用途 |
+| --- | --- | --- |
+| LLM 重试 | `agent.llm_retry_config` | 临时提供商故障或可恢复的解析失败 |
+| 工具重试 | `agent.tool_retry_config` | 临时搜索源、MCP 或工具故障 |
+| 任务重试 | `task_retry_policy` | 重新启动完整轨迹 |
+
+### 日志
+
+SearcherKit 将日志分为运行级日志和轨迹级日志。一次批处理运行的输出通常如下：
+
+```text
+outputs/searcherkit/
+├── history/000000.json
+├── traces/000000_<trace-id>.log
+├── run.log
+└── summary.json
+```
+
+日志配置如下：
+```yaml
+logging:
+  global_file: ${output_path}/run.log
+  trace:
+    enabled: true
+    dir: ${output_path}/traces
+    format: text       # text 或 json
+    level: DEBUG
+    filename_template: "{sample_id}_{trace_id}.log"
+```
+
+`history/` 保存输入、参考答案、消息历史、单样本统计和计时数据；`summary.json` 保存批次汇总。`run.log` 是全局文本日志，包含时间、源文件和行号、级别，以及 `scope`、`run`、`sample`、`trace`、`turn` 上下文。轨迹文本日志按 `{sample_id}_{trace_id}.log` 命名；设为 JSON 格式后，每条轨迹包含 `run`、`sample`、`execution`、`stats`、`tool_interactions` 和 `events`。
+
+#### 上下文感知的 `logger`
+
+SearckerKit 提供上下文感知的 logger ，可在记录日志时附带当前的任务、轮次、样本信息。 使用 `log_context` 设置当前日志上下文，然后用标准 `logger` 记录日志：
+
+```python
+from searcherkit.common.log import get_logger, log_context
+
+logger = get_logger(__name__)
+with log_context(scope="trace", run_id="run-1", sample_id=0, trace_id="abc", turn=2):
+    logger.info("Calling the tool")
+```

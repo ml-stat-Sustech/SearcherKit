@@ -1,20 +1,17 @@
 ---
-title: Batch Run & Evaluate
+title: 批量运行与评估
 ---
 
-SearcherKit provides an asynchronous batch runtime for running SearchAgent over a
-dataset and an LLM-based evaluator for scoring the saved results. This guide covers
-the complete workflow:
+SearcherKit 提供高效的异步批处理运行时。可以快速高效地在数据集上批量运行智能体；同时，SearcherKit提供基于LLM-as-judge的评估脚本，为保存的结果评分。本指南涵盖完整流程：
 
-1. Prepare a dataset.
-2. Configure and run the agent.
-3. Monitor or resume the batch.
-4. Evaluate the saved trajectories.
+1. 准备数据集。
+2. 配置并运行智能体。
+3. 监控或恢复批处理。
+4. 评估保存的轨迹。
 
-### Prepare the input data
+### 准备输入数据
 
-The default data loader reads JSONL or Parquet files. Set the source format and the
-fields that contain the question and reference answer:
+数据加载器读取 JSONL 或 Parquet 文件。请设置搜索源格式，以及包含问题和参考答案的字段：
 
 ```yaml
 dataloader:
@@ -25,42 +22,38 @@ dataloader:
   max_items: null
 ```
 
-A JSONL record can be as small as:
+一条 JSONL 记录可以只有以下内容：
 
 ```json
 {"question": "Who designed the first compiler?", "answer": "Grace Hopper"}
 ```
 
-Set `max_items` to a small number while testing a new configuration, then change it
-to `null` for the full dataset.
+测试新配置时可以将 `max_items` 设小，跑通后再改为 `null`。
 
-### Configure Agent
+### 配置智能体
 
-#### Configure concurrency
+#### 配置并发
 
-Large batches can overload an inference server or a search backend. Each concurrency
-setting protects a different resource:
+大批量任务可能使推理服务器或搜索后端过载。每项并发设置保护不同资源：
 
-| Setting | Limits |
+| 设置 | 限制对象 |
 | --- | --- |
-| Top-level `max_concurrency` | Concurrent agent tasks |
-| `agent.llm_client.concurrency_limit` | In-flight LLM requests |
-| Source `es_max_concurrency` | Elasticsearch requests |
-| Source `embedding_max_concurrency` | Embedding requests |
-| Source `web_max_concurrency` | Web search and fetch requests |
-| Tool summarizer `max_concurrency` | Summarizer requests |
+| 顶层 `max_concurrency` | 智能体任务并发 |
+| `agent.llm_client.concurrency_limit` | LLM 请求 |
+| 搜索源的 `es_max_concurrency` | Elasticsearch 请求 |
+| 搜索源的 `embedding_max_concurrency` | Embedding 模型请求 |
+| 搜索源的 `web_max_concurrency` | Web 搜索和获取请求 |
+| 工具摘要器的 `max_concurrency` | 摘要用LLM请求 |
 
-Start with conservative values and increase them while monitoring queue depth,
-latency, rate-limit responses, and retries. A higher limit does not necessarily
-increase throughput.
+数值可以设置得略保守，在监控好队列深度、延迟、限流响应和重试的前提下逐步提高。一味放宽限制不一定会提升吞吐量。
 
-#### Configure LLM endpoint
+#### 配置 LLM 端点
 
-For self-hosted LLM endpoint, to encourage KV cache hit. Avoid using data parallel and let SearcherKit handle the scheduling between inference instances.
+对于自托管 LLM 端点，为提高 KV 缓存命中率，应避免使用数据并行（Data Parallel），而改为启动多个推理实例端点点，让 SearcherKit 负责推理实例之间的调度。
 
-To do this, run as many independent server instances as the hardware allows instead of running one instance with a large `dp` value. Assign each instance the smallest GPU group that can hold the model. Expose every instance as a separate endpoint and let SearcherKit distribute agent sessions across them.
+具体来说，不要运行一个 `dp` 值很大的实例，而是在硬件允许范围内运行尽可能多的独立推理实例，每个实例分配尽可能少的 GPU。将每个实例暴露为独立端点，再由 SearcherKit 在端点之间分配智能体会话。
 
-For example, for one `dp=2, tp=2` deployment uses four GPUs: two data-parallel replicas, each spanning two GPUs with tensor parallelism. Run those replicas as **two** independent `dp=1, tp=2` server instances and configure both endpoints:
+例如，一个 `dp=2, tp=2` 部署使用四块 GPU：两个数据并行副本，每个副本通过张量并行跨两块 GPU。可将这两个副本作为**两个**独立的 `dp=1, tp=2` 服务器实例运行，并配置两个端点：
 
 ```yaml
 agent:
@@ -75,26 +68,23 @@ agent:
 
 max_concurrency: 64
 ```
-List all their endpoints under `base_url`. SearcherKit keeps each agent session on one endpoint to improve KV-cache reuse.
+在 `base_url` 下列出全部端点。SearcherKit 会让每个智能体会话固定在一个端点，以提高 KV 缓存复用率。
 
-Every endpoint must serve the same model with compatible generation settings.
+每个端点必须提供相同模型，使用一样的生成参数配置。
 
-#### Configure retries and resume behavior
+#### 配置重试与恢复行为
 
-Retries apply at three boundaries:
+重试应用于三个边界：
 
-- `agent.llm_retry_config` retries recoverable LLM and parsing failures.
-- `agent.tool_retry_config` retries recoverable tool failures.
-- `task_retry_policy` retries an entire dataset sample.
+- `agent.llm_retry_config` 重试可恢复的 LLM 和解析故障。
+- `agent.tool_retry_config` 重试可恢复的工具故障。
+- `task_retry_policy` 重试完整的数据集样本。
 
-The packaged `searcherkit` configuration also enables checkpoint-based resume. Keep
-`checkpoint.resume: true` and rerun the same command after an interruption. Existing
-sample outputs are preserved unless `overwrite_output` is enabled.
+关于如何配置重试，详见[重试与日志](../03-customizing/04-retrying-and-logging.qmd)
 
-### Run the Agent
+### 运行智能体
 
-First inspect the composed configuration. This catches invalid fields and Hydra
-overrides before the batch starts:
+首先检查配置，以便提前发现无效字段：
 
 ```bash
 searcher inspect --config-path searcherkit \
@@ -102,7 +92,7 @@ searcher inspect --config-path searcherkit \
   output_path=outputs/searcherkit
 ```
 
-Then run the batch with the same overrides:
+然后运行批处理：
 
 ```bash
 searcher run --config-path searcherkit \
@@ -111,7 +101,7 @@ searcher run --config-path searcherkit \
   output_path=outputs/searcherkit
 ```
 
-Use `--debug` before the Hydra overrides for verbose global logging:
+在 Hydra 覆盖项之前使用 `--debug` 可输出详细的全局日志：
 
 ```bash
 searcher run --debug --config-path searcherkit \
@@ -119,13 +109,12 @@ searcher run --debug --config-path searcherkit \
   output_path=outputs/searcherkit
 ```
 
-For long-running jobs, monitor `summary.json`, `run.log`, the per-trace logs, and the
-queue depth of each external service.
+对于长时间运行的任务，请监控 `summary.json`、`run.log`、各条轨迹日志以及每个外部服务的队列深度。
 
 
-#### The run output
+#### 运行输出
 
-Executing `searcher run` creates output in the following structure:
+执行 `searcher run` 会创建以下结构的输出：
 
 ```bash
 outputs/searcherkit/
@@ -139,33 +128,28 @@ outputs/searcherkit/
 └── summary.json
 ```
 
-Each file in `history/` contains the input, reference answer, complete message
-history, per-sample statistics, and timing data. `summary.json` reports aggregate completion, failure, turn, tool-call, and timing statistics. `traces/` contains per-trajectory logs while `run.log` contains global log.
+`history/` 中的每个文件都包含输入、参考答案、完整消息历史、单样本统计和计时数据。`summary.json` 报告汇总的完成、失败、轮次、工具调用和计时统计。`traces/` 包含单条轨迹日志，`run.log` 则包含全局日志。
 
-### Evaluate the saved trajectories
+### 评估保存的轨迹
 
 
-#### Evaluate
+#### 评估
 
-`searcher evaluate` extracts the final answer from each saved trajectory, asks an
-LLM judge to compare it with the reference answer, writes one judgment per sample,
-and produces aggregate accuracy statistics.
+`searcher evaluate` 从每条保存的轨迹中提取最终答案，让 LLM 裁判将其与参考答案比较，为每个样本写入一条判定，并生成汇总准确率统计。
 
-#### Check the trajectory format
+#### 检查轨迹格式
 
-Pass the run's `history/` directory as the evaluator input. Each JSON record must
-contain:
+评估器一般接受运行时输出的 `history/` 目录作为输入。每条 JSON 记录必须包含：
 
-- `input`: the original question;
-- `answer`: the reference answer;
-- `history`: a non-empty list of messages.
+- `input`：原始问题；
+- `answer`：参考答案；
+- `history`：非空消息列表。
 
-The last history item should be an assistant message. Otherwise, the evaluator
-records the sample as an incorrect `No valid response` without calling the judge.
+评估器会从历史记录的最后一条是LLM消息（assistant）提取答案，若最后一条不是LLM消息，评估器会直接将样本记录为错误的 `No valid response`。
 
-#### Configure the judge
+#### 配置LLM-as-Judge
 
-The evaluator uses an OpenAI-compatible endpoint:
+评估器使用 OpenAI 兼容端点：
 
 ::: {.panel-tabset}
 #### Bash
@@ -183,22 +167,17 @@ $env:OPENAI_BASE_URL = "http://127.0.0.1:8001/v1"
 ```
 :::
 
-#### Match the final-answer format
+#### 匹配最终答案格式
 
-The evaluator extracts the first answer inside `\boxed{...}` by default. The
-packaged `searcherkit` configuration instead asks SearchAgent to emit
-`<answer>...</answer>`, so pass a matching regular expression when evaluating its
-output:
+评估器按照`--answer-pattern`提供的正则表达式提取最终答案
 
 ```bash
 --answer-pattern '<answer>(?P<answer>.*?)</answer>'
 ```
 
-The expression must contain a named `answer` group. If it does not match, or the
-captured answer is empty, the evaluator sends the complete final assistant response
-to the judge. Use the same extraction pattern across runs to keep scores comparable.
+表达式必须包含名为 `answer` 的捕获组。如果没有匹配或捕获答案为空，评估器会将完整的助手最终响应发送给裁判。
 
-#### Run the evaluation
+#### 运行评估
 
 ```bash
 searcher evaluate \
@@ -208,24 +187,17 @@ searcher evaluate \
   --max-concurrency 32
 ```
 
-`--max-concurrency` limits simultaneous judge requests. Choose a value within the
-judge server's capacity. If omitted, the evaluator submits all pending records
-concurrently.
+`--max-concurrency` 限制同时进行的裁判LLM请求。请选择不超过裁判LLM服务器容量的值。省略时，评估器会并发提交所有待处理记录。
 
-The evaluator retries invalid JSON and invalid judge schemas. A valid judge response
-must contain exactly these fields: `extracted_final_answer`, `correct_answer`,
-`reasoning`, `correct`, and `confidence`.
+评估器会重试无效 JSON 和无效裁判 schema。有效的裁判响应应该是正确的JSON字符串，并必须且只能包含这些字段：`extracted_final_answer`、`correct_answer`、`reasoning`、`correct` 和 `confidence`。
 
-#### Resume an evaluation
+#### 断点继续评估
 
-Each output filename matches its input filename. Existing output files are skipped,
-so rerunning the same command resumes an interrupted evaluation. Delete an individual
-result file only when you need to evaluate that sample again.
+每个输出的评估结果文件名都与输入的文件名对应。重新运行同一命令即可跳过已有的输出文件、恢复中断的评估。如果需要重新评估某个样本时，删除对应结果文件即可。
 
-Failed requests are logged and counted in `summary.json`; they do not prevent other
-samples from completing.
+失败的请求会记录到日志并计入 `summary.json`，但不会阻止其他样本完成。
 
-#### Inspect the evaluation output
+#### 检查评估输出
 
 ```bash
 outputs/searcherkit-eval/
@@ -234,18 +206,13 @@ outputs/searcherkit-eval/
 └── summary.json
 ```
 
-Each result contains the question, evaluated response, reference answer,
-judge-extracted answer, reasoning, correctness, and confidence. The serialized
-reasoning key is currently `judege_reasoning` for compatibility with existing runtime
-output.
+每条结果都包含问题、被评估的响应、参考答案、裁判提取的答案、推理、正确性和置信度。
 
-`summary.json` includes:
+`summary.json` 包含：
 
-- `accuracy`, `correct`, and `incorrect` over valid result files;
-- `avg_confidence` reported by the judge;
-- `source_total`, `submitted`, and `skipped_existing`;
-- `invalid` result files and `failed_requests` from the current invocation.
+- 有效结果文件的 `accuracy`、`correct` 和 `incorrect`；
+- 裁判报告的 `avg_confidence`；
+- `source_total`、`submitted` 和 `skipped_existing`；
+- 当前调用中的无效结果文件 `invalid` 和失败请求 `failed_requests`。
 
-LLM-judge scores are not ground truth. Before comparing models, inspect extraction
-failures, low-confidence decisions, and a sample of both correct and incorrect
-judgments.
+LLM-as-Judge 分数可能不稳定。比较模型前，请检查提取失败、低置信度判定，并抽查正确与错误判定。

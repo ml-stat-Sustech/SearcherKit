@@ -1,8 +1,8 @@
 ---
-title: Search Files
+title: 搜索本地文件
 ---
 
-SearcherKit provides a out-of-the-box local file search pipeline for agents to answer questions about files in a local directory, with the config `file_search`.
+SearcherKit 通过 `file_search` 配置提供开箱即用的本地文件搜索智能体，智能体根据本地目录中的文件内容回答问题。
 
 ```bash
 question -> LLM -> search -> ripgrep matches
@@ -10,15 +10,15 @@ question -> LLM -> search -> ripgrep matches
                 -> LLM -> final answer
 ```
 
-To use it, you should
-- Install the required dependencies
-- Configure enviroment variables for LLM and file search root
-- Run searchagent tui with the `file_search` config.
+使用步骤如下：
 
-### Install SearcherKit
+- 安装所需依赖；
+- 配置 LLM 和文件搜索根目录的环境变量；
+- 使用 `file_search` 配置运行 SearchAgent 的 TUI。
 
-SearcherKit requires Python 3.12 or later. Install the package in a virtual
-environment:
+### 安装 SearcherKit
+
+SearcherKit 需要 Python 3.12 或更高版本。请在虚拟环境中安装软件包：
 
 :::: {.panel-tabset}
 #### pip
@@ -28,7 +28,7 @@ git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
@@ -39,32 +39,30 @@ git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
 uv venv --python 3.12
 source .venv/bin/activate  # macOS/Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows: .venv\Scripts\activate
 uv pip install -e .
 ```
 ::::
 
-SearcherKit uses [ripgrep](https://github.com/BurntSushi/ripgrep) to search through local files. Install with the [Installation Guide](https://github.com/BurntSushi/ripgrep#installation). 
+SearcherKit 使用 [ripgrep](https://github.com/BurntSushi/ripgrep) 搜索本地文件。请按照 [安装指南](https://github.com/BurntSushi/ripgrep#installation) 安装。
 
-To ensure that riggrep is available, run:
+运行以下命令确认 ripgrep 可用：
 ```bash
 rg --version
 ```
 
-### Configure the environment
+### 配置环境
 
-SearcherKit with the `file_search` config uses the following environment variables.
+使用 `file_search` 配置时，SearcherKit 会读取以下环境变量。
 
-| Variable | Meaning |
+| 变量 | 含义 |
 | --- | --- |
-| `LLM_MODEL` | Model name sent to the endpoint |
-| `LLM_API_KEY` | Endpoint credential; use `EMPTY` only when the server permits it |
-| `LLM_BASE_URL` | OpenAI-compatible API base URL |
-| `FILE_SEARCH_ROOT` | Directory that `search` and `visit` may access; defaults to `./docs` |
+| `LLM_MODEL` | 像模型服务请求的模型名称 |
+| `LLM_API_KEY` | 端点访问凭据 |
+| `LLM_BASE_URL` | OpenAI 兼容 API 的base URL |
+| `FILE_SEARCH_ROOT` | `search` 和 `visit` 可访问的目录；默认为 `./docs` |
 
-For a one-time setup, define the variables in the terminal session where you
-will start SearcherKit. The values remain available until that terminal is
-closed.
+请在即将启动 SearcherKit 的终端会话中定义这些变量。关闭该终端前，这些值会一直有效。
 
 ::: {.panel-tabset}
 #### Bash
@@ -87,35 +85,28 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 :::
 
 ::: {.callout-tip}
-To keep the configuration across terminal sessions, create a `.env` file in
-the directory where you run SearcherKit:
+要让配置永久有效，请在运行 SearcherKit 的目录中创建 `.env` 文件：
 
-```dotenv
+```{.dotenv, filename=.env}
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1
 FILE_SEARCH_ROOT=./docs
 ```
 
-SearcherKit loads `.env` by default. Use `--env-file path/to/another.env` to load a
-different file. Variables already defined in the terminal take precedence over
-values in the dotenv file. 
+SearcherKit 默认加载 `.env`。使用 `--env-file path/to/another.env` 可加载其他文件。终端中已定义的环境变量优先于 dotenv 文件中的值。
 :::
 
-### Start to search files
+### 开始搜索文件
 
 ```bash
 searcher tui --config-path file_search
 ```
 
-The source searches exact text fragments with smart case. Search results use
-paths relative to `FILE_SEARCH_ROOT`; the visit tool reads those relative paths.
-Paths outside the configured root are rejected.
+该搜索源按智能大小写规则搜索精确匹配 `FILE_SEARCH_ROOT` 指定路径下的文本片段。配置的根目录之外的路径不会被访问。
 
-Use `/tool-detail` to inspect tool arguments and results. Interactive records,
-the global log, and trace logs are written under
-`outputs/file-search-tui/interactive`.
+在TUI对话框输入 `/` 查看可用的命令，详见通用控件和记录行为见[使用交互式 TUI](../04-interface/02-use-the-interactive-tui.qmd)。
 
-For general controls and record behavior, see
-[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd). For the complete
-source/tool model, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
+交互记录、全局日志和追踪日志写入 `outputs/file-search-tui/interactive`。
+
+完整的搜索源和工具模型参考资料见[搜索源与工具](../03-customizing/03-sources-and-tools.qmd)。

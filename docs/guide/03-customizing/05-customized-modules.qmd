@@ -1,30 +1,25 @@
 ---
-title: Customized Modules
+title: 自定义模块
 ---
 
-Add an extension at the narrowest interface that owns the new behavior. This
-keeps provider transport, model formatting, retrieval, and tool presentation
-independently testable.
+应在负责新行为的最小接口处添加扩展，使提供商传输、模型格式、检索和工具呈现能够独立测试。
 
-### Choose an extension point
+### 选择扩展点
 
-| Need | Extend |
+| 需求 | 扩展对象 |
 | --- | --- |
-| Call another model API | `searcherkit.llm.Client` |
-| Support another model chat or tool format | `searcherkit.llm.parsers.Parser` |
-| Search or fetch from another backend | `searcherkit.sources.DataSource` |
-| Expose another model-callable action | `searcherkit.tools.BaseTool` |
-| Add dataset or index deployment logic | `searcherkit.plugins` |
-| Add a batch or training integration | `searcherkit.runtime` or `searcherkit.training` |
+| 调用其他模型 API | `searcherkit.llm.Client` |
+| 支持其他模型聊天或工具格式 | `searcherkit.llm.parsers.Parser` |
+| 从其他后端搜索或获取内容 | `searcherkit.sources.DataSource` |
+| 暴露其他可由模型调用的操作 | `searcherkit.tools.BaseTool` |
+| 添加数据集或索引部署逻辑 | `searcherkit.plugins` |
+| 添加批处理或训练集成 | `searcherkit.runtime` 或 `searcherkit.training` |
 
-Do not place provider HTTP calls in parsers, retrieval code in CLI commands, or
-benchmark-specific implementation in packaged config defaults.
+不要把提供商 HTTP 调用放入解析器、把检索代码放入 CLI 命令，也不要把特定基准的实现放入软件包默认配置。
 
-### Construction contract
+### 构造约定
 
-Public runtime components should support normal Python parameters and their
-structured config or factory path. A custom source or tool can be selected with
-`type: custom` and a real import target:
+公共运行时组件应同时支持普通 Python 参数以及结构化配置或工厂路径。使用 `type: custom` 和真实导入目标即可选择自定义搜索源或工具：
 
 ```yaml
 agent:
@@ -40,19 +35,111 @@ agent:
         source_name: internal_corpus
 ```
 
-### Test the contract
+`pkg://` 目标使用已经安装到当前 Python 环境中的模块（格式为
+`pkg://包.模块:属性`）；`file://` 目标加载一个 `.py` 文件（格式为
+`file:///绝对路径/module.py:属性`）。搜索源的构造器接收
+`SourceConfig`，自定义工具的构造器接收 `ToolConfig`；工具配置中的
+`extra` 会作为额外关键字参数传给自定义工具。
 
-Extension tests should cover, when applicable:
+### 自定义搜索源
 
-1. construction through direct parameters and through config or factory paths;
-2. functional inputs, outputs, payloads, parsing, state, and public errors;
-3. retry success after transient failures and final error propagation after all
-   attempts fail;
-4. resource initialization and shutdown.
+搜索源实现 `DataSource` 的三个异步方法。`search` 返回按相关性排序的
+`SearchResult`，`fetch` 返回完整的 `Document`，`close` 释放 HTTP 客户端、
+连接池或其他资源。
 
-Catch concrete exception types and classify failures as recoverable or fatal at
-the boundary where that distinction is known.
+```python
+# my_project/sources.py
+from searcherkit.sources import DataSource, Document, SearchResult, SourceConfig, build_source
 
-For config, CLI, recipe, or plugin entry-point changes, also run a compose,
-`--help`, or import check in addition to targeted tests. Keep the API Reference
-accurate by updating Google-style docstrings on the public implementation.
+
+class InternalSource(DataSource):
+    def __init__(self, *, config: SourceConfig) -> None:
+        self.endpoint = config.client_kwargs["endpoint"]
+        self._client = make_client(self.endpoint)
+
+    async def search(self, query: str, *, top_k: int = 10) -> list[SearchResult]:
+        rows = await self._client.search(text=query, limit=top_k)
+        return [
+            SearchResult(
+                document=Document(
+                    id=str(row["id"]),
+                    title=row.get("title"),
+                    text=row["text"],
+                    url=row.get("url"),
+                    metadata={"backend": "internal"},
+                ),
+                score=float(row["score"]) if row.get("score") is not None else None,
+                snippet=row.get("snippet"),
+            )
+            for row in rows
+        ]
+
+    async def fetch(self, document_id: str, *, goal: str | None = None) -> Document:
+        row = await self._client.fetch(document_id)
+        return Document(id=str(row["id"]), text=row["text"], title=row.get("title"))
+
+    async def close(self) -> None:
+        await self._client.close()
+```
+
+### 自定义工具
+
+自定义工具继承 `BaseTool` 并实现 `_run`。工具名称、描述和 `inputSchema`
+默认会根据`_run`函数签名发送给模型。也可以在类内赋值指定或者在config指定这些值。
+
+```python
+# my_project/tools.py
+from searcherkit.tools import BaseTool, ToolConfig
+
+
+class LookupTool(BaseTool):
+    def __init__(self, *, config: ToolConfig, source_name: str) -> None:
+        super().__init__(config=config)
+        self.source = build_source(source_name)
+
+    async def _run(self, *, query: str, limit: int = 5) -> tuple[str, dict[str, object]]:
+        """Look up records in the internal corpus."""
+        results = await self.source.search(query, top_k=limit)
+        content = "\n\n".join(
+            f"[{item.document.id}] {item.document.title or ''}\n{item.document.text}"
+            for item in results
+        )
+        return content, {"result_count": len(results)}
+
+    async def close(self) -> None:
+        await self.source.close()
+```
+
+对应配置如下。`extra.source_name` 会传给构造器；`argument_mapping` 适用于
+模型使用的名称与 Python 参数名不同的情况：
+
+```yaml
+agent:
+  tools:
+    - type: custom
+      name: lookup
+      target: pkg://my_project.tools:LookupTool
+      description: Search the internal corpus and return matching records.
+      inputSchema:
+        type: object
+        properties:
+          query: {type: string, minLength: 1}
+          limit: {type: integer, minimum: 1, maximum: 20, default: 5}
+        required: [query]
+        additionalProperties: false
+      extra:
+        source_name: internal_corpus
+```
+
+### 测试约定
+
+适用时，扩展测试应覆盖：
+
+1. 通过直接参数以及配置或工厂路径进行构造；
+2. 功能输入、输出、载荷、解析、状态和公共错误；
+3. 临时失败后重试成功，以及所有尝试失败后最终错误的传播；
+4. 资源初始化和关闭。
+
+捕获具体异常类型，并在能够确定其性质的边界将故障分类为可恢复或致命。
+
+修改配置、CLI、运行配方或插件入口点后，除定向测试外，还要运行配置组合、`--help` 或导入检查。更新公共实现中的 Google 风格文档字符串，确保 API 参考准确。

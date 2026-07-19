@@ -1,35 +1,29 @@
 ---
-title: RL with AReaL
+title: 使用 AReaL 进行强化学习
 ---
 
-The AReaL integration uses SearcherKit for agent conversation, tool execution,
-limits, errors, and trajectory metadata. AReaL owns distributed scheduling,
-rollout generation, optimization, checkpoints, and experiment tracking.
+AReaL 集成使用 SearcherKit 处理智能体对话、工具执行、并发限制和错误处理等工作。AReaL 负责分布式调度、rollout 调度、梯度更新等。
 
-### Prerequisites
+### 前置条件
 
-Install AReaL according to [its manual](https://areal-ai.io/en/tutorial/installation.html), then install SearcherKit
-into that environment. Every participating node must be able to access the
-model, tokenizer, dataset, name-resolution storage, output paths, and retrieval
-services referenced by the config.
+按照 [AReaL 手册](https://areal-ai.io/en/tutorial/installation.html)安装 AReaL，再将 SearcherKit 安装到该环境。每个参与节点都必须能够访问配置所引用的模型、分词器、数据集、名称解析存储、输出路径和检索服务。
 
-The main entry points are:
+主要入口点如下：
 
-| Algorithm | Python entry point | Example Script |
+| 算法 | Python 入口点 | 示例脚本 |
 | --- | --- | --- |
 | GRPO | `searcherkit.training.areal.train_dist` | `scripts/areal/train_dist_areal.sh` |
 | IGPO | `searcherkit.training.areal.train_igpo` | `scripts/areal/train_dist_areal_igpo.sh` |
 
-### Configure the rollout agent
+### 配置 rollout（轨迹采样）智能体
 
-Start with `src/searcherkit/config/training/train_areal.yaml` for GRPO or
-`train_dist_areal_igpo.yaml` for IGPO. 
+GRPO 从 `src/searcherkit/config/training/train_areal.yaml` 开始配置，IGPO 则使用 `train_dist_areal_igpo.yaml`。
 
-Configure `workflow.agent` and `eval_workflow.agent` to define agents. For other configurations, check [AReaL Manual](https://areal-ai.io/en/cli_reference.html)
+通过 `workflow.agent` 和 `eval_workflow.agent` 定义智能体。其他配置见 [AReaL 手册](https://areal-ai.io/en/cli_reference.html)。
 
-### Run training
+### 运行训练
 
-The launch scripts contain cluster-specific defaults. Override hardware related configuration, paths, and experiment name.
+启动脚本主要包含和训练硬件和实验元数据有关的配置，请覆盖硬件相关配置、路径和实验名称。
 
 ```bash
 bash scripts/areal/train_dist_areal.sh \
@@ -44,7 +38,7 @@ bash scripts/areal/train_dist_areal.sh \
 
 ### IGPO
 
-IGPO recipe contains SearcherKit's reproduction of the [IGPO reward](https://arxiv.org/abs/2510.14967). Run with the `searcherkit.training.areal.train_igpo` entry point or start from the `train_dist_areal_igpo.sh`
+IGPO 运行配方包含 SearcherKit 对 [IGPO 奖励](https://arxiv.org/abs/2510.14967)的复现。可通过 `searcherkit.training.areal.train_igpo` 入口点运行，也可从 `train_dist_areal_igpo.sh` 脚本开始。
 
 ```bash
 bash scripts/areal/train_dist_areal_igpo.sh \
@@ -52,12 +46,10 @@ bash scripts/areal/train_dist_areal_igpo.sh \
   ...
 ```
 
-### Failure and reward accounting
+### 失败与奖励统计
 
-During the training, retrying should only be carried for external, recoverable error like tool invoking timeouts. Handle model related errors like `LLMError` and return a low score to allow RL engine to punish such action.
+训练期间，应该只重试工具调用超时等可恢复 Exception 。对于 `LLMError` 等模型相关错误，应进行处理并返回较低分数的，使强化学习引擎能够惩罚这类行为。
 
-Uncaught error, like exhausted retries and fatal errors would cause the rollout trajectory to be discarded. If such problem should be processed, caught the exception within workflow.
+未捕获的错误（例如重试耗尽和致命错误（FatalError））会导致 rollout 轨迹被丢弃。如希望RL引擎处理这类问题，应在 workflow 内捕获相应异常。
 
-Monitor rollout completion, exception categories, outcome and format scores,
-overlength and truncation penalties, tool calls, repeated queries, context
-tokens, KL, clipping, entropy, loss, and gradient norm.
+请监控 rollout 完成率、异常类别、结果与格式得分、超长与截断惩罚、工具调用、重复查询、上下文 token、KL、裁剪、熵、损失和梯度范数等指标。

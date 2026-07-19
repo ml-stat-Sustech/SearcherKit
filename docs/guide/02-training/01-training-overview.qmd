@@ -1,32 +1,27 @@
 ---
-title: Training Overview
+title: 训练概览
 ---
 
-Training starts from the same trajectory artifacts used for debugging and
-evaluation. Treat data generation, filtering, conversion, training, serving,
-and evaluation as separate reproducible stages.
+SearcherKit 提供了一套既可以支持训练时使用，也可以原样迁移到评估时的高效智能体运行时。可以作为搜索任务强化学习的轨迹采样执行器，将轨迹反馈给训练引擎进行模型的训练。训练完成后，可以直接复用训练时的智能体架构来评估训练效果。
 
+### 选择训练指南
 
-### Choose a training guide
-
-| Goal | Guide |
+| 目标 | 指南 |
 | --- | --- |
-| Convert trajectories and launch MS-Swift | [Supervised fine-tuning](04-sft.qmd) |
-| Run GRPO or IGPO through AReaL | [RL with AReaL](02-rl-areal.qmd) |
-| Run synchronous or asynchronous RL through slime | [RL with slime](03-rl-slime.qmd) |
+| 转换轨迹并启动 MS-Swift | [监督微调](04-sft-with-msswift.qmd) |
+| 通过 AReaL 运行 GRPO 或 IGPO | [使用 AReaL 进行强化学习](02-rl-areal.qmd) |
+| 通过 Slime 运行强化学习 | [使用 Slime 进行强化学习](03-rl-slime.qmd) |
 
-### Supervised fine-tuning
+### 监督微调
 
-The SFT scripts under `scripts/sft/` cover two distinct stages:
+`scripts/sft/` 下的 SFT 脚本覆盖两个不同阶段：
 
-| Stage | Entry point |
+| 阶段 | 入口点 |
 | --- | --- |
-| Convert trajectory format | `scripts/sft/sft_convert.sh` |
-| Launch MS-Swift training | `scripts/sft/sft_train.sh` and `sft_training.yaml` |
+| 转换轨迹格式 | `scripts/sft/sft_convert.sh` |
+| 启动 MS-Swift 训练 | `scripts/sft/sft_train.sh` 和 `sft_training.yaml` |
 
-Before a full training job, inspect converted samples and resolve the generated
-training command with a dry run. The detailed sequence is covered in the
-[SFT guide](04-sft.qmd).
+开始完整训练任务前，请检查转换后的样本，并通过试运行解析生成的训练命令。详细步骤见 [SFT 指南](04-sft-with-msswift.qmd)。
 
 ```bash
 python -m searcherkit.training.sft \
@@ -34,24 +29,17 @@ python -m searcherkit.training.sft \
   --dry-run
 ```
 
-Keep environment-specific model paths, datasets, output directories, and
-reporting credentials in environment variables. Keep semantic training choices
-such as template, loss scale, context length, optimizer settings, and
-distributed strategy in versioned YAML.
+请在环境变量中设定模型路径、数据集、输出目录和报告凭据等。在YAML配置中指定模板、损失缩放、上下文长度、优化器设置和分布式策略等训练语义选择。
 
-### Reinforcement learning
+### 强化学习
 
-The `scripts/areal/` and `scripts/slime/` directories are framework adapters,
-while reusable reward and training-agent logic belongs in
-`searcherkit.training`. Document each experiment with the base model, reward
-definition, rollout config, dataset revision, framework revision, and produced
-checkpoint. See the [AReaL](02-rl-areal.qmd) and [slime](03-rl-slime.qmd) guides for
-their distinct ownership boundaries and launch paths.
+`scripts/areal/` 和 `scripts/slime/` 目录包含框架适配器、奖励与训练智能体逻辑等。
 
-### Evaluate a checkpoint
+各自的说明见 [AReaL](02-rl-areal.qmd) 与 [Slime](03-rl-slime.qmd) 指南。
 
-Serve the checkpoint behind an OpenAI-compatible endpoint, then point the
-existing agent configuration at the served model:
+### 评估模型
+
+完成训练后，请架设模型的 OpenAI 兼容端点，然后让现有智能体配置指向该模型：
 
 ```yaml
 agent:
@@ -62,4 +50,6 @@ agent:
     base_url: http://127.0.0.1:8000/v1
 ```
 
-SearcherKit agents are reusable across base models and trained checkpoints: the agent, parser, tools, sources, dataset, and runtime behavior remain defined through config, while the model and endpoint can be changed independently. Use the same config to inspect the composed setup, run the checkpoint over a dataset, and evaluate the saved trajectories. See [Run and evaluate SearchAgent](../01-searching/04-batch-run-and-evaluate.qmd) for the complete commands and evaluation options.
+SearcherKit 智能体可在基础模型和训练后检查点之间复用智能体、解析器、工具、搜索源等。使用同一配置即可在数据集上运行智能体并评估保存的轨迹。
+
+完整命令和评估选项见[批量运行与评估](../01-searching/04-batch-run-and-evaluate.qmd)。

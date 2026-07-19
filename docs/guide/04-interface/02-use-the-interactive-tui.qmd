@@ -1,71 +1,58 @@
 ---
-title: Use the Interactive TUI
+title: 使用交互式 TUI
 ---
 
-The terminal UI runs ad hoc queries with the same agent, parser, sources, tools,
-traces, and history serialization used by batch execution. Each submitted query
-is an independent agent run; visible transcript history is not added to the
-next query's model context.
+终端 UI 使用与批处理相同的智能体、解析器、搜索源、工具、追踪和历史记录序列化机制来运行临时查询。每次提交的查询都是一次独立的智能体运行；界面中可见的历史对话不会加入下一次查询的模型上下文。
 
-### Start the TUI
+### 启动 TUI
 
 ```bash
 searcher inspect --config-path configs/demo/config.yaml
 searcher tui --config-path configs/demo/config.yaml
 ```
 
-Hydra overrides can follow the command options:
+Hydra 覆盖项可跟在命令选项之后：
 
 ```bash
 searcher tui --config-path configs/demo/config.yaml \
   agent.llm_client.model=Qwen3-8B
 ```
 
-The TUI also reads `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, and
-`LLM_BASE_URL` from `.env` by default. Select another file with `--env-file`.
-Explicit environment values are applied to the composed client config.
+TUI 默认还会从 `.env` 读取 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_API_KEY` 和 `LLM_BASE_URL`。可用 `--env-file` 选择其他文件。显式设置的环境变量值会应用到组合出的客户端配置。
 
-### Run one interactive query without the full UI
+### 不启动完整 UI 运行单次交互查询
 
-Use `--query` to exercise the interactive streaming and recording path from a
-normal terminal:
+在普通终端中使用 `--query` 即可测试交互式流传输和记录流程：
 
 ```bash
 searcher tui --config-path configs/demo/config.yaml \
   --query "Which component owns tool-call parsing?"
 ```
 
-This is useful for smoke tests and environments where a full-screen terminal
-application is inconvenient.
+这适合冒烟测试，也适用于不便运行全屏终端应用的环境。
 
-### Slash commands
+### 斜杠命令
 
-Type `/` to open the command menu.
+输入 `/` 打开命令菜单。
 
-| Command | Behavior |
+| 命令 | 行为 |
 | --- | --- |
-| `/models` | Select a discovered model for subsequent runs |
-| `/sources` | Select the active source for subsequent runs |
-| `/thinking` | Show or hide assistant reasoning blocks |
-| `/tool-detail` | Toggle compact and full tool interaction details |
-| `/clear` | Clear the visible transcript |
-| `/quit` | Exit the TUI |
+| `/models` | 为后续运行选择已发现的模型 |
+| `/sources` | 为后续运行选择当前数据源 |
+| `/thinking` | 显示或隐藏助手推理块 |
+| `/tool-detail` | 切换精简或完整的工具交互详情 |
+| `/clear` | 清空可见对话 |
+| `/quit` | 退出 TUI |
 
-Model and source changes apply only to subsequent independent runs. Commands
-that mutate session state are rejected while a query is active; cancel the
-current query first.
+模型和搜索源的更改只影响后续独立运行。查询执行期间，修改会话状态的命令会被拒绝；请先取消当前查询。
 
-### Records and traces
+### 记录与追踪
 
-The default record directory is `outputs/interactive`, or
-`<output_path>/interactive` when the run config defines `output_path`.
+默认记录目录为 `outputs/interactive`；如果运行配置定义了 `output_path`，则为 `<output_path>/interactive`。
 
 ```bash
 searcher tui --config-path configs/demo/config.yaml \
   --interactive-output-path outputs/tui-sessions
 ```
 
-Each query writes a timestamped JSON record and a trace. Completed, failed, and
-cancelled runs are all persisted with their event stream, message history,
-timing, statistics, and error information. Use these artifacts when promoting
-an interactive experiment into a batch configuration.
+每次查询都会写入带时间戳的 JSON 记录和追踪。无论运行完成、失败还是被取消，都会持久化其事件流、消息历史、计时、统计和错误信息。将交互式实验转为批处理配置时，可使用这些产物。

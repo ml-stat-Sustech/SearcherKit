@@ -1,10 +1,8 @@
 ---
-title: Search with Elasticsearch
+title: 使用 Elasticsearch 搜索
 ---
 
-SearcherKit can use an Elasticsearch index as a private knowledge base. The
-agent searches the index for relevant passages, optionally fetches complete
-documents, and then answers from the retrieved evidence.
+SearcherKit 可将 Elasticsearch 索引用作私有知识库。智能体在索引中搜索相关段落，按需获取完整文档，再根据检索到的证据回答。
 
 ```bash
 question -> LLM -> search -> Elasticsearch matches
@@ -12,13 +10,11 @@ question -> LLM -> search -> Elasticsearch matches
                 -> LLM -> final answer
 ```
 
-This guide starts with BM25 because it needs only Elasticsearch. Vector and
-hybrid retrieval are covered after the basic pipeline is working.
+本指南从 Elasticsearch 的 BM25 搜索开始。基础流程运行正常后，再介绍向量和混合检索。
 
-### Install SearcherKit
+### 安装 SearcherKit
 
-SearcherKit requires Python 3.12 or later. Install the package in a virtual
-environment:
+SearcherKit 需要 Python 3.12 或更高版本。请在虚拟环境中安装软件包：
 
 :::: {.panel-tabset}
 #### pip
@@ -28,7 +24,7 @@ git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
@@ -39,32 +35,29 @@ git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
 uv venv --python 3.12
 source .venv/bin/activate  # macOS/Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows: .venv\Scripts\activate
 uv pip install -e .
 ```
 ::::
 
-You need a running Elasticsearch service and an OpenAI-compatible LLM
-endpoint. Check [Elasticsearch Documentation](https://www.elastic.co/guide/en/elasticsearch/reference/8.19/search-with-elasticsearch.html) to setup your own elasticsearch service. 
+你需要一个正在运行的 Elasticsearch 服务和 OpenAI 兼容 LLM 端点。请参考 [Elasticsearch 文档](https://www.elastic.co/guide/en/elasticsearch/reference/8.19/search-with-elasticsearch.html)搭建自己的服务。
 
-With a valid elasticsearch endpoint, confirm that Elasticsearch is reachable before continuing:
+获得有效端点后，请先确认 Elasticsearch 可访问：
 ```bash
 curl http://your.elasticsearch.endpoint:port
 ```
 
-### Prepare an index
+### 准备索引 {#build-index}
 
-The default installation includes the Elasticsearch client. To build an index with SearcherKit's deployment plugins, install the indexing dependencies:
+要使用 SearcherKit 部署插件构建索引，请安装索引依赖：
 
 ```bash
 pip install -e ".[indexing]"
 ```
 
-An Elasticsearch source works with an existing index. SearcherKit includes
-deployment plugins for MediaWiki dumps and BrowseComp Plus corpora. Both create
-documents with `title`, `text`, `url`, and `links` fields.
+Elasticsearch 搜索源使用现有索引。SearcherKit 包含适用于 MediaWiki dump 和 BrowseComp Plus 语料库的部署插件，两者都会创建含 `title`、`text`、`url` 和 `links` 字段的文档。
 
-To index a local MediaWiki dump for BM25 search:
+为 BM25 搜索索引本地 MediaWiki dump：
 
 ```bash
 searcher plugins deploy local-wiki \
@@ -74,7 +67,7 @@ searcher plugins deploy local-wiki \
   --overwrite
 ```
 
-To index BrowseComp Plus instead:
+如需改为索引 BrowseComp Plus：
 
 ```bash
 searcher plugins deploy browsecomp-plus \
@@ -84,17 +77,49 @@ searcher plugins deploy browsecomp-plus \
   --overwrite
 ```
 
-`--overwrite` deletes and recreates an index with the same name. Omit it when
-you do not want an existing index replaced.
+`--overwrite` 会删除并重建同名索引。不希望替换现有索引时请省略该选项。
 
-If you manage the index outside SearcherKit, map the source fields in the
-configuration below. At minimum, the fields in `search_fields` must be
-searchable. The field used by `document_id_field` and `fetch_field` must
-identify a document unambiguously.
+如果在 SearcherKit 外部管理索引，请在下面的配置中映射搜索源字段。至少要确保 `search_fields` 中的字段可搜索。`document_id_field` 和 `fetch_field` 使用的字段必须能唯一标识文档。
 
-### Configure the environment
+::: {.callout-tip}
+#### 构造向量索引
 
-Set the LLM connection values in the shell that will run SearcherKit:
+如果计划使用向量或混合检索，请在部署时启用 dense vector。索引依赖中已包含
+`sentence-transformers`，模型会在本地加载并为每个文档生成 `text_vector` 字段：
+
+```bash
+searcher plugins deploy local-wiki \
+  --wiki_dump_path data/wiki.xml.bz2 \
+  --es_host http://127.0.0.1:9200 \
+  --index_name wiki_qwen3 \
+  --dense-vector \
+  --model_name Qwen/Qwen3-Embedding-8B \
+  --embedding_dim 4096 \
+  --prompt_strategy qwen3 \
+  --cpu_batch_size 200 \
+  --gpu_batch_size 16 \
+  --overwrite
+```
+
+参数说明：
+
+- `--dense-vector` 创建并填充 Elasticsearch `dense_vector` 字段；不指定时只建立 BM25 索引。
+- `--model_name` 可以是 Hugging Face 模型名或本地模型目录。运行机器需要能够下载或读取该模型。
+- `--embedding_dim` 必须与模型实际输出维度完全一致；例如 Qwen3-Embedding-8B 为 `4096`，其他模型请以模型文档或实际输出为准。
+- `--prompt_strategy qwen3` 为 Qwen3 应用文档提示词；使用不需要提示词的模型时保留默认值 `none`，E5 模型使用 `e5`。
+- `--cpu_batch_size` 使用CPU进行 BM25 索引构建时的批大小 
+- `--gpu_batch_size` 使用GPU进行向量索引构建时的批大小
+```
+:::
+
+::: {.callout-caution}
+向量索引和查询必须使用相同的模型，参考模型文档确定向量维度、提示词等设置。更换模型后请使用新的
+`--index_name`，或显式指定 `--overwrite` 重建索引。
+:::
+
+### 配置环境
+
+在运行 SearcherKit 的 shell 中设置 LLM 配置：
 
 ::: {.panel-tabset}
 #### Bash
@@ -115,22 +140,20 @@ $env:LLM_BASE_URL = "https://your-endpoint.example/v1"
 :::
 
 ::: {.callout-tip}
-To keep these values across terminal sessions, put them in a `.env` file in
-the directory where you run SearcherKit:
+要让配置永久有效，请在运行 SearcherKit 的目录中创建 `.env` 文件：
 
-```dotenv
+```{.dotenv, filename=.env}
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1
 ```
 
-SearcherKit loads `.env` by default. Values already defined in the shell take
-precedence.
+SearcherKit 默认加载 `.env`。shell 中已定义的值优先。
 :::
 
-### Create a BM25 search configuration
+### 创建 BM25 搜索配置
 
-Create `elasticsearch_search.yaml` in the repository root:
+在仓库根目录创建 `elasticsearch_search.yaml`：
 
 ```yaml
 defaults:
@@ -152,9 +175,9 @@ agent:
   sources:
     - type: elasticsearch
       name: knowledge_base
-      hosts: [http://127.0.0.1:9200]
-      index: wiki_local
-      search_fields: [title^2, text]
+      hosts: [http://127.0.0.1:9200] # elasticsearch endpoint URL
+      index: wiki_local # 注意和之前构建的index名一致
+      search_fields: [title, text]
       title_field: title
       text_field: text
       url_field: url
@@ -209,64 +232,35 @@ logging:
     filename_template: "{sample_id}_{trace_id}.log"
 ```
 
-The source name is internal to SearcherKit. The `search` and `visit` tools use
-`source: [knowledge_base]` to select that source. For an index without a stable
-URL field, remove `document_id_field` and `fetch_field`; search results will use
-the Elasticsearch `_id`, and `visit` will fetch by `_id`.
+`sources` 段配置了我们刚刚建立的elasticsearch索引，并命名为`knowledge_base`。通过`tools`段每个工具项的`source: [knowledge_base]`指定给工具
 
-### Validate and start the TUI
+### 验证并启动 TUI
 
-Validate the configuration before connecting to the services:
+连接服务前先验证配置：
 
 ```bash
 searcher inspect --config-path elasticsearch_search.yaml
 ```
 
-Then start the interactive interface:
+然后启动交互界面：
 
 ```bash
 searcher tui --config-path elasticsearch_search.yaml
 ```
 
-Use `/tool-detail` to inspect queries, result snippets, document identifiers,
-and fetched content. Interactive records and trace logs are written under
-`outputs/elasticsearch-search-tui/interactive` and
-`outputs/elasticsearch-search-tui/traces`.
+在TUI对话框输入 `/` 查看可用的命令，详见通用控件和记录行为见[使用交互式 TUI](../04-interface/02-use-the-interactive-tui.qmd)。
 
-For a non-interactive smoke test, pass one question directly:
+交互记录、全局日志和追踪日志写入 `outputs/file-search-tui/interactive`。
 
-```bash
-searcher tui --config-path elasticsearch_search.yaml \
-  --query "What topics are covered by this knowledge base?"
-```
+### 启用向量或混合检索
 
-### Enable vector or hybrid retrieval
+向量搜索会嵌入每个查询，并与索引中的向量字段比较。混合搜索将向量检索与 BM25 结合。两种模式都需要：
 
-Vector search embeds each query and compares it with a dense-vector field in
-the index. Hybrid search combines vector retrieval with BM25. Both modes require:
+- 构建索引时，构造了向量索引
+- 索引和查询时使用相同的嵌入模型与向量维度；
+- Embedding 模型的 OpenAI 兼容端点。
 
-- a dense-vector field populated during indexing;
-- the same embedding model and vector dimension at indexing and query time;
-- an OpenAI-compatible embeddings endpoint available to SearcherKit.
-
-For example, build a Qwen3 vector index from a wiki dump:
-
-```bash
-searcher plugins deploy local-wiki \
-  --wiki_dump_path data/wiki.xml.bz2 \
-  --es_host http://127.0.0.1:9200 \
-  --index_name wiki_qwen3 \
-  --dense-vector \
-  --model_name Qwen/Qwen3-Embedding-8B \
-  --embedding_dim 4096 \
-  --prompt_strategy qwen3 \
-  --overwrite
-```
-
-Check the model's actual embedding dimension rather than assuming `4096` for a
-different model or configuration.
-
-Replace the Elasticsearch source in the YAML with:
+将 YAML 中的 Elasticsearch 搜索源替换为：
 
 ```yaml
   sources:
@@ -274,56 +268,53 @@ Replace the Elasticsearch source in the YAML with:
       name: knowledge_base
       hosts: [http://127.0.0.1:9200]
       index: wiki_qwen3
-      search_fields: [title^2, text]
+      search_fields: [title, text]
       title_field: title
       text_field: text
       url_field: url
       document_id_field: url
       fetch_field: url
-      vector_search_mode: hybrid
+      vector_search_mode: hybrid # 混合搜索模式
       vector_field: text_vector
+
+      # 链接到 Embedding 模型服务
       embedding_model: Qwen/Qwen3-Embedding-8B
       embedding_base_url: http://127.0.0.1:8004/v1
       embedding_api_key: EMPTY
       embedding_prefix: |-
         Instruct: Given a web search query, retrieve relevant passages that answer the query
         Query:
+      embedding_max_concurrency: 8
+      embedding_retry_config:
+        max_tries: 3
+
+      # highlight (见下)
       highlight: true
       highlight_fragment_size: 256
       highlight_number_of_fragments: 5
       snippet_chars: 2048
       es_max_concurrency: 8
-      embedding_max_concurrency: 8
-      embedding_retry_config:
-        max_tries: 3
 ```
 
 ::: {.callout-tip}
-`highlight: true` is valid with `bm25` and `hybrid`. Set `highlight: false` for
-pure `vector` mode because Elasticsearch highlighting depends on a text query.
+Elasticsearch 高亮依赖文本查询，故`highlight: true` 仅适用于 `bm25` 和 `hybrid`。纯 `vector` 模式不可用。
 :::
 
 ::: {.callout-caution}
-Some embedding servers apply a query instruction themselves. Configure
-`embedding_prefix` only when the server does not, so that the instruction is
-applied exactly once. Document embeddings must use the model's document prompt
-convention; query embeddings must use its query prompt convention.
+有些模型（如示例中的Qwen3-Embedding-8B）要求在查询时在文本前加入特别的前缀。请根据模型手册和 Embedding模型推理服务行为设置 `embedding_prefix`。 该项可能极大影响文档召回准确性
 :::
 
-### Common failures and solutions
+### 常见故障与解决方法
 
-| Symptom | Check |
+| 症状 | 检查项 |
 | --- | --- |
-| Connection refused or timeout | Elasticsearch host, port, TLS settings, proxy, firewall, and service health |
-| Index not found | The configured `index` name and the result of `curl http://127.0.0.1:9200/_cat/indices?v` |
-| Search returns no matches | `search_fields`, analyzers, indexed content, and whether the query language matches the corpus |
-| `visit` cannot find a result | `document_id_field` and `fetch_field`; use `_id` by omitting both when no stable field exists |
-| Vector dimension error | Index mapping dimension versus the embedding endpoint's returned vector dimension |
-| Authentication failure | Elasticsearch `client_kwargs`, embedding API key, or LLM API key |
-| Vector mode rejects the config | `embedding_model`, `embedding_api_key`, `vector_field`, and `highlight: false` |
-| Model rejects tool calls | Model chat template, provider tool-call support, and parser configuration |
+| 连接被拒绝或超时 | Elasticsearch 主机、端口、TLS 设置、代理、防火墙和服务健康状态 |
+| 找不到索引 | 配置的 `index` 名称，可使用 `curl http://127.0.0.1:9200/_cat/indices?v` 查看现有`index`信息 |
+| 搜索没有匹配结果 | `search_fields`、分析器、已索引内容，以及查询语言是否与语料匹配 |
+| `visit` 找不到结果 | `document_id_field` 和 `fetch_field`；没有稳定字段时省略两者以使用 `_id` |
+| 向量维度错误 | 索引映射维度与嵌入服务端点返回的向量维度 |
+| 身份验证失败 | Elasticsearch `client_kwargs`、Embedding API 密钥或 LLM API 密钥 |
+| 向量模式拒绝配置 | `embedding_model`、`embedding_api_key`、`vector_field` 和 `highlight: false` |
 
-For the complete source field reference and model-visible tool schemas, see
-[Sources and Tools](../03-customizing/03-sources-and-tools.qmd). For TUI controls
-and saved record behavior, see
-[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
+完整的搜索源字段参考和模型可见工具模式（schema）见[搜索源与工具](../03-customizing/03-sources-and-tools.qmd)。
+

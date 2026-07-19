@@ -1,12 +1,10 @@
 ---
-title: Project Architecture
+title: 项目架构
 ---
 
-SearcherKit separates model communication, agent reasoning, retrieval, tool
-presentation, and batch execution. This separation is the central design idea
-behind both the code and its configuration.
+SearcherKit 都模块化设计将模型通信、智能体推理、检索、工具呈现和批处理执行相互分离，具体结构如下
 
-### Execution flow
+### 执行流程
 
 ```bash
 dataset or TUI
@@ -24,53 +22,33 @@ dataset or TUI
       `---- Tool ----> MCP server
 ```
 
-`AgentRunner` owns workload concerns such as concurrency, checkpointing, output
-files, and whole-task retries. `SearchAgent` owns one trajectory: it formats the
-conversation, calls the model, dispatches tools, and asks for a final answer as
-configured limits approach.
+`AgentRunner` 负责并发、检查点、输出文件和任务级别重试等执行逻辑。`SearchAgent` 负责单条轨迹：对话格式、调用模型、工具等。
 
-### Core concepts
+### 核心概念
 
-#### LLM client and parser
+#### LLM 客户端与解析器
 
-The client performs provider or inference-server I/O. The parser translates
-between SearcherKit messages and a model's chat or tool-call format. Keeping
-them separate lets an OpenAI-compatible endpoint serve models with different
-prompt and tool-call conventions.
+客户端用于和模型端点或推理服务通信，直接获得模型的输出。解析器用于 SearcherKit 的通用消息格式与模型的消息格式之间转换。将二者分离，可让一个 OpenAI 兼容端点服务采用不同提示词和工具调用格式的模型。
 
-Use the `upstream` parser when the provider returns native tool calls. Use a
-model-specific parser when tool calls are encoded in model text.
+当上游模型端点或推理服务返回格式化的工具调用信息时，使用 `upstream` 解析器直接获取上游服务解析的工具调用、思考内容等信息。有的模型将工具、思考内容作为 assistant message 返回，此时需要使用不同模型特定的解析器。
 
-#### Source and tool
+#### 搜索源与工具
 
-A source retrieves documents. A tool is the model-visible action that uses a
-source or another service. Multiple tools can share a source, and a tool can
-present a deliberately small JSON Schema even when its implementation accepts
-more parameters.
+搜索源负责检索文档。工具是搜索源或其他服务、被智能体可见，并可直接被智能体调用。多个工具可以共享一个搜索源，一个工具也可以使用多个搜索源。
 
-Built-in source families are local files, web search and fetch, and
-Elasticsearch. Built-in tool families include search, visit, multi-source
-variants, summarization, and MCP-backed tools.
+内置搜索源包括本地文件、Web 搜索与获取以及 Elasticsearch。内置工具包括`search`, `visit`和基于 MCP 的工具。
 
-#### Config and factories
+#### 配置与工厂
 
-Runtime objects support structured configuration as well as normal Python
-construction. Hydra composes YAML for CLI workflows; factory functions convert
-the resulting config into clients, parsers, sources, and tools. Custom modules
-are referenced by their real import paths rather than compatibility aliases.
+SearcherKit 的一大特性，就是是所有主要组件既支持如正常`Python`对象实例化，也支持完全由结构化配置文件构造，这些对象都有只传递配置项的`__init__()`函数别名。通过 CLI 入口启动时，` Hydra` 库组合 `YAML` 配置，并根据注册的 `Config` 数据类生成结构化配置，再生成对应的对象，构造智能体。这样，SearcherKit 就能完全通过持久化的 `YAML` 配置文件来定义智能体结构和训练流程等细节，方便复现。
 
-#### Outputs and traces
+#### 输出与日志
 
-Batch execution writes one durable history record per sample, trace logs for
-individual trajectories, a global run log, and aggregate summary data. These
-artifacts are the handoff between running, evaluation, debugging, conversion,
-and training workflows.
+SearcherKit 运行时会为每个样本写入持久历史记录、单条轨迹追踪日志、全局运行日志和汇总数据。这些产物连接运行、评估、调试、转换和训练工作流。
 
-#### Training integrations
+#### 训练集成
 
-Training reuses the same agent, parser, tools, sources, and trajectory format as
-normal inference. `searcherkit.training` adapts those runtime components to a
-training framework.
+训练时，SearcherKit 复用运行时所使用的智能体、解析器、工具、搜索源和轨迹格式。`searcherkit.training` 将这些运行时组件连接到训练框架。
 
 ```bash
 AReaL or Slime
@@ -84,36 +62,25 @@ AReaL or Slime
       ...
 ```
 
-The supervised fine-tuning path converts saved trajectories into the target
-dataset format and launches training from structured persistant config. 
+强化学习集成支持在RL框架的 rollout worker 中运行 `SearchAgent`，记录对话和工具行为，并对接框架请求、响应、奖励和轨迹元数据等。
 
-The reinforcement-learning integrations run `SearchAgent` inside framework-owned
-rollout workers, preserving conversation and tool behavior while translating
-framework requests, responses, rewards, and trajectory metadata at the
-integration boundary.
+SFT 集成支持将保存的轨迹转换为目标数据集格式，和根据持久化的结构化配置启动训练。
 
-Framework-specific adapters live under `searcherkit.training.areal` and
-`searcherkit.training.slime`; reusable training-agent and reward logic stays in
-`searcherkit.training`. Shell launchers and cluster-specific defaults live in
-`scripts/`. See the [training overview](../02-training/01-training-overview.qmd),
-[SFT guide](../02-training/04-sft.qmd), [AReaL guide](../02-training/02-rl-areal.qmd),
-and [slime guide](../02-training/03-rl-slime.qmd) for configuration and launch
-details.
+特定于框架的适配器位于 `searcherkit.training.areal` 和 `searcherkit.training.slime`；可复用的训练智能体与奖励逻辑保留在 `searcherkit.training`。Shell 启动器和集群专用默认值位于 `scripts/`。
 
-### Ownership map
+配置和启动详情见[训练概览](../02-training/01-training-overview.qmd)、[SFT 指南](../02-training/04-sft-with-msswift.qmd)、[AReaL 指南](../02-training/02-rl-areal.qmd)和 [Slime 指南](../02-training/03-rl-slime.qmd)。
 
-| Concern | Owning package |
+### 职责归属表
+
+| 关注点 | 负责的软件包 |
 | --- | --- |
-| Reasoning loop and final-answer control | `searcherkit.agent` |
-| Provider API transport | `searcherkit.llm` |
-| Model message and tool-call formats | `searcherkit.llm.parsers` |
-| Search backend adapters | `searcherkit.sources` |
-| Model-callable actions | `searcherkit.tools` |
-| Batch, checkpoints, traces, evaluation | `searcherkit.runtime` |
-| Config composition and user commands | `searcherkit.cli` |
-| Dataset conversion and index deployment | `searcherkit.plugins` |
-| SFT and RL integrations | `searcherkit.training` and `scripts/` |
+| Agent Loop | `searcherkit.agent` |
+| LLM 提供商 API 传输 | `searcherkit.llm` |
+| 模型消息与工具调用格式 | `searcherkit.llm.parsers` |
+| 搜索源适配器 | `searcherkit.sources` |
+| 智能体工具 | `searcherkit.tools` |
+| 批处理、检查点、追踪与评估 | `searcherkit.runtime` |
+| 用户命令和配置解析 | `searcherkit.cli` |
+| SFT 与 RL 集成 | `searcherkit.training` 和 `scripts/` |
+| 数据集转换与索引部署 | `searcherkit.plugins` |
 
-This ownership map should also guide documentation changes: explain a concept
-once in the guide, keep command syntax in the CLI reference, and keep exact
-Python signatures in the generated API Reference.

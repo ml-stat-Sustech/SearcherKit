@@ -32,33 +32,33 @@ dynamic: false
 user_guide: null
 
 sections:
-  - title: Quick Start
+  - title: 快速开始
     dir: docs/guide
     index: false
     # Great Docs strips numeric directory prefixes before building the sidebar,
     # then sorts the cleaned directory names alphabetically. Keep the intended
     # reader journey explicit instead of relying on the source directory names.
     sidebar_groups:
-      - section: Searching
+      - section: 搜索
         contents:
           - searching/search-files.qmd
           - searching/search-web.qmd
           - searching/search-with-elasticsearch.qmd
           - searching/batch-run-and-evaluate.qmd
-      - section: Training
+      - section: 训练
         contents:
           - training/training-overview.qmd
           - training/rl-areal.qmd
           - training/rl-slime.qmd
           - training/sft-with-msswift.qmd
-      - section: Customizing
+      - section: 定制
         contents:
           - customizing/project-architecture.qmd
           - customizing/llm-integration.qmd
           - customizing/sources-and-tools.qmd
           - customizing/retrying-and-logging.qmd
           - customizing/customized-modules.qmd
-      - section: Interface
+      - section: 交互界面
         contents:
           - interface/use-the-cli-interface.qmd
           - interface/use-the-interactive-tui.qmd
@@ -105,8 +105,8 @@ inline_methods: true
 # - Add 'desc:' to sections for descriptions
 
 reference:
-  - title: Classes
-    desc: Main classes provided by the package
+  - title: 类
+    desc: 软件包提供的主要类
     contents:
       - agent.SearchAgent
       - agent.SingleTurnAgent
@@ -121,8 +121,8 @@ reference:
       - sources.FileSource
       - common.dataloader.GenericDataLoader
 
-  - title: Config
-    desc: Config definitions
+  - title: 配置
+    desc: 配置定义
     contents:
       - runtime.runner.RunConfig
       - agent.SearchAgentConfig
@@ -133,8 +133,8 @@ reference:
       - tools.SummarizerConfig
       - common.retry.RetryConfig
 
-  - title: DataClasses
-    desc: DataClass definitions
+  - title: 数据类
+    desc: 数据类定义
     contents:
       - common.messages.ToolCall
       - common.messages.Tool
@@ -147,8 +147,8 @@ reference:
       - sources.Document
       - sources.SearchResult
 
-  - title: Abstract Classes
-    desc: Abstract base classes
+  - title: 抽象类
+    desc: 抽象基类
     contents:
       - agent.BaseAgent
       - llm.Client
@@ -157,8 +157,8 @@ reference:
       - tools.BaseTool
       - common.dataloader.BaseLoader
 
-  - title: Functions
-    desc: Utility functions
+  - title: 函数
+    desc: 实用函数
     contents:
       - llm.get_client
       - llm.parsers.get_parser
@@ -173,8 +173,8 @@ reference:
       - common.messages.assistant
       - common.messages.tool
 
-  - title: Errors
-    desc: Error types
+  - title: 错误
+    desc: 错误类型
     contents:
       - common.errors.SearcherKitError
       - common.errors.RecoverableError
@@ -199,6 +199,9 @@ reference:
 #   toc: true                  # Show table of contents (default: true)
 #   toc-depth: 2               # TOC heading depth (default: 2)
 #   toc-title: On this page    # TOC title (default: "On this page")
+
+site:
+  language: zh-Hans
 
 # Jupyter Kernel
 # --------------

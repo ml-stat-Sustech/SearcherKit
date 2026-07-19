@@ -1,33 +1,27 @@
 ---
-title: RL with Slime
+title: 使用 Slime 进行强化学习
 ---
 
-The slime integration uses SearcherKit as the custom agent rollout and reward
-layer. slime owns SGLang rollout workers, Megatron training workers, Ray
-placement, weight synchronization, and checkpoints.
+Slime 集成使用 SearcherKit 处理智能体对话、工具执行、并发限制和错误处理等工作。Slime 负责分布式调度、rollout 调度、梯度更新等。
 
-### Prerequisites
+### 前置条件
 
-Install slime according to [its manual](https://thudm.github.io/slime/get_started/quick_start.html). Install SearcherKit into the same training environment. The cluster must share access to model checkpoints, datasets, SearcherKit agent config, retrieval services, and output paths.
+按照 [slime 手册](https://thudm.github.io/slime/get_started/quick_start.html)安装 slime，并将 SearcherKit 安装到同一训练环境。集群必须共享对模型检查点、数据集、SearcherKit 智能体配置、检索服务和输出路径的访问。
 
-`src/searcherkit/config/training/train_slime.yaml` defines the SearcherKit agent
-used during rollout. Select another config with `SEARCHERKIT_AGENT_CONFIG`.
+`src/searcherkit/config/training/train_slime.yaml` 定义 rollout 使用的 SearcherKit 智能体。通过 `SEARCHERKIT_AGENT_CONFIG` 可选择其他配置。
 
-### Integration hooks
+### 集成钩子
 
-| Responsibility | Path |
+| 职责 | 路径 |
 | --- | --- |
-| Agent rollout and reward | `searcherkit.training.slime.rollout` |
-| Fully asynchronous rollout | `searcherkit.training.slime.fully_async` |
-| slime training entry points | `searcherkit.training.slime.train_dist` and `train_async` |
-| IGPO advantage calculation | `searcherkit.training.slime.igpo` |
+| 智能体 rollout 和奖励 | `searcherkit.training.slime.rollout` |
+| 完全异步 rollout | `searcherkit.training.slime.fully_async` |
+| slime 训练入口点 | `searcherkit.training.slime.train_dist` 和 `train_async` |
+| IGPO 优势计算 | `searcherkit.training.slime.igpo` |
 
-### Run training
+### 运行训练
 
-The launch script contains cluster-specific defaults for an eight-GPU node:
-four GPUs for Megatron actor training and four GPUs for SGLang rollout. Override
-the model checkpoints, datasets, output directory, experiment name, and hardware
-topology for your environment.
+启动脚本包含适用于八 GPU 节点的集群默认值：四块 GPU 用于 Megatron actor 训练，四块用于 SGLang rollout。请根据环境覆盖模型检查点、数据集、输出目录、实验名称和硬件拓扑。
 
 ```bash
 SEARCHERKIT_AGENT_CONFIG=src/searcherkit/config/training/train_slime.yaml \
@@ -47,15 +41,10 @@ N_SAMPLES_PER_PROMPT=8 \
 bash scripts/slime/train_grpo.sh
 ```
 
-The training JSONL file must provide the `question`, `answer`, and `metadata`
-fields expected by the launcher; the validation file must provide `question`
-and `answer`. Update `agent.llm_client`, `agent.sources`,
-`eval_agent.llm_client`, and `eval_agent.sources` in `train_slime.yaml` with the
-model and retrieval service settings for your cluster. The `agent` and
-`eval_agent` sections configure rollout and evaluation respectively. The
-launcher uses fully asynchronous rollout by default. Set `SLIME_ASYNC_MODE=0`
-for synchronous training.
+训练 JSONL 文件必须提供启动器所需的 `question`、`answer` 和 `metadata` 字段；验证文件必须提供 `question` 和 `answer`。
 
-Before allocating the training workers, prepend `DRY_RUN=1` to the same command
-to inspect the resolved training module, rollout mode, batch sizes, config path,
-and experiment name.
+请在 `train_slime.yaml` 中更新 `agent.llm_client`、`agent.sources`、`eval_agent.llm_client` 和 `eval_agent.sources`，填入集群的模型与检索服务设置。`agent` 和 `eval_agent` 分别配置 rollout 与评估。
+
+启动器默认使用完全异步 rollout；设置 `SLIME_ASYNC_MODE=0` 可进行同步训练。
+
+分配训练 worker 前，在同一命令前加上 `DRY_RUN=1`，检查解析后的训练模块、rollout 模式、批大小、配置路径和实验名称。

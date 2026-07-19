@@ -1,49 +1,94 @@
 ---
-title: Use the CLI Interface
+title: 使用 CLI
 ---
 
-The SearcherKit command-line interface is used to run configurations, evaluate outputs, inspect configurations, and manage plugins.
+SearcherKit 命令行界面用于运行配置、评估输出、检查配置以及管理插件。
 
-### `searcher run`
+| 命令 | 用途 | 页面章节 |
+| --- | --- | --- |
+| `searcher run` | 按配置运行智能体 | [运行配置](#cli-run) |
+| `searcher evaluate` | 使用 LLM 裁判评估已保存的运行记录 | [评估运行记录](#cli-evaluate) |
+| `searcher inspect` | 在不运行智能体的情况下检查结构化配置 | [检查配置](#cli-inspect) |
+| `searcher tui` | 在终端 UI 中运行交互式查询 | [启动 TUI](#cli-tui) |
+| `searcher plugins list` | 列出已安装的插件 | [列出插件](#cli-plugins-list) |
+| `searcher plugins deploy` | 部署插件数据到 Elasticsearch | [部署插件数据](#cli-plugins-deploy) |
+| `searcher plugins convert` | 转换插件或训练数据集格式 | [转换数据](#cli-plugins-convert) |
 
-Run a SearcherKit configuration.
+### `--config-path` 的解析
+
+`run`、`inspect` 和 `tui` 都支持 `--config-path`。
+
+- 未提供参数时，使用`SearcherKit` 包内配置目录中的 `config.yaml`。
+- 如果路径没有 `.yaml` 后缀，也会尝试补上该后缀。
+- 先按当前工作目录解析相对路径，再解析绝对。
+- 路径解析找不到文件时，再到 `SearcherKit` 包内配置目录中查找同名文件（或补 `.yaml` 后缀）。
+- 找到并加载配置项后，再覆盖命令给出的（如果由） Hydra 覆盖项。
 
 ```bash
-searcher run
-searcher run --config-path webexplorer
+searcher run --config-path searchagent agent.llm_client.model=demo
 ```
 
-Additional arguments are passed as Hydra-style overrides:
+例如，以上命令会依次查找当前目录的 `searchagent`、`searchagent.yaml`，再查找内置配置目录中的同名文件；最后用`demo`值等覆盖加载的配置的 `agent.llm_client.model` 项。
+
+### `searcher run` {#cli-run}
+
+运行 SearcherKit 配置。
 
 ```bash
-searcher run \
-  --config-path webexplorer \
-  agent.llm_client.model=demo
+searcher run --config-path searchagent
 ```
 
-### `searcher evaluate`
+参数：
 
-Evaluate saved run records using an LLM judge.
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `--config-path PATH` | `None`（使用 `config.yaml`） | 配置文件路径或内置配置名称。 |
+| `--debug` | `false` | 将日志级别设为 `DEBUG`。 |
+
+直接运行智能体，详见[批处理和评估](../01-searching/04-batch-run-and-evaluate.qmd)
+
+### `searcher evaluate` {#cli-evaluate}
+
+使用 LLM 裁判评估已保存的运行记录。
 
 ```bash
-searcher evaluate outputs/webexplorer outputs/webexplorer_eval \
+export OPENAI_BASE_URL=http://127.0.0.1:8000/v1
+export OPENAI_API_KEY=API_KEY
+searcher evaluate \
+  /path/to/history \
+  /path/to/eval_output \
   --max-concurrency 32
 ```
 
-The evaluation process uses the `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables.
+评估所用的 LLM-as-Judge 使用 `OPENAI_BASE_URL` 和 `OPENAI_API_KEY` 环境变量。
 
-### `searcher inspect`
+参数：
 
-Recursively validate configuration fields against their corresponding structured config types without running the agent.
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `input_dir` | 必填 | 包含运行记录 JSON 文件的目录。 |
+| `output_dir` | 必填 | 写入评估结果 JSON 文件的目录。 |
+| `--max-concurrency N` | `None`（按运行时默认） | 同时评估的最大记录数。 |
+| `--answer-pattern REGEX` | 内置答案正则 | 提取待评估最终答案的正则表达式，必须包含命名捕获组 `(?P<answer>...)`。 |
+
+### `searcher inspect` {#cli-inspect}
+
+在不运行智能体的情况下，递归检查配置字段是否符合对应的结构化配置类型。
 
 ```bash
 searcher inspect \
   --config-path webexplorer
 ```
 
-- Raise **ERROR** when unexpected field in config (not in target dataclass) or required field missing (no default value in target dataclass)
+参数：
 
-Hydra-style overrides are also supported:
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `--config-path PATH` | `None`（使用 `config.yaml`） | 配置文件路径或内置配置名称。 |
+
+- 当配置中出现目标数据类未定义的字段，或缺少目标数据类中没有默认值的必填字段时，报告 **ERROR**。
+
+同样支持 Hydra 风格的覆盖项，当覆盖项不合法，也会报告 Error ：
 
 ```bash
 searcher inspect \
@@ -51,15 +96,51 @@ searcher inspect \
   agent.llm_client.model=demo
 ```
 
-### `searcher plugins`
+### `searcher plugins` {#cli-plugins}
 
-List plugins or run plugin deployment tools.
+
+#### `searcher plugins list` {#cli-plugins-list}
+
+列出插件或运行插件部署工具。
 
 ```bash
 searcher plugins list
 ```
 
-Deploy a local Wiki index:
+参数：无。
+
+#### `searcher plugins deploy local-wiki / browsecomp-plus` {#cli-plugins-deploy}
+
+详见 [构造 ElasticSearch 索引](../01-searching/03-search-with-elasticsearch.qmd#build-index)
+
+通用参数：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `--es_host URL` | 必填 | Elasticsearch 地址。 |
+| `--es_username TEXT` | `None` | Elasticsearch 用户名，必须与密码同时提供。 |
+| `--es_password TEXT` | `None` | Elasticsearch 密码，必须与用户名同时提供。 |
+| `--index_name TEXT` | 必填 | Elasticsearch 索引名称。 |
+| `--model_name TEXT` | `""` | SentenceTransformer 模型名称或路径。启用 `--dense-vector` 时必填。 |
+| `--embedding_dim N` | `0` | 稠密向量维度。 |
+| `--prompt_strategy {none,e5,qwen3}` | `none` | embedding prompt 策略。 |
+| `--batch_size N`（别名 `--cpu_batch_size`） | `200` | CPU 文档批大小。 |
+| `--embedding_batch_size N`（别名 `--gpu_batch_size`） | `16` | embedding 批大小。 |
+| `--max_text_chars N` | `32768` | 每篇文档最大文本字符数。 |
+| `--limit N` | `None` | 最多处理的文档数。 |
+| `--shards N` | `1` | Elasticsearch 分片数。 |
+| `--replicas N` | `0` | Elasticsearch 副本数。 |
+| `--overwrite` | `false` | 覆盖已有索引。 |
+| `--dense-vector` | `false` | 启用稠密向量索引。 |
+
+`local-wiki` 专属参数：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `--wiki_dump_path PATH` | 必填 | MediaWiki XML/XML.bz2 dump 路径。 |
+| `--base_url URL` | `https://en.wikipedia.org/wiki/` | Wiki 页面链接的基础 URL。 |
+
+示例：
 
 ```bash
 searcher plugins deploy local-wiki \
@@ -69,15 +150,43 @@ searcher plugins deploy local-wiki \
   --overwrite
 ```
 
-Deploy BrowseComp Plus:
+`browsecomp-plus` 专属参数：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `--dataset_path PATH` | 必填 | Hugging Face 数据集名称或本地 JSON/JSONL/Parquet 路径。 |
+| `--split TEXT` | `train` | 数据集 split。 |
+
+#### `searcher plugins convert` {#cli-plugins-convert}
+
+运行插件提供的数据集转换命令。其余参数会原样转发给转换工具：
 
 ```bash
-searcher plugins deploy browsecomp-plus \
-  --dataset_path data/browsecomp_plus_corpus.jsonl \
-  --es_host http://127.0.0.1:9200 \
-  --index_name browsecomp_plus \
-  --overwrite
+searcher plugins convert --help
 ```
 
-Add `--dense-vector --model_name Qwen3-Embedding-0.6B --embedding_dim 1024`
-to enable dense-vector indexing.
+参数：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `input_path` | 必填 | 输入 OpenSeeker JSONL 数据集路径。 |
+| `output_path` | 必填 | 输出 MS-Swift JSONL 数据集路径。 |
+| `--max-records N` | `0`（不限制） | 最多转换的记录数。 |
+
+### `searcher tui` {#cli-tui}
+
+在终端中运行 TUI 。完整用法见[使用交互式 TUI](02-use-the-interactive-tui.qmd)。
+
+```bash
+searcher tui --config-path configs/demo/config.yaml
+```
+
+参数：
+
+| 参数 | 默认值 | 用途 |
+| --- | --- | --- |
+| `--config-path PATH` | `None`（使用 `config.yaml`） | 配置文件路径或内置配置名称。 |
+| `--debug` | `false` | 将日志级别设为 `DEBUG`。 |
+| `--env-file PATH` | `.env` | 加载 LLM 环境变量的 dotenv 文件。 |
+| `--query TEXT` | `None` | 非交互地执行一次查询。 |
+| `--interactive-output-path PATH` | `None` | 交互式运行记录目录。 |

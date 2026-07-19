@@ -1,10 +1,8 @@
 ---
-title: Search Webpages
+title: 搜索网页
 ---
 
-SearcherKit provides a web search pipeline for agents to answer questions about web pages, with the config `file_search`. It search the public web through
-Google Serper and read result pages through Jina Reader. The LLM selects
-queries and URLs, then synthesizes an answer from visited evidence.
+SearcherKit 通过 `web_search` 定义了一个网页搜索智能体。智能体通过 Google Serper 搜索互联网，再通过 Jina Reader 读取结果页面，来回答相关问题。
 
 ```bash
 question -> LLM -> search -> Serper results
@@ -12,15 +10,15 @@ question -> LLM -> search -> Serper results
                 -> LLM -> final answer
 ```
 
-To use it, you should 
-- Abtain API keys for required services
-- Configure enviroment variables for LLM and file search root
-- Run searchagent tui with the `web_search` config.
+使用步骤如下：
 
-### Install SearcherKit
+- 获取所需服务的 API 密钥；
+- 配置 LLM 和 Web 搜索所需的环境变量；
+- 使用 `web_search` 配置运行 SearchAgent 的 TUI。
 
-SearcherKit requires Python 3.12 or later. Install the package in a virtual
-environment:
+### 安装 SearcherKit
+
+SearcherKit 需要 Python 3.12 或更高版本。请在虚拟环境中安装软件包：
 
 :::: {.panel-tabset}
 #### pip
@@ -30,7 +28,7 @@ git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
@@ -41,32 +39,33 @@ git clone https://github.com/ml-stat-Sustech/searcherkit.git
 cd searcherkit
 uv venv --python 3.12
 source .venv/bin/activate  # macOS/Linux
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows: .venv\Scripts\activate
 uv pip install -e .
 ```
 ::::
 
-##### Prepare required services
+##### 准备所需服务
 
-Prepare an LLM endpoint, a [Serper](https://serper.dev/) API key, and optionally
-a Jina Reader API key. The machine must be able to reach the LLM endpoint,
-`google.serper.dev`, and `r.jina.ai`.
+为了使用网络搜索智能体，你需要准备
+- LLM 服务端点密钥
+- [Serper](https://serper.dev/) API 密钥
+- Jina Reader API 密钥。（可选，不配置API密钥时Jina Reader的速度会很慢）
+ 
+机器必须能够访问 LLM 端点、`google.serper.dev` 和 `r.jina.ai`。
 
-### Configure the environment
+### 配置环境
 
-SearcherKit with `web_search` config take the following enviroment variables.
+使用 `web_search` 配置时，SearcherKit 会读取以下环境变量。
 
-| Variable | Meaning |
+| 变量 | 含义 |
 | --- | --- |
-| `LLM_MODEL` | Model name sent to the endpoint |
-| `LLM_API_KEY` | LLM endpoint credential |
-| `LLM_BASE_URL` | OpenAI-compatible API base URL |
-| `SERPER_API_KEY` | Required credential for web search |
-| `JINA_API_KEY` | Optional credential for Jina Reader |
+| `LLM_MODEL` | 发送到端点的模型名称 |
+| `LLM_API_KEY` | LLM 端点访问凭据 |
+| `LLM_BASE_URL` | OpenAI 兼容 API 的基础 URL |
+| `SERPER_API_KEY` | Web 搜索所需凭据 |
+| `JINA_API_KEY` | Jina Reader 的可选凭据 |
 
-For a one-time setup, define the variables in the terminal session where you
-will start SearcherKit. The values remain available until that terminal is
-closed.
+请在即将启动 SearcherKit 的终端会话中定义这些变量。关闭该终端前，这些值会一直有效。
 
 ::: {.panel-tabset}
 #### Bash
@@ -91,10 +90,9 @@ $env:JINA_API_KEY="YOUR_JINA_API_KEY"
 :::
 
 ::: {.callout-tip}
-To keep the configuration across terminal sessions, create a `.env` file in
-the directory where you run SearcherKit:
+要让配置永久有效，请在运行 SearcherKit 的目录中创建 `.env` 文件：
 
-```dotenv
+```{.dotenv, filename=.env}
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1
@@ -102,31 +100,26 @@ SERPER_API_KEY="YOUR_SERPER_API_KEY"
 JINA_API_KEY="YOUR_JINA_API_KEY"
 ```
 
-SearcherKit loads `.env` by default. Use `--env-file path/to/another.env` to load a
-different file. Variables already defined in the terminal take precedence over
-values in the dotenv file. 
+SearcherKit 默认加载 `.env`。使用 `--env-file path/to/another.env` 可加载其他文件。终端中已定义的变量优先于 dotenv 文件中的值。
 :::
 
-### Start the TUI
+### 启动 TUI
 
 ```bash
 searcher tui --config-path web_search
 ```
 
-Use `/tool-detail` to inspect search queries, selected URLs, and page text.
-Interactive records and traces are written under
-`outputs/web-search-tui/interactive`.
+在TUI对话框输入 `/` 查看可用的命令，详见通用控件和记录行为见[使用交互式 TUI](../04-interface/02-use-the-interactive-tui.qmd)。
 
-For general controls and record behavior, see
-[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd). For web source
-fields, retry behavior, and tool schemas, see
-[Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
+交互记录、全局日志和追踪日志写入 `outputs/file-search-tui/interactive`。
 
-### Common failuares and solutions
+完整的搜索源和工具模型参考资料见[搜索源与工具](../03-customizing/03-sources-and-tools.qmd)。
 
-| Symptom | Check |
+### 常见故障与解决方法
+
+| 症状 | 检查项 |
 | --- | --- |
-| 401 or 403 from search | `SERPER_API_KEY` and account permissions |
-| 401 or 403 while visiting | `JINA_API_KEY` or Jina access policy |
-| Model rejects tool calls | Model chat template and server tool-call parser |
-| Timeout or connection failure | Endpoint URL, DNS, proxy, firewall, and service health |
+| 搜索返回 401 或 403 | `SERPER_API_KEY` 和账户权限 |
+| 访问页面时返回 401 或 403 | `JINA_API_KEY` 或 Jina 访问策略 |
+| 模型拒绝工具调用 | 模型聊天模板和服务器工具调用解析器 |
+| 超时或连接失败 | 端点 URL、DNS、代理、防火墙和服务健康状态 |

@@ -1,14 +1,12 @@
 ---
-title: SFT with MS-Swift
+title: 使用 MS-Swift 进行 SFT
 ---
 
-SearcherKit's SFT path converts agent trajectories into MS-Swift records and
-launches `swift sft` from validated structured YAML. Keep trajectory generation,
-conversion, training, serving, and evaluation as separate stages.
+SearcherKit 的 SFT 流程会将智能体轨迹转换为 MS-Swift 记录，并根据验证过的结构化 YAML 启动 `swift sft`。请保持轨迹生成、转换、训练、服务和评估相互独立。
 
-Install ms-swift according to [its manual](https://swift.readthedocs.io/zh-cn/latest/GetStarted/SWIFT-installation.html). Install SearcherKit into the same training environment.
+按照 [MS-Swift 手册](https://swift.readthedocs.io/zh-cn/latest/GetStarted/SWIFT-installation.html)安装 ms-swift，并将 SearcherKit 安装到同一训练环境。
 
-### Convert trajectories
+### 转换轨迹
 
 ```bash
 searcher plugins convert \
@@ -16,25 +14,23 @@ searcher plugins convert \
   outputs/sft/ms_swift.jsonl
 ```
 
-Use `--max-records` for a small validation set. Inspect several rows before
-training and confirm that system, user, assistant, tool-call, and tool-result
-messages are formatted correctly for the selected model template.
+使用 `--max-records` 生成小型验证集。训练前检查若干行，确认`system`、`user`、`assistant`、`tool-call`和`tool-response`消息均符合所选模型模板的格式。
 
-See `scripts/sft/sft_convert.sh` for conversion setting references.
+转换设置参考见 `scripts/sft/sft_convert.sh`。
 
-### Configure MS-Swift
+### 配置 MS-Swift
 
-Edit `scripts/sft/sft_training.yaml`. Put semantic training choices in YAML:
+编辑 `scripts/sft/sft_training.yaml`，将训练语义相关的选择放入 YAML：
 
-- model and chat or agent template;
-- loss scale and full or adapter training mode;
-- maximum context and sequence-parallel settings;
-- batch size, accumulation, learning rate, and epochs;
-- DeepSpeed, checkpoint, logging, and reporting settings.
+- 模型以及聊天或智能体模板；
+- 全量或Lora训练模式；
+- 最大上下文和序列并行设置；
+- 批大小、梯度累积、学习率和训练轮数；
+- DeepSpeed、检查点、日志和报告设置。
 
-MS-Swift flags belong under `backend.extra_args`, check [MS-Swift Documentation](https://swift.readthedocs.io/zh-cn/latest/Instruction/Command-line-parameters.html) for details
+MS-Swift 参数应放在 `backend.extra_args` 下，详情见 [MS-Swift 文档](https://swift.readthedocs.io/zh-cn/latest/Instruction/Command-line-parameters.html)。
 
-### Validate before launch
+### 试运行
 
 ```bash
 python -m searcherkit.training.sft \
@@ -42,11 +38,9 @@ python -m searcherkit.training.sft \
   --dry-run
 ```
 
-The dry run resolves the YAML and prints the generated `swift sft` command. Run
-it in the same dedicated environment that contains MS-Swift, the intended CUDA
-toolchain, and SearcherKit.
+试运行会解析 YAML 并打印生成的 `swift sft` 命令。
 
-### Train
+### 训练
 
 ```bash
 SFT_MODEL=/models/Qwen3-8B \
@@ -55,6 +49,4 @@ SFT_OUTPUT_DIR=outputs/sft/model \
 bash scripts/sft/sft_train.sh
 ```
 
-The wrapper prepares repository paths and CUDA library locations before calling
-`python -m searcherkit.training.sft`. Treat its host-specific defaults as
-overridable deployment settings, not portable model configuration.
+包装脚本会先准备仓库路径和 CUDA 库位置，再调用 `python -m searcherkit.training.sft`。请自行改写脚本内的默认值。
