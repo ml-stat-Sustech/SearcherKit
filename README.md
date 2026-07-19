@@ -1,52 +1,56 @@
 # 🔎 SearcherKit
 
-SearcherKit is a modular runtime for search-intensive agents. It brings agent
-rollouts, heterogeneous search sources, tool execution, model adapters,
-benchmark recipes, evaluation, and training integration into one coherent
-stack.
+SearcherKit is a modular system for building AI agents that rely heavily on search. It handles everything from agent rollouts, LLM backends, tool calls, and benchmark evaluation, to training pipelines — all in one package.
+
+
 
 ![SearcherKit](docs/images/searcherkit_1.png){width=80% fig-align="center"}
 
-### ✨ Highlights
 
-- 🧠 **One toolkit for the full search-agent lifecycle.** Build agent scaffolds, generate training rollouts, run evaluations, and serve interactive experiences in one coherent framework. Reuse the same components from early prototypes to production-oriented workflows. Spend less time connecting fragmented tools, more time improving agent capabilities.
+## What it does
 
-- 🌐 **Connect to various search sources.** Connect web services, APIs, Elasticsearch indexes, private knowledge bases, and local files through a common source interface. Combine sources as needed without modifying agent or tool design. Build custom retrieval pipelines that can evolve with your data and use case.
+- **Build and run search agents** – Define agent behavior once, then use it for prototyping, evaluation, interactive demos, and large‑scale rollout generation.
+- **Connect to any data source** – Plug in web APIs, Elasticsearch, internal knowledge bases, or local files through a unified interface. Combine sources freely without touching agent code.
+- **Scale without pain** – Async execution, flexible concurrency, checkpoint recovery, and detailed traces make batch jobs fast and debuggable. Swap models and backends easily.
+- **Train with confidence** – Use the same setup to generate SFT data and RL rollouts. Our 8B model achieved SOTA results on public search benchmarks with this stack.
 
-- ⚡ **Developer-friendly and built for large-scale experiments.** Modular providers, parsers, sources, and tools allow local models, hosted APIs, and retrieval backends can be mixed and matched. Native asynchronous execution and layered concurrency controls keep batch workloads fast and resource-aware. Checkpoint recovery and per-sample traces make long-running experiments easier to resume, inspect, and reproduce.
+---
 
-- 🔥 **Training-ready, with SOTA results from reinforcement learning.** Use SearcherKit as a high-throughput rollout runtime for SFT and RL workflows. The same agent and tool configuration can power interactive sessions, offline evaluation, training-data generation, and RL rollouts. Our RL experiments achieve state-of-the-art results with an 8B model on public search benchmarks。
+## Why SearcherKit?
+
+- 🧩 **One codebase, many uses** – No more copying logic between research and production. What you build for an experiment works directly for evaluation and deployment.
+- 🔌 **Plug‑and‑play sources** – Add or remove search backends in minutes. The agent doesn’t care where the data comes from.
+- ⚡ **Fast and reliable** – Native async, smart concurrency, and automatic checkpointing let you run weeks‑long experiments without babysitting.
+- 🏆 **Proven in RL** – We’ve used it to train competitive 8B models on real search tasks. The same pipeline is open and ready for your own training.
+
+---
 
 ### 🚀 Quick Start
 
-See the [Quick Start](docs/guide/index.qmd)
-to start running your search agent.
+Jump right in with the [Quick Start guide](docs/guide/index.qmd) — you’ll have a search agent running in minutes.
 
 ### 📖 Documentation
 
-- [Quick start](docs/guide/index.qmd)
-- [Search Files](docs/guide/01-searching/01-search-files.qmd)
-- [Search Webpages](docs/guide/01-searching/02-search-web.qmd)
+Browse the docs by topic:
 
-- [Training overview](docs/guide/02-training/01-training-overview.qmd)
+- **Getting started** – [Quick Start](docs/guide/index.qmd) · [Searching files](docs/guide/01-searching/01-search-files.qmd) · [Searching webpages](docs/guide/01-searching/02-search-web.qmd)  
+- **Training** – [Overview of SFT & RL workflows](docs/guide/02-training/01-training-overview.qmd)  
+- **Customization** – [Project architecture and extending components](docs/guide/03-customizing/01-project-architecture.qmd)  
+- **Interfaces** – [CLI reference](docs/guide/04-interface/01-use-the-cli-interface.qmd) · [Interactive TUI](docs/guide/04-interface/02-use-the-interactive-tui.qmd)
 
-- [Project Architecture](docs/guide/03-customizing/01-project-architecture.qmd)
 
-- [CLI reference](docs/guide/04-interface/01-use-the-cli-interface.qmd)
-- [Interactive TUI](docs/guide/04-interface/02-use-the-interactive-tui.qmd)
+---
 
 ### 🤝 Contributing
 
-SearcherKit is actively evolving. We welcome issues & PRs on reproduction reports, new model parsers, source adapters, benchmark recipes, training integrations, bug reports, and
-documentation improvements etc. 
+SearcherKit is under active development. We welcome issues and pull requests for reproduction reports, new model parsers, source adapters, benchmark recipes, training integrations, bug fixes, documentation, and more.
 
-If SearcherKit helps your research or makes your agent stack easier to reason
-about, consider starring the repository. It helps more search-agent builders
-find the project.
+If SearcherKit helps your research or simplifies your agent stack, please give us a ⭐ on GitHub – it helps others discover the project.
 
 ### 👤 The Team
 
-SearcherKit is built by contributors from Department of Statistics and Data Science at SUSTech under the guidence of Assistant Professor [Wei Hongxin](https://hongxin001.github.io/). Main contributors & maintainers are [Li Hanyang](https://justinliii.github.io/), [Zhang Haotian](), [Yang Hanjie](), [Wang Shuoyuan](), [Lan Zijie]() and [Yu Zhengye]().
+SearcherKit is built and maintained by the group of Assistant Professor [Wei Hongxin](https://hongxin001.github.io/) and Professor [Jing Bingyi](https://hongxin001.github.io/) in SUSTech and CUHK-SZ.  
+Core maintainers: [Li Hanyang](https://justinliii.github.io/), Zhang Haotian, Yang Hanjie, Wang Shuoyuan, Lan Zijie, and Yu Zhengye.
 
 ### 📜 License
 
