@@ -41,12 +41,9 @@ distributed strategy in versioned YAML.
 
 ### Reinforcement learning
 
-The `scripts/areal/` and `scripts/slime/` directories are framework adapters,
-while reusable reward and training-agent logic belongs in
-`searcherkit.training`. Document each experiment with the base model, reward
-definition, rollout config, dataset revision, framework revision, and produced
-checkpoint. See the [AReaL](02-rl-areal.qmd) and [slime](03-rl-slime.qmd) guides for
-their distinct ownership boundaries and launch paths.
+The `scripts/areal/` and `scripts/slime/` directories are framework adapters, reward and training-agent logic. 
+
+See the [AReaL](02-rl-areal.qmd) and [slime](03-rl-slime.qmd) guides for their distinct ownership boundaries and launch paths.
 
 ### Evaluate a checkpoint
 

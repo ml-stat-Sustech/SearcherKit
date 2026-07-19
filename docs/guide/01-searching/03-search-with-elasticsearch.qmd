@@ -52,7 +52,7 @@ With a valid elasticsearch endpoint, confirm that Elasticsearch is reachable bef
 curl http://your.elasticsearch.endpoint:port
 ```
 
-### Prepare an index
+### Prepare an index {#build-index}
 
 The default installation includes the Elasticsearch client. To build an index with SearcherKit's deployment plugins, install the indexing dependencies:
 
@@ -91,6 +91,41 @@ If you manage the index outside SearcherKit, map the source fields in the
 configuration below. At minimum, the fields in `search_fields` must be
 searchable. The field used by `document_id_field` and `fetch_field` must
 identify a document unambiguously.
+
+::: {.callout-tip}
+#### Build a dense-vector index
+
+Enable `--dense-vector` while deploying if you plan to use vector or hybrid
+retrieval. The indexing extra includes `sentence-transformers`; the selected
+model is loaded locally and each document receives a `text_vector` field:
+
+```bash
+searcher plugins deploy local-wiki \
+  --wiki_dump_path data/wiki.xml.bz2 \
+  --es_host http://127.0.0.1:9200 \
+  --index_name wiki_qwen3 \
+  --dense-vector \
+  --model_name Qwen/Qwen3-Embedding-8B \
+  --embedding_dim 4096 \
+  --prompt_strategy qwen3 \
+  --cpu_batch_size 200 \
+  --gpu_batch_size 16 \
+  --overwrite
+```
+
+- `--dense-vector` enables building embedding index.
+- `--cpu_batch_size` controls document/indexing batches and
+- `--gpu_batch_size` controls embedding batches.
+- `--model_name` may be a Hugging Face name or local directory.
+- `--embedding_dim` must exactly match the model output dimension.
+- `--prompt_strategy` is `none` by default; use `e5` or `qwen3` when required by the embedding model.
+:::
+
+::: {.callout-caution}
+The index and query must use the same embedding model, dimension, and prompt
+conventions. Use a new `--index_name`, or explicitly pass `--overwrite`, when
+changing models.
+:::
 
 ### Configure the environment
 
@@ -154,7 +189,7 @@ agent:
       name: knowledge_base
       hosts: [http://127.0.0.1:9200]
       index: wiki_local
-      search_fields: [title^2, text]
+      search_fields: [title, text]
       title_field: title
       text_field: text
       url_field: url
@@ -167,6 +202,9 @@ agent:
       snippet_chars: 2048
       request_timeout: 30
       es_max_concurrency: 8
+      # For authenticated Elasticsearch:
+      # client_kwargs:
+      #   basic_auth: [${oc.env:ES_USERNAME}, ${oc.env:ES_PASSWORD}]
 
   tools:
     - type: search
@@ -209,10 +247,7 @@ logging:
     filename_template: "{sample_id}_{trace_id}.log"
 ```
 
-The source name is internal to SearcherKit. The `search` and `visit` tools use
-`source: [knowledge_base]` to select that source. For an index without a stable
-URL field, remove `document_id_field` and `fetch_field`; search results will use
-the Elasticsearch `_id`, and `visit` will fetch by `_id`.
+The `sources` section configures the elasticsearch source we've just built, and name it as `knowledge_base`. By passing the name to the tool config as `source: [knowledge_base]`, the source is assigned to the tool.
 
 ### Validate and start the TUI
 
@@ -228,17 +263,12 @@ Then start the interactive interface:
 searcher tui --config-path elasticsearch_search.yaml
 ```
 
-Use `/tool-detail` to inspect queries, result snippets, document identifiers,
-and fetched content. Interactive records and trace logs are written under
-`outputs/elasticsearch-search-tui/interactive` and
-`outputs/elasticsearch-search-tui/traces`.
+Type `/` in the TUI to view available commands. Use `/tool-detail` to inspect tool arguments and results. For general controls and record behavior, see [Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
 
-For a non-interactive smoke test, pass one question directly:
+Interactive records, the global log, and trace logs are written under
+`outputs/file-search-tui/interactive`.
 
-```bash
-searcher tui --config-path elasticsearch_search.yaml \
-  --query "What topics are covered by this knowledge base?"
-```
+For the complete source/tool guidance, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
 
 ### Enable vector or hybrid retrieval
 
@@ -248,23 +278,6 @@ the index. Hybrid search combines vector retrieval with BM25. Both modes require
 - a dense-vector field populated during indexing;
 - the same embedding model and vector dimension at indexing and query time;
 - an OpenAI-compatible embeddings endpoint available to SearcherKit.
-
-For example, build a Qwen3 vector index from a wiki dump:
-
-```bash
-searcher plugins deploy local-wiki \
-  --wiki_dump_path data/wiki.xml.bz2 \
-  --es_host http://127.0.0.1:9200 \
-  --index_name wiki_qwen3 \
-  --dense-vector \
-  --model_name Qwen/Qwen3-Embedding-8B \
-  --embedding_dim 4096 \
-  --prompt_strategy qwen3 \
-  --overwrite
-```
-
-Check the model's actual embedding dimension rather than assuming `4096` for a
-different model or configuration.
 
 Replace the Elasticsearch source in the YAML with:
 
@@ -324,6 +337,4 @@ convention; query embeddings must use its query prompt convention.
 | Model rejects tool calls | Model chat template, provider tool-call support, and parser configuration |
 
 For the complete source field reference and model-visible tool schemas, see
-[Sources and Tools](../03-customizing/03-sources-and-tools.qmd). For TUI controls
-and saved record behavior, see
-[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
+[Sources and Tools](../03-customizing/03-sources-and-tools.qmd).

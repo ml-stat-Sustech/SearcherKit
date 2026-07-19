@@ -2,7 +2,7 @@
 title: Search Webpages
 ---
 
-SearcherKit provides a web search pipeline for agents to answer questions about web pages, with the config `file_search`. It search the public web through
+SearcherKit provides a web search pipeline for agents to answer questions about web pages, with the config `web_search`. It searches the public web through
 Google Serper and read result pages through Jina Reader. The LLM selects
 queries and URLs, then synthesizes an answer from visited evidence.
 
@@ -94,7 +94,7 @@ $env:JINA_API_KEY="YOUR_JINA_API_KEY"
 To keep the configuration across terminal sessions, create a `.env` file in
 the directory where you run SearcherKit:
 
-```dotenv
+```bash
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1
@@ -113,14 +113,13 @@ values in the dotenv file.
 searcher tui --config-path web_search
 ```
 
-Use `/tool-detail` to inspect search queries, selected URLs, and page text.
-Interactive records and traces are written under
-`outputs/web-search-tui/interactive`.
+Type `/` in the TUI to view available commands. Use `/tool-detail` to inspect tool arguments and results. For general controls and record behavior, see [Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
 
-For general controls and record behavior, see
-[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd). For web source
-fields, retry behavior, and tool schemas, see
-[Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
+Interactive records, the global log, and trace logs are written under
+`outputs/file-search-tui/interactive`.
+
+For the complete source/tool guidance, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
+
 
 ### Common failuares and solutions
 

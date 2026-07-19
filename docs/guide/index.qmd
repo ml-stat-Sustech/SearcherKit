@@ -67,14 +67,9 @@ full-text matching. Install it separately and verify that `rg` is on `PATH`:
 rg --version
 ```
 
-The default installation includes the Elasticsearch and Anthropic clients.
-Some deployment and training workflows require additional services or optional
-dependencies; their task guides list the relevant requirements.
-
 ### Run your first search
 
-The packaged `file_search` configuration connects an OpenAI-compatible model
-endpoint to `search` and `visit` tools over a local directory.
+The packaged `file_search` demonstrates an agent that searches through local directory with `search` and `visit` tools.
 
 Set the model endpoint and the directory to search:
 

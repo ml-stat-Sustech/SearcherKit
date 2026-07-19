@@ -28,7 +28,6 @@ the format changes; change the client when API transport changes.
 | --- | --- |
 | `openai` | OpenAI and OpenAI-compatible chat completion endpoints |
 | `anthropic` | Anthropic-compatible message endpoints |
-| `vllm` or `vllm_server` | vLLM integration selected through the client factory |
 
 ```yaml
 agent:
@@ -67,15 +66,16 @@ agent:
 ```
 
 Use `upstream` when the inference server parses model tool-call text and returns
-structured provider tool calls. For vLLM or SGLang deployments, configure the
+structured provider tool calls.
+
+::: {.callout-tip}
+For vLLM or SGLang deployments, configure the
 server's tool-call and reasoning parsers to match the model template.
+:::
 
 ### Streaming
 
 Interactive execution enables `stream_llm` and consumes client stream chunks.
-Parsers may provide a live-delta splitter so reasoning and final content can be
-displayed separately without changing the stored final message. Batch execution
-continues to use the complete response interface.
 
 ### Retry boundaries
 
@@ -90,10 +90,6 @@ agent:
     exceptions:
       - pkg://searcherkit.llm.parsers:ParsingError
 ```
-
-Invalid credentials, unknown model names, and permanent request errors should
-surface immediately. When retries are exhausted, the final concrete error is
-propagated to the agent or task boundary.
 
 To implement a new transport or model format, see
 [Custom Modules](05-customized-modules.qmd).
