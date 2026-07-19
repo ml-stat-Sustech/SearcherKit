@@ -19,7 +19,10 @@ searcher tui --config-path configs/demo/config.yaml \
 ```
 
 If successful, TUI would show
+
 ![TUI](../../images/tui.png)
+
+Enter a question below and press Enter to run it. Context is not shared between inputs.
 
 ### Slash commands
 
