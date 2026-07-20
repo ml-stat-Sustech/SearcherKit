@@ -7,8 +7,11 @@ build:
   jobs:
     post_install:
       - python -m pip install . "great-docs>=0.15.0"
+      - curl --fail --location --output /tmp/quarto.tar.gz https://github.com/quarto-dev/quarto-cli/releases/download/v1.9.38/quarto-1.9.38-linux-amd64.tar.gz
+      - mkdir --parents "$READTHEDOCS_VIRTUALENV_PATH/quarto"
+      - tar --extract --gzip --file /tmp/quarto.tar.gz --strip-components=1 --directory "$READTHEDOCS_VIRTUALENV_PATH/quarto"
     build:
       html:
-        - great-docs build
+        - PATH="$READTHEDOCS_VIRTUALENV_PATH/quarto/bin:$PATH" python -m great_docs.cli build
         - mkdir --parents "$READTHEDOCS_OUTPUT/html"
         - cp --recursive great-docs/_site/. "$READTHEDOCS_OUTPUT/html/"
