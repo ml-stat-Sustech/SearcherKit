@@ -12,6 +12,6 @@ build:
       - tar --extract --gzip --file /tmp/quarto.tar.gz --strip-components=1 --directory "$READTHEDOCS_VIRTUALENV_PATH/quarto"
     build:
       html:
-        - PATH="$READTHEDOCS_VIRTUALENV_PATH/quarto/bin:$PATH" python -m great_docs.cli build
+        - PATH="$READTHEDOCS_VIRTUALENV_PATH/quarto/bin:$PATH" python great-docs-patched.py build
         - mkdir --parents "$READTHEDOCS_OUTPUT/html"
         - cp --recursive great-docs/_site/. "$READTHEDOCS_OUTPUT/html/"
