@@ -52,7 +52,7 @@ class ChatRenderer:
             )
         if hidden_reasoning:
             parts.append(
-                ("class:muted", f"[{hidden_reasoning} reasoning block(s) hidden; use /thinking]\n")
+                ("class:muted", f"[{hidden_reasoning} reasoning block(s) hidden; use Ctrl+O]\n")
             )
         return parts or [("class:muted", " ")]
 

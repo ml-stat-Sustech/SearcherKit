@@ -116,6 +116,10 @@ class TuiApplicationBuilder:
         def _cancel_clear_or_quit(event: Any) -> None:
             self._shell.handle_ctrl_c(event)
 
+        @bindings.add("c-o", eager=True)
+        def _toggle_detail(event: Any) -> None:
+            self._shell.handle_ctrl_o(event)
+
         class _ChatControl(FormattedTextControl):
             def mouse_handler(_self, mouse_event):
                 if mouse_event.event_type == MouseEventType.SCROLL_UP:
@@ -147,7 +151,10 @@ class TuiApplicationBuilder:
                 return NotImplemented
 
         chat_window = Window(_ChatControl(self._shell.render_chat_viewport), wrap_lines=True)
-        scrollbar = Window(FormattedTextControl(self._shell.render_scrollbar), width=1)
+        scrollbar = ConditionalContainer(
+            Window(FormattedTextControl(self._shell.render_scrollbar), width=1),
+            filter=Condition(lambda: not self._shell.is_splash()),
+        )
         text_area = TextArea(
             height=self._shell.input_view_height,
             prompt="> ",
@@ -164,13 +171,28 @@ class TuiApplicationBuilder:
             filter=Condition(slash_menu.is_active),
         )
         # Blank spacer keeps running kicker text one row below the chat content.
-        kicker_spacer = Window(height=1)
-        kicker = Window(FormattedTextControl(self._shell.render_kicker), height=1)
-        status_window = Window(FormattedTextControl(self._shell.render_status), height=1)
+        # Splash page hides kicker chrome and shows a one-line input hint instead.
+        kicker_spacer = ConditionalContainer(
+            Window(height=1),
+            filter=Condition(lambda: not self._shell.is_splash()),
+        )
+        kicker = ConditionalContainer(
+            Window(FormattedTextControl(self._shell.render_kicker), height=1),
+            filter=Condition(lambda: not self._shell.is_splash()),
+        )
+        splash_hint = ConditionalContainer(
+            Window(FormattedTextControl(self._shell.render_splash_hint), height=1),
+            filter=Condition(self._shell.is_splash),
+        )
+        status_window = ConditionalContainer(
+            Window(FormattedTextControl(self._shell.render_status), height=1),
+            filter=Condition(lambda: not self._shell.is_splash()),
+        )
         root = HSplit([
             VSplit([chat_window, scrollbar]),
             kicker_spacer,
             kicker,
+            splash_hint,
             Window(height=1, char="─"),
             text_area,
             Window(height=1, char="─"),

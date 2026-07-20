@@ -30,31 +30,6 @@ class ChatHistory:
         self._entries = []
         self._touch()
 
-    def set_intro(
-        self,
-        *,
-        model_label: str,
-        has_model_menu: bool,
-        discovery_message: str = "",
-    ) -> None:
-        body = (
-            f"Model: {model_label}\n"
-            "Type a query and press Enter. Each query starts a fresh independent run."
-        )
-        if has_model_menu:
-            body += "\nType /models to open the Active Model submenu for future runs."
-        if discovery_message:
-            body += f"\n{discovery_message}"
-        self._entries = [
-            ConversationEntry(
-                role="intro",
-                title="SearcherKit Interactive Query",
-                body=body,
-                style="class:meta",
-            )
-        ]
-        self._touch()
-
     def append(
         self,
         *,

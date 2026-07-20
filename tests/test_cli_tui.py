@@ -5,11 +5,14 @@ from typing import Any
 
 from searcherkit.agent.search_agent import SearchAgentConfig
 from searcherkit.interfaces.tui.app import SearcherKitTui
+from searcherkit.interfaces.tui.app_builder import TuiApplicationBuilder
 from searcherkit.interfaces.tui.chat.conversation_entry import ConversationEntry
 from searcherkit.runtime.interactive_selection import ModelOption, apply_active_model, discover_model_options, parse_model_command
 from searcherkit.interfaces.tui.slash.slash_command import SlashCommandMenuState, TuiCommand
+from searcherkit.interfaces.tui.ui.banner import render_banner, render_splash
 from searcherkit.interfaces.tui.ui.formatting import _display_width, _formatted_lines
 from searcherkit.interfaces.tui.ui.selection_types import ChatPoint, ChatSelection
+from searcherkit.interfaces.tui.ui.splash_notice import SplashNotice, render_splash_notice
 from searcherkit.llm.base import ClientConfig
 from searcherkit.runtime.interactive import InteractiveQueryConfig
 from searcherkit.common.live_events import LiveEvent
@@ -459,6 +462,7 @@ def test_tui_streams_thinking_delta_and_respects_visibility_toggle() -> None:
     hidden_text = _render_text(app)
     assert "secret-reasoning" not in hidden_text
     assert "reasoning block(s) hidden" in hidden_text
+    assert "use Ctrl+O" in hidden_text
 
     app.view_state.show_thinking = True
     visible_text = _render_text(app)
@@ -805,7 +809,7 @@ def test_tui_tool_detail_toggles_preview_and_full_result() -> None:
     assert "├─ Doc A" in preview_text
     assert "└─ Doc B" in preview_text
     assert "line-0" not in preview_text
-    assert "use /tool-detail to expand details for 2 documents" in preview_text
+    assert "use Ctrl+O to expand details for 2 documents" in preview_text
     assert 'search "demo", 5' in preview_text
     assert "TOOL" in full_text
     assert "line-7" in full_text
@@ -882,7 +886,7 @@ def test_tui_collapses_search_results_to_document_summary() -> None:
     assert "├─ 02-rl-slime.qmd" in preview_text
     assert "├─ 03-sft.qmd" in preview_text
     assert "└─ https://example.com/doc" in preview_text
-    assert "use /tool-detail to expand details for 3 documents" in preview_text
+    assert "use Ctrl+O to expand details for 3 documents" in preview_text
     assert "guide/03-training/02-rl-slime.qmd:2:title" not in preview_text
     assert "guide/03-training/02-rl-slime.qmd:2:title" in full_text
     assert app.chat_history.entries()[0].extensions["documents"][0]["title"] == "02-rl-slime.qmd"
@@ -933,7 +937,7 @@ def test_tui_collapses_summarized_search_to_document_count() -> None:
     assert "├─ a.md" in preview_text
     assert "└─ b.md" in preview_text
     assert "Evidence in page" not in preview_text
-    assert "use /tool-detail to expand details for 2 documents" in preview_text
+    assert "use Ctrl+O to expand details for 2 documents" in preview_text
 
 
 def test_tui_collapses_visit_results_to_document_tree() -> None:
@@ -982,7 +986,7 @@ def test_tui_collapses_visit_results_to_document_tree() -> None:
     full_text = _render_text(app)
 
     assert "└─ source_files.md" in preview_text
-    assert "use /tool-detail to expand details for 1 document" in preview_text
+    assert "use Ctrl+O to expand details for 1 document" in preview_text
     assert "full document body" not in preview_text
     assert "full document body" in full_text
 
@@ -1149,6 +1153,9 @@ def test_tui_reuses_chat_layout_until_render_inputs_change(monkeypatch) -> None:
 
 def test_tui_chat_layout_cache_invalidates_when_terminal_width_changes(monkeypatch) -> None:
     app = _make_app()
+    app.chat_history._entries = [
+        ConversationEntry(role="assistant", title="Assistant", body="body", style="class:assistant")
+    ]
     render_calls = 0
     original_render_full = app.renderer.render_full
 
@@ -1349,6 +1356,79 @@ def test_tui_thinking_command_is_allowed_while_running() -> None:
     assert app.view_state.show_thinking is True
 
 
+def test_tui_ctrl_o_is_bound_in_prompt_toolkit_application() -> None:
+    app = _make_app()
+
+    pt_app = TuiApplicationBuilder(
+        shell=app,
+        input_field=app.input_field,
+        slash_menu=app.slash_menu,
+        chat_selection=app.chat_selection,
+        view_state=app.view_state,
+    ).build()
+
+    assert pt_app.key_bindings.get_bindings_for_keys(("c-o",))
+
+
+def test_tui_ctrl_o_expands_and_collapses_both_detail_surfaces() -> None:
+    app = _make_app()
+    app.chat_history._entries = [
+        ConversationEntry(role="user", title="User", body="question", style="class:user"),
+    ]
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.handle_ctrl_o(object())
+    assert app.view_state.show_thinking is True
+    assert app.view_state.show_tool_detail is True
+
+    app.handle_ctrl_o(object())
+    assert app.view_state.show_thinking is False
+    assert app.view_state.show_tool_detail is False
+
+
+def test_tui_ctrl_o_from_partial_expansion_opens_both() -> None:
+    app = _make_app()
+    app.chat_history._entries = [
+        ConversationEntry(role="user", title="User", body="question", style="class:user"),
+    ]
+    app.view_state.show_thinking = True
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.handle_ctrl_o(object())
+    assert app.view_state.show_thinking is True
+    assert app.view_state.show_tool_detail is True
+
+
+def test_tui_ctrl_o_is_noop_on_empty_startup_view() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.handle_ctrl_o(object())
+    assert app.view_state.show_thinking is False
+    assert app.view_state.show_tool_detail is False
+
+
+def test_tui_ctrl_o_is_allowed_while_running() -> None:
+    app = _make_app()
+    app.chat_history._entries = [
+        ConversationEntry(role="user", title="User", body="question", style="class:user"),
+    ]
+    app.query_controller.running = True
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.handle_ctrl_o(object())
+    assert app.view_state.show_thinking is True
+    assert app.view_state.show_tool_detail is True
+
+
 def test_tui_clear_command_rejected_while_running_and_preserves_input() -> None:
     app = _make_app()
     app.chat_history._entries = [ConversationEntry(role="assistant", title="Assistant", body="active", style="class:assistant")]
@@ -1386,13 +1466,15 @@ def test_tui_clear_command_clears_entries_when_idle(tmp_path) -> None:
 
     assert app.execute_tui_command("clear") is True
 
-    assert [entry.title for entry in app.chat_history.entries()] == ["SearcherKit Interactive Query", "Clear"]
+    assert list(app.chat_history.entries()) == []
     assert app.view_state.chat_scroll_top is None
     assert app.input_field.text() == ""
-    assert app.chat_history.entries()[-1].body == "Conversation cleared. Ready for new queries."
+    rendered = _render_text(app)
+    assert "█" in rendered
+    assert "Conversation cleared. Ready for new queries." in rendered
 
 
-def test_tui_intro_and_clear_entry_widths_follow_terminal(tmp_path) -> None:
+def test_tui_splash_widths_follow_terminal_and_clear_restores_splash(tmp_path) -> None:
     app = SearcherKitTui(config=InteractiveQueryConfig(record_dir=str(tmp_path)))
     app.query_controller.running = False
     app.view_state.show_thinking = False
@@ -1419,22 +1501,188 @@ def test_tui_intro_and_clear_entry_widths_follow_terminal(tmp_path) -> None:
 
     app.input_field.set_input_field(FakeInput())
     app._pt_app = FakeApp()
-    app._set_intro()
 
     narrow_text = _render_text(app)
-    assert len(narrow_text.splitlines()[0]) == 37
+    assert "|/o_|_" in narrow_text
+    assert "█" not in narrow_text
     assert "Records:" not in narrow_text
-    assert "  Type a query and press Enter. Each\n  query starts" in narrow_text
 
     FakeOutput.columns = 100
     wide_text = _render_text(app)
-    assert len(wide_text.splitlines()[0]) == 97
-    assert "  Type a query and press Enter. Each query starts" in wide_text
+    banner_line = next(line for line in wide_text.splitlines() if "█" in line)
+    assert banner_line.startswith(" " * 18)
+    assert "Model:" in wide_text
+    assert "Type to search, or / for commands" in "".join(
+        text for _, text in app.render_splash_hint()
+    )
 
+    app.chat_history.append_event(LiveEvent(kind="user_message", message="hello"))
+    assert "█" not in _render_text(app)
     assert app.execute_tui_command("clear") is True
     clear_text = _render_text(app)
-    assert len(clear_text.splitlines()[0]) == 97
-    assert "  Conversation cleared. Ready for new queries." in clear_text
+    assert "█" in clear_text
+    assert "Conversation cleared. Ready for new queries." in clear_text
+
+
+def test_tui_discovery_failure_is_rendered_below_banner(tmp_path) -> None:
+    app = SearcherKitTui(
+        config=InteractiveQueryConfig(record_dir=str(tmp_path)),
+        model_discovery_message="Model discovery failed for openai: endpoint unavailable.",
+    )
+
+    lines = _render_text(app).splitlines()
+
+    assert app.is_splash()
+    assert app.chat_history.entries() == ()
+    assert "Model discovery failed for openai: endpoint unavailable." in lines[13]
+    assert "╚═╝" in lines[12]
+
+
+def test_tui_selection_notice_replaces_discovery_failure(tmp_path) -> None:
+    option = ModelOption(
+        provider="openai",
+        model="llama3.2:1b",
+        base_url="http://127.0.0.1:11434/v1",
+    )
+    app = SearcherKitTui(
+        config=InteractiveQueryConfig(record_dir=str(tmp_path)),
+        model_options=[option],
+        model_discovery_message="Model discovery failed for openai: endpoint unavailable.",
+    )
+
+    assert app.execute_tui_command("models:openai/llama3.2:1b") is True
+
+    rendered = _render_text(app)
+    assert app.is_splash()
+    assert "Model:openai/llama3.2:1b" in rendered
+    assert "Active Model selected: openai/llama3.2:1b" in rendered
+    assert "Model discovery failed" not in rendered
+    assert app.chat_history.entries() == ()
+
+
+def test_tui_splash_notice_is_immediately_below_banner(tmp_path) -> None:
+    app = SearcherKitTui(
+        config=InteractiveQueryConfig(record_dir=str(tmp_path)),
+        model_discovery_message="Model discovery failed: endpoint unavailable.",
+    )
+
+    class FakeOutput:
+        columns = 100
+        rows = 30
+
+        def get_size(self):
+            class Size:
+                rows = FakeOutput.rows
+                columns = FakeOutput.columns
+
+            return Size()
+
+    class FakeApp:
+        output = FakeOutput()
+
+    app._pt_app = FakeApp()
+    viewport_lines = "".join(text for _, text in app.render_chat_viewport()).splitlines()
+    banner_top = (FakeOutput.rows - 13) // 2
+
+    assert "╚═╝" in viewport_lines[banner_top + 12]
+    notice_line = viewport_lines[banner_top + 13]
+    assert "Model discovery failed: endpoint unavailable." in notice_line
+    assert notice_line.index("Model") == (
+        FakeOutput.columns - len("Model discovery failed: endpoint unavailable.")
+    ) // 2
+    assert viewport_lines[banner_top + 14].strip() == ""
+
+
+def test_tui_query_submission_clears_splash_notice(tmp_path) -> None:
+    app = SearcherKitTui(
+        config=InteractiveQueryConfig(record_dir=str(tmp_path)),
+        model_discovery_message="Model discovery failed: endpoint unavailable.",
+    )
+    _set_test_input(app, "question")
+
+    class FakeEventApp:
+        def create_background_task(self, coroutine) -> None:
+            coroutine.close()
+
+    class FakeEvent:
+        app = FakeEventApp()
+
+    app.handle_enter(FakeEvent())
+
+    assert "Model discovery failed" not in _render_text(app)
+
+
+def test_tui_splash_notice_is_centered_and_width_bounded() -> None:
+    rendered = "".join(
+        text
+        for _, text in render_splash_notice(
+            SplashNotice("Model discovery failed"), width=40
+        )
+    )
+    line = rendered.rstrip("\n")
+
+    assert line.strip() == "Model discovery failed"
+    assert line.index("Model") == (40 - len("Model discovery failed")) // 2
+    assert _display_width(line) <= 40
+
+
+def test_tui_banner_renders_gradient_and_falls_back_to_plain_text() -> None:
+    wide = render_banner(chat_width=97)
+    styles = {style for style, _ in wide if style}
+    assert styles
+    assert all(style.startswith("#") and len(style) == 7 for style in styles)
+    assert len(styles) > 1
+
+    tiny = render_banner(chat_width=10)
+    assert "".join(text for _, text in tiny).strip() == "Searcher Kit"
+
+
+def test_tui_splash_fallback_never_exceeds_terminal_width() -> None:
+    for width in range(20, 81):
+        rendered = render_splash(
+            chat_width=width,
+            model_label="openai/model",
+            source_label="wiki(file)",
+            tool_label="search, visit, external",
+        )
+        lines = "".join(text for _, text in rendered).splitlines()
+
+        assert all(_display_width(line) <= width for line in lines)
+
+
+def test_tui_splash_status_sits_left_of_kit_and_truncates_when_wide() -> None:
+    from searcherkit.interfaces.tui.ui.banner import BANNER_ART
+
+    art_width = max(len(line) for line in BANNER_ART.splitlines())
+    rendered = render_splash(
+        chat_width=art_width,
+        model_label="demo",
+        source_label="wiki(file)",
+        tool_label="search, visit",
+    )
+    lines = "".join(text for _, text in rendered).splitlines()
+    model_line = next(line for line in lines if "Model:demo" in line)
+    source_line = next(line for line in lines if "Source:wiki(file)" in line)
+    tool_line = next(line for line in lines if "Tool:search, visit" in line)
+    assert tool_line.lstrip().startswith("│")
+    assert model_line.lstrip().startswith("│")
+    assert source_line.lstrip().startswith("│")
+    assert any(line.lstrip().startswith("╰") for line in lines)
+    assert "██" in model_line
+    assert "██" in source_line
+    assert len(model_line.rstrip()) <= art_width
+    assert len(source_line.rstrip()) <= art_width
+
+    art_lines = BANNER_ART.splitlines()
+    blank = next(i for i, line in enumerate(art_lines) if not line.strip())
+    kit_rows = art_lines[blank + 1 : blank + 7]
+    starts = [len(line) - len(line.lstrip(" ")) for line in kit_rows]
+    assert starts == [starts[0] - i for i in range(6)]
+
+    truncated = render_splash(
+        chat_width=art_width, model_label="x" * 80, source_label="y" * 80
+    )
+    assert "…" in "".join(text for _, text in truncated)
 
 
 def test_input_field_set_text_can_move_cursor_to_end() -> None:
@@ -1458,6 +1706,7 @@ def test_input_field_set_text_can_move_cursor_to_end() -> None:
 
 def test_tui_dynamic_input_height_and_fixed_slash_height_share_terminal_rows() -> None:
     app = _make_app()
+    app.chat_history.append_event(LiveEvent(kind="user_message", message="hello"))
     app.slash_menu.menu_state = SlashCommandMenuState([TuiCommand(f"cmd{i}", f"Command {i}") for i in range(10)])
 
     class FakeInput:
@@ -1569,9 +1818,11 @@ def test_tui_source_command_completes_and_executes(tmp_path) -> None:
     assert app.execute_tui_command("sources:bcp(file)") is True
 
     assert app.session_state.active_source.name == "bcp"
-    assert app.chat_history.entries()[-1].role == "meta"
-    assert app.chat_history.entries()[-1].title == "Active Source"
-    assert app.chat_history.entries()[-1].body == "bcp(file)"
+    assert app.is_splash()
+    rendered = _render_text(app)
+    assert "Source:bcp(file)" in rendered
+    assert "Active Source selected: bcp(file)" in rendered
+    assert app.chat_history.entries() == ()
     assert app.input_field.text() == ""
 
 
@@ -1710,7 +1961,7 @@ def test_tui_run_query_renders_bad_request_as_friendly_error(tmp_path, monkeypat
     assert "Error code: 400" not in app.chat_history.entries()[-1].body
 
 
-def test_tui_model_command_appends_selection_entry(tmp_path) -> None:
+def test_tui_model_command_updates_splash_without_history_entry(tmp_path) -> None:
     option = ModelOption(provider="openai", model="llama3.2:1b", base_url="http://127.0.0.1:11434/v1")
     config = InteractiveQueryConfig(record_dir=str(tmp_path))
     app = SearcherKitTui(config=config, model_options=[option])
@@ -1719,6 +1970,28 @@ def test_tui_model_command_appends_selection_entry(tmp_path) -> None:
 
     assert app.execute_tui_command("models:openai/llama3.2:1b") is True
 
+    assert app.is_splash()
+    rendered = _render_text(app)
+    assert "Model:openai/llama3.2:1b" in rendered
+    assert "Active Model selected: openai/llama3.2:1b" in rendered
+    assert app.chat_history.entries() == ()
+
+
+def test_tui_model_command_appends_selection_entry_after_query_started(tmp_path) -> None:
+    option = ModelOption(
+        provider="openai",
+        model="llama3.2:1b",
+        base_url="http://127.0.0.1:11434/v1",
+    )
+    app = SearcherKitTui(
+        config=InteractiveQueryConfig(record_dir=str(tmp_path)),
+        model_options=[option],
+    )
+    app.chat_history.append_event(LiveEvent(kind="user_message", message="hello"))
+
+    assert app.execute_tui_command("models:openai/llama3.2:1b") is True
+
+    assert not app.is_splash()
     assert app.chat_history.entries()[-1].role == "meta"
     assert app.chat_history.entries()[-1].title == "Active Model"
     assert app.chat_history.entries()[-1].body == "openai/llama3.2:1b"

@@ -11,15 +11,17 @@ from searcherkit.interfaces.tui.chat.chat_renderer import ChatRenderer
 from searcherkit.interfaces.tui.runtime.clipboard import _copy_text_to_clipboard
 from searcherkit.interfaces.tui.runtime.query_controller import QueryController
 from searcherkit.interfaces.tui.selection.active_selector import ModelSelector, SourceSelector
-from searcherkit.runtime.interactive_selection import ModelOption, active_model_label
+from searcherkit.runtime.interactive_selection import ModelOption
 from searcherkit.runtime.interactive_selection import SelectionState
 from searcherkit.interfaces.tui.slash.slash_command import SlashCommandMenuState
 from searcherkit.interfaces.tui.slash.slash_command_handler import SlashCommandHandler
 from searcherkit.interfaces.tui.slash.slash_menu import SlashMenu, SlashMenuRenderer
+from searcherkit.interfaces.tui.ui.banner import render_splash
 from searcherkit.interfaces.tui.ui.formatting import _formatted_lines
 from searcherkit.interfaces.tui.ui.input_field import InputField
 from searcherkit.interfaces.tui.ui.layout_geometry import FallbackSize, LayoutGeometry, TerminalSize
 from searcherkit.interfaces.tui.ui.selection_manager import SelectionManager, _apply_line_selection
+from searcherkit.interfaces.tui.ui.splash_notice import SplashNotice, render_splash_notice
 from searcherkit.interfaces.tui.ui.status_bar import build_status_bar
 from searcherkit.interfaces.tui.ui.view_state import TuiViewState
 from searcherkit.runtime.interactive import InteractiveQueryConfig
@@ -31,6 +33,7 @@ class _ChatLayout:
     parts: list[tuple[str, str]]
     lines: list[list[tuple[str, str]]]
     plain_lines: list[str]
+    splash_banner_height: int | None = None
 
 
 class SearcherKitTui:
@@ -53,6 +56,9 @@ class SearcherKitTui:
         self._chat_layout_cache: _ChatLayout | None = None
         self._model_options = list(model_options or [])
         self._model_discovery_message = model_discovery_message
+        self._splash_notice = (
+            SplashNotice(model_discovery_message) if model_discovery_message else None
+        )
 
         self.layout_geometry = LayoutGeometry(self._get_terminal_size)
         self.slash_menu_renderer = SlashMenuRenderer()
@@ -71,6 +77,8 @@ class SearcherKitTui:
             view_state=self.view_state,
             chat_history=self.chat_history,
             is_running=self.query_controller.is_running,
+            is_splash=self.is_splash,
+            on_splash_notice=self.set_splash_notice,
             on_exit=self.exit_app,
             on_refresh_needed=self.refresh,
         )
@@ -87,7 +95,6 @@ class SearcherKitTui:
         )
 
         self._pt_app: Any = None
-        self._set_intro()
 
     def _build_selectors(self, model_discovery_message: str) -> list[ModelSelector | SourceSelector]:
         selectors: list[ModelSelector | SourceSelector] = []
@@ -115,7 +122,6 @@ class SearcherKitTui:
             input=input,
             output=output,
         ).build()
-        self._set_intro()
         try:
             self._pt_app.run()
         finally:
@@ -155,6 +161,7 @@ class SearcherKitTui:
         ):
             self.view_state.query_history.append(query_text)
         self.view_state.history_index = None
+        self._splash_notice = None
         self._clear_input_and_menu()
         event.app.create_background_task(self.query_controller.run_query(decision.value))
 
@@ -210,6 +217,17 @@ class SearcherKitTui:
             return
         event.app.exit()
 
+    def handle_ctrl_o(self, event: Any) -> None:
+        """Toggle Assistant Reasoning and Tool Interaction detail together."""
+        if not self.chat_history.entries():
+            return
+        expanded = not (
+            self.view_state.show_thinking and self.view_state.show_tool_detail
+        )
+        self.view_state.show_thinking = expanded
+        self.view_state.show_tool_detail = expanded
+        self.refresh()
+
     def scroll_chat(self, delta: int) -> None:
         self._scroll_chat(delta)
 
@@ -229,14 +247,6 @@ class SearcherKitTui:
         self.slash_menu.close_submenu()
         self.input_field.set_text("")
 
-    def _set_intro(self) -> None:
-        self.view_state.chat_scroll_top = None
-        self.chat_history.set_intro(
-            model_label=active_model_label(self.config.agent.llm_client, self.session_state.active_model),
-            has_model_menu=bool(self._model_options),
-            discovery_message=self._model_discovery_message,
-        )
-
     # --- rendering -----------------------------------------------------------
 
     def _render_chat_full(self) -> list[tuple[str, str]]:
@@ -245,7 +255,13 @@ class SearcherKitTui:
     def _render_chat_plain_lines(self) -> list[str]:
         return self._chat_layout().plain_lines
 
+    def is_splash(self) -> bool:
+        """Startup page: empty history and no in-flight Interactive Query Run."""
+        return not self.chat_history.entries() and not self.query_controller.is_running()
+
     def _chat_layout(self) -> _ChatLayout:
+        if self.is_splash():
+            return self._splash_layout()
         chat_width = self.layout_geometry.chat_view_width()
         key = (
             self.chat_history.revision,
@@ -277,9 +293,39 @@ class SearcherKitTui:
         self._chat_layout_cache = layout
         return layout
 
+    def _splash_layout(self) -> _ChatLayout:
+        """Build the complete banner followed by an optional one-line notice."""
+        content = build_status_bar(self.config, self.session_state)
+        chat_width = self.layout_geometry.splash_view_width()
+        banner_parts = render_splash(
+            chat_width=chat_width,
+            model_label=content.model_label,
+            source_label=content.source_label,
+            tool_label=content.tool_label,
+        )
+        banner_lines = _formatted_lines(banner_parts)
+        parts = list(banner_parts)
+        if self._splash_notice is not None:
+            parts.extend(render_splash_notice(self._splash_notice, width=chat_width))
+        lines = _formatted_lines(parts)
+        return _ChatLayout(
+            key=(0, chat_width, False, False),
+            parts=parts,
+            lines=lines,
+            plain_lines=["".join(text for _, text in line) for line in lines],
+            splash_banner_height=len(banner_lines),
+        )
+
     def render_chat_viewport(self) -> list[tuple[str, str]]:
-        lines = self._chat_layout().lines
+        layout = self._chat_layout()
+        lines = layout.lines
         view_height = self.chat_view_height()
+        if self.is_splash():
+            return self._render_splash_viewport(
+                lines,
+                view_height=view_height,
+                banner_height=layout.splash_banner_height or len(lines),
+            )
         scroll_top = self._current_chat_scroll_top(
             content_lines=len(lines),
             view_height=view_height,
@@ -296,6 +342,25 @@ class SearcherKitTui:
             )
             result.append(("", "\n"))
         for _ in range(max(0, view_height - len(viewport))):
+            result.append(("", "\n"))
+        return result
+
+    def _render_splash_viewport(
+        self,
+        lines: list[list[tuple[str, str]]],
+        *,
+        view_height: int,
+        banner_height: int,
+    ) -> list[tuple[str, str]]:
+        """Center the banner and keep an optional notice directly below it."""
+        top_pad = max(0, (self.layout_geometry.terminal_rows() - banner_height) // 2)
+        top_pad = min(top_pad, max(0, view_height - 1))
+        visible = lines[: max(0, view_height - top_pad)]
+        result: list[tuple[str, str]] = [("", "\n")] * top_pad
+        for line in visible:
+            result.extend(line)
+            result.append(("", "\n"))
+        for _ in range(max(0, view_height - top_pad - len(visible))):
             result.append(("", "\n"))
         return result
 
@@ -329,6 +394,12 @@ class SearcherKitTui:
             ("class:status-label", "Records:"),
             ("class:status-records", content.record_label),
         ]
+
+    def set_splash_notice(self, text: str) -> None:
+        self._splash_notice = SplashNotice(text)
+
+    def render_splash_hint(self) -> list[tuple[str, str]]:
+        return [("class:splash-hint", " Type to search, or / for commands\n")]
 
     def render_kicker(self) -> list[tuple[str, str]]:
         """One-line live progress label, plus a hint when content hides below the viewport."""
@@ -377,6 +448,7 @@ class SearcherKitTui:
         return self.layout_geometry.input_view_height(
             self.input_field.text(),
             slash_visible=self.slash_candidates_visible(),
+            splash=self.is_splash(),
         )
 
     def slash_candidates_height(self) -> int:
@@ -386,6 +458,7 @@ class SearcherKitTui:
         return self.layout_geometry.chat_view_height(
             input_height=self.input_view_height(),
             slash_visible=self.slash_candidates_visible(),
+            splash=self.is_splash(),
         )
 
     def is_running(self) -> bool:

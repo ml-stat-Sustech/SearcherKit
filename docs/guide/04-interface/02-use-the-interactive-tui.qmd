@@ -37,6 +37,17 @@ Type `/` to open the command menu.
 | `/clear` | Clear the visible transcript |
 | `/quit` | Exit the TUI |
 
+### Shortcuts
+
+| Shortcut | Behavior |
+| --- | --- |
+| `Ctrl+O` | Expand or collapse assistant reasoning and tool detail together |
+
+`Ctrl+O` expands both surfaces when either is collapsed, and collapses both
+when both are expanded. Collapsed-state hints in the live view point at
+`Ctrl+O`. The shortcut works while a query is running and does nothing on the
+empty startup screen.
+
 Model and source changes apply only to subsequent independent runs. Commands
 that mutate session state are rejected while a query is active; cancel the
 current query first.

@@ -23,6 +23,8 @@ class SlashCommandHandler:
         view_state: TuiViewState,
         chat_history: ChatHistory,
         is_running: Callable[[], bool],
+        is_splash: Callable[[], bool],
+        on_splash_notice: Callable[[str], None],
         on_exit: Callable[[], None],
         on_refresh_needed: Callable[[], None],
     ) -> None:
@@ -32,6 +34,8 @@ class SlashCommandHandler:
         self._view_state = view_state
         self._chat_history = chat_history
         self._is_running = is_running
+        self._is_splash = is_splash
+        self._on_splash_notice = on_splash_notice
         self._on_exit = on_exit
         self._on_refresh_needed = on_refresh_needed
 
@@ -83,18 +87,9 @@ class SlashCommandHandler:
     def _clear(self) -> str | None:
         if self._is_running():
             return "Cannot clear while a query is running. Press Ctrl+C to cancel first."
-        self._chat_history.set_intro(
-            model_label=self._model_label(),
-            has_model_menu=self._has_model_menu(),
-            discovery_message=self._discovery_message(),
-        )
-        self._chat_history.append(
-            role="meta",
-            title="Clear",
-            body="Conversation cleared. Ready for new queries.",
-            style="class:meta",
-        )
+        self._chat_history.clear()
         self._view_state.chat_scroll_top = None
+        self._on_splash_notice("Conversation cleared. Ready for new queries.")
         self._on_refresh_needed()
         return None
 
@@ -111,31 +106,15 @@ class SlashCommandHandler:
                 "Press Ctrl+C to cancel first."
             )
         label = selector.apply(self._session_state, option)
-        self._chat_history.append_selection_entry(selector.display_name, label)
+        if self._is_splash():
+            self._on_splash_notice(
+                f"Active {selector.display_name} selected: {label}"
+            )
+        else:
+            self._chat_history.append_selection_entry(selector.display_name, label)
         self._view_state.chat_scroll_top = None
         self._on_refresh_needed()
         return None
-
-    def _model_label(self) -> str:
-        active_model = self._session_state.active_model
-        if active_model is not None:
-            return active_model.label
-        client = self._config.agent.llm_client
-        provider = str(client.type or "provider")
-        model = str(client.model or "model")
-        return f"{provider}/{model}"
-
-    def _has_model_menu(self) -> bool:
-        for selector in self._selectors:
-            if isinstance(selector, ModelSelector) and selector.list_items():
-                return True
-        return False
-
-    def _discovery_message(self) -> str:
-        for selector in self._selectors:
-            if isinstance(selector, ModelSelector):
-                return selector.discovery_message
-        return ""
 
 
 def _builtin_commands() -> list[TuiCommand]:

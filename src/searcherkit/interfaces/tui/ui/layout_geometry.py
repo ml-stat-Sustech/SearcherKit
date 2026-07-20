@@ -20,9 +20,12 @@ class GeometryConfig:
 
     slash_menu_height: int = 5
     # One blank spacer above the live progress line so running text is not
-    # flush against the chat viewport. Always reserved to avoid layout jumps.
+    # flush against the chat viewport. Always reserved to avoid layout jumps
+    # in conversation mode; splash mode omits the kicker entirely.
     kicker_height: int = 2
     status_bar_height: int = 1
+    # One-line splash hint above the input bar (splash page only).
+    splash_hint_height: int = 1
     input_separator_height: int = 2
     min_chat_height: int = 4
     max_input_height: int = 6
@@ -44,8 +47,15 @@ class LayoutGeometry:
     def terminal_rows(self) -> int:
         return self._safe_size().rows
 
+    def terminal_columns(self) -> int:
+        return self._safe_size().columns
+
     def chat_view_width(self) -> int:
         return max(20, self._safe_size().columns - 1)
+
+    def splash_view_width(self) -> int:
+        """Full terminal width for the splash page (no scrollbar column)."""
+        return max(20, self._safe_size().columns)
 
     def input_view_width(self) -> int:
         return max(1, self._safe_size().columns)
@@ -55,18 +65,23 @@ class LayoutGeometry:
         *,
         input_height: int,
         slash_visible: bool,
+        splash: bool = False,
     ) -> int:
         reserved = (
-            self._config.status_bar_height
-            + self._config.input_separator_height
+            self._config.input_separator_height
             + input_height
             + self._slash_height(slash_visible)
-            + self._config.kicker_height
+            + (self._config.splash_hint_height if splash else self._config.kicker_height)
+            + (0 if splash else self._config.status_bar_height)
         )
         return max(self._config.min_chat_height, self.terminal_rows() - reserved)
 
-    def input_view_height(self, text: str, *, slash_visible: bool) -> int:
-        available = self._available_dynamic_height(slash_visible=slash_visible)
+    def input_view_height(
+        self, text: str, *, slash_visible: bool, splash: bool = False
+    ) -> int:
+        available = self._available_dynamic_height(
+            slash_visible=slash_visible, splash=splash
+        )
         return min(
             max(1, self._input_visual_line_count(text)),
             self._config.max_input_height,
@@ -125,13 +140,13 @@ class LayoutGeometry:
         thumb_start = round((scroll_top / max_scroll) * (view_height - thumb_size))
         return thumb_start, thumb_size
 
-    def _available_dynamic_height(self, *, slash_visible: bool) -> int:
+    def _available_dynamic_height(self, *, slash_visible: bool, splash: bool) -> int:
         return max(
             1,
             self.terminal_rows()
-            - self._config.status_bar_height
             - self._config.input_separator_height
-            - self._config.kicker_height
+            - (self._config.splash_hint_height if splash else self._config.kicker_height)
+            - (0 if splash else self._config.status_bar_height)
             - self._slash_height(slash_visible)
             - self._config.min_chat_height,
         )

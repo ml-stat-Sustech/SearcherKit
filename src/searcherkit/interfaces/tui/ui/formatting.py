@@ -63,7 +63,7 @@ def _format_document_tree(
 
 
 def _tool_detail_documents_hint(count: int) -> str:
-    return f"use /tool-detail to expand details for {_document_count_label(count)}"
+    return f"use Ctrl+O to expand details for {_document_count_label(count)}"
 
 
 def _role_prefix(role: str) -> str:
@@ -250,6 +250,13 @@ def _tui_style() -> Any:
             "status-model": "reverse ansicyan bold",
             "status-source": "reverse ansiyellow bold",
             "status-records": "reverse ansibrightblack",
+            "splash-label": "ansibrightblack",
+            "splash-model": "ansicyan bold",
+            "splash-source": "ansiyellow bold",
+            "splash-tool": "ansigreen bold",
+            "splash-border": "ansibrightblack",
+            "splash-notice": "ansiyellow",
+            "splash-hint": "ansibrightblack",
             "slash-menu": "ansibrightblack",
             "slash-selected": "reverse",
             "running-kicker": "ansibrightblack",
