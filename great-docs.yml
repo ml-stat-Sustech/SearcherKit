@@ -14,7 +14,7 @@ display_name: "SearcherKit"
 # The docstring format used in your package (numpy, google, or sphinx)
 parser: google
 
-pypi: false
+pypi: true
 
 # Dynamic Introspection
 # ---------------------
