@@ -24,32 +24,52 @@ environment:
 #### pip
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searcherkit.git
-cd searcherkit
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -e .
+pip install searcherkit
 ```
 
 #### uv
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searcherkit.git
-cd searcherkit
 uv venv --python 3.12
 source .venv/bin/activate  # macOS/Linux
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-uv pip install -e .
+uv pip install searcherkit
 ```
 ::::
 
-SearcherKit uses [ripgrep](https://github.com/BurntSushi/ripgrep) to search through local files. Install with the [Installation Guide](https://github.com/BurntSushi/ripgrep#installation). 
+SearcherKit uses [ripgrep](https://github.com/BurntSushi/ripgrep) to search
+through local files. Install with the [Installation Guide](https://github.com/BurntSushi/ripgrep#installation).
 
-To ensure that riggrep is available, run:
+To ensure that ripgrep is available, run:
 ```bash
 rg --version
 ```
+
+### Supported file types
+
+`FileSource` searches readable text files. Typical supported names include:
+
+| Category | Examples |
+| --- | --- |
+| Code | `.py`, `.js`, `.ts`, `.java`, `.c`, `.cpp`, `.rs`, `.go`, `.rb` |
+| Web and docs | `.html`, `.css`, `.md`, `.rst`, `.adoc`, `.xml`, `.tex` |
+| Data and config | `.json`, `.jsonl`, `.yaml`, `.yml`, `.toml`, `.ini`, `.csv` |
+| Project files | `Dockerfile`, `Makefile`, `CMakeLists.txt`, `README` |
+
+The authoritative list, including the exact extension/glob mapping for the
+installed version, is available with:
+
+```bash
+rg --type-list
+```
+
+The source reads files as text with the configured encoding (`utf-8` by
+default). PDF, ZIP, images, and other binary files cannot be searched directly.
+For the complete list, run `rg --type-list` and see ripgrep's [File types
+guide](https://github.com/BurntSushi/ripgrep/blob/master/GUIDE.md#file-types).
 
 ### Configure the environment
 

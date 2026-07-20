@@ -24,23 +24,19 @@ environment:
 #### pip
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searcherkit.git
-cd searcherkit
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -e .
+pip install searcherkit
 ```
 
 #### uv
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searcherkit.git
-cd searcherkit
 uv venv --python 3.12
 source .venv/bin/activate  # macOS/Linux
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-uv pip install -e .
+uv pip install searcherkit
 ```
 ::::
 
@@ -57,7 +53,7 @@ curl http://your.elasticsearch.endpoint:port
 The default installation includes the Elasticsearch client. To build an index with SearcherKit's deployment plugins, install the indexing dependencies:
 
 ```bash
-pip install -e ".[indexing]"
+pip install "searcherkit[indexing]"
 ```
 
 An Elasticsearch source works with an existing index. SearcherKit includes

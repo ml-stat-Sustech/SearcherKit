@@ -94,7 +94,7 @@ def build_elasticsearch_client(hosts: str, *, username: str | None = None, passw
     except ImportError as exc:
         raise ImportError(
             "Elasticsearch deployment requires the 'elasticsearch' package. "
-            "Install with `uv sync --extra elasticsearch-source` or `uv sync --extra indexing`."
+            "Install with `pip install searcherkit` or `pip install 'searcherkit[indexing]'`."
         ) from exc
     if (username is None) != (password is None):
         raise ValueError("username and password must be provided together")
@@ -164,7 +164,7 @@ def load_sentence_transformer(model_name: str) -> Any:
     except ImportError as exc:
         raise ImportError(
             "Vector indexing requires the 'sentence-transformers' package. "
-            "Install with `uv sync --extra indexing`."
+            "Install with `pip install 'searcherkit[indexing]'`."
         ) from exc
 
     cuda_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
@@ -220,7 +220,7 @@ def index_documents(
     except ImportError as exc:
         raise ImportError(
             "Bulk indexing requires the 'elasticsearch' package. "
-            "Install with `uv sync --extra elasticsearch-source` or `uv sync --extra indexing`."
+            "Install with `pip install searcherkit` or `pip install 'searcherkit[indexing]'`."
         ) from exc
 
     total = 0
