@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from enum import Enum
 from typing import Any, Literal
 
+import pytest
+
 from searcherkit.common.json_schema import schema_from_signature
 
 
@@ -79,20 +81,28 @@ def test_schema_from_signature_supports_enum_types() -> None:
     }
 
 
-def test_schema_from_signature_returns_none_for_non_keyword_signatures(caplog: Any) -> None:
+def test_schema_from_signature_returns_none_for_non_keyword_signatures(
+    caplog: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def run(query: str, **kwargs: Any) -> str:
         return query
 
+    monkeypatch.setattr(logging.getLogger("searcherkit"), "propagate", True)
     caplog.set_level(logging.WARNING, logger="searcherkit.common.json_schema")
 
     assert schema_from_signature(run) is None
     assert "unsupported kind variadic keyword" in caplog.text
 
 
-def test_schema_from_signature_returns_none_when_type_hints_cannot_resolve(caplog: Any) -> None:
+def test_schema_from_signature_returns_none_when_type_hints_cannot_resolve(
+    caplog: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def run(*, item: "MissingType") -> str:  # noqa: F821
         return str(item)
 
+    monkeypatch.setattr(logging.getLogger("searcherkit"), "propagate", True)
     caplog.set_level(logging.WARNING, logger="searcherkit.common.json_schema")
 
     assert schema_from_signature(run) is None

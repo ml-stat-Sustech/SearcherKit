@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from searcherkit.runtime.interactive_selection import infer_active_source
@@ -24,6 +25,14 @@ from searcherkit.interfaces.tui.ui.view_state import TuiViewState
 from searcherkit.runtime.interactive import InteractiveQueryConfig
 
 
+@dataclass(slots=True)
+class _ChatLayout:
+    key: tuple[int, int, bool, bool]
+    parts: list[tuple[str, str]]
+    lines: list[list[tuple[str, str]]]
+    plain_lines: list[str]
+
+
 class SearcherKitTui:
     """Thin prompt-toolkit shell for the SearcherKit interactive TUI."""
 
@@ -41,6 +50,7 @@ class SearcherKitTui:
         self.view_state = TuiViewState()
         self.chat_history = ChatHistory()
         self.renderer = ChatRenderer()
+        self._chat_layout_cache: _ChatLayout | None = None
         self._model_options = list(model_options or [])
         self._model_discovery_message = model_discovery_message
 
@@ -230,19 +240,45 @@ class SearcherKitTui:
     # --- rendering -----------------------------------------------------------
 
     def _render_chat_full(self) -> list[tuple[str, str]]:
-        return self.renderer.render_full(
+        return self._chat_layout().parts
+
+    def _render_chat_plain_lines(self) -> list[str]:
+        return self._chat_layout().plain_lines
+
+    def _chat_layout(self) -> _ChatLayout:
+        chat_width = self.layout_geometry.chat_view_width()
+        key = (
+            self.chat_history.revision,
+            chat_width,
+            self.view_state.show_thinking,
+            self.view_state.show_tool_detail,
+        )
+        cached = self._chat_layout_cache
+        if cached is not None and cached.key == key:
+            return cached
+        parts = self.renderer.render_full(
             self.chat_history.entries(),
-            chat_width=self.layout_geometry.chat_view_width(),
+            chat_width=chat_width,
             show_thinking=self.view_state.show_thinking,
             show_tool_detail=self.view_state.show_tool_detail,
         )
-
-    def _render_chat_plain_lines(self) -> list[str]:
-        return self.renderer.render_plain_lines(self._render_chat_full())
+        lines = _formatted_lines(parts)
+        layout = _ChatLayout(
+            key=key,
+            parts=parts,
+            lines=lines,
+            # The streaming cursor is display-only chrome; keep it out of
+            # plain lines so mouse selection copies clean text.
+            plain_lines=[
+                "".join(text for style, text in line if style != "class:streaming-cursor")
+                for line in lines
+            ],
+        )
+        self._chat_layout_cache = layout
+        return layout
 
     def render_chat_viewport(self) -> list[tuple[str, str]]:
-        full = self._render_chat_full()
-        lines = _formatted_lines(full)
+        lines = self._chat_layout().lines
         view_height = self.chat_view_height()
         scroll_top = self._current_chat_scroll_top(
             content_lines=len(lines),
@@ -265,7 +301,7 @@ class SearcherKitTui:
 
     def render_scrollbar(self) -> list[tuple[str, str]]:
         view_height = self.chat_view_height()
-        content_lines = len(self._render_chat_plain_lines())
+        content_lines = len(self._chat_layout().lines)
         if content_lines <= view_height:
             return [("class:separator", " \n" * max(1, view_height))]
         thumb_start, thumb_size = self.layout_geometry.scrollbar_thumb(
@@ -275,10 +311,10 @@ class SearcherKitTui:
         )
         parts: list[tuple[str, str]] = []
         for index in range(view_height):
-            char = "#" if thumb_start <= index < thumb_start + thumb_size else "|"
-            parts.append(
-                ("class:scrollbar-thumb" if char == "#" else "class:scrollbar-track", f"{char}\n")
-            )
+            if thumb_start <= index < thumb_start + thumb_size:
+                parts.append(("class:scrollbar-thumb", "█\n"))
+            else:
+                parts.append(("class:scrollbar-track", "│\n"))
         return parts
 
     def render_status(self) -> list[tuple[str, str]]:
@@ -294,14 +330,39 @@ class SearcherKitTui:
             ("class:status-records", content.record_label),
         ]
 
-    def render_running_kicker(self) -> list[tuple[str, str]]:
-        return [("class:running-kicker", f" {self._spinner_marker()} searching...\n")]
+    def render_kicker(self) -> list[tuple[str, str]]:
+        """One-line live progress label, plus a hint when content hides below the viewport."""
+        parts: list[tuple[str, str]] = []
+        if self.query_controller.is_running():
+            parts.append(
+                ("class:running-kicker", f" {self._spinner_marker()} searching...")
+            )
+        below = self._lines_below_viewport()
+        if below:
+            if parts:
+                parts.append(("class:running-kicker", " · "))
+            parts.append(("class:new-below", f"↓ {below} more (PgDn to bottom)"))
+        if not parts:
+            return [("class:running-kicker", "")]
+        parts.append(("class:running-kicker", "\n"))
+        return parts
+
+    def _lines_below_viewport(self) -> int:
+        if self.view_state.chat_scroll_top is None:
+            return 0
+        lines = self._chat_layout().lines
+        view_height = self.chat_view_height()
+        scroll_top = self._current_chat_scroll_top(
+            content_lines=len(lines),
+            view_height=view_height,
+        )
+        return max(0, len(lines) - scroll_top - view_height)
 
     def render_slash_candidates(self) -> list[tuple[str, str]]:
         return self.slash_menu_renderer.render(self.slash_menu.menu_state)
 
     def _spinner_marker(self) -> str:
-        frames = ("[|]", "[/]", "[-]", "[\\]")
+        frames = ("|", "/", "-", "\\")
         return frames[self.view_state.spinner_frame % len(frames)]
 
     def copy_chat_selection_to_clipboard(self) -> None:
@@ -316,7 +377,6 @@ class SearcherKitTui:
         return self.layout_geometry.input_view_height(
             self.input_field.text(),
             slash_visible=self.slash_candidates_visible(),
-            running=self.query_controller.is_running(),
         )
 
     def slash_candidates_height(self) -> int:
@@ -326,7 +386,6 @@ class SearcherKitTui:
         return self.layout_geometry.chat_view_height(
             input_height=self.input_view_height(),
             slash_visible=self.slash_candidates_visible(),
-            running=self.query_controller.is_running(),
         )
 
     def is_running(self) -> bool:
@@ -343,7 +402,7 @@ class SearcherKitTui:
         )
 
     def _scroll_chat(self, delta: int) -> None:
-        lines = self._render_chat_plain_lines()
+        lines = self._chat_layout().lines
         view_height = self.chat_view_height()
         content_lines = len(lines)
         self.view_state.chat_scroll_top = self.layout_geometry.next_scroll_top(

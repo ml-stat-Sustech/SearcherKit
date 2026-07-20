@@ -9,7 +9,7 @@ from typing import Any
 
 from omegaconf import OmegaConf
 
-from searcherkit.cli.config import ConfigError
+from searcherkit.common.config import ConfigError
 
 
 @dataclass

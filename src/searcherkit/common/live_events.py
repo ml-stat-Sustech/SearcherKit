@@ -55,6 +55,8 @@ class RunEventRecorder:
         self.events: list[dict[str, Any]] = []
 
     async def __call__(self, event: LiveEvent) -> None:
+        if event.kind == "assistant_delta":
+            return
         self.events.append(_event_payload(event))
 
 

@@ -8,8 +8,6 @@ from searcherkit.common.config import import_from_path
 
 from .base import BaseTool, ToolConfig
 from .mcp import MCPTool
-from .multi_source_search import MultiSourceSearchTool
-from .multi_source_visit import MultiSourceVisitTool
 from .search import SearchTool
 from .visit import VisitTool
 
@@ -36,8 +34,6 @@ def register_tool(name: str, entry: _RegistryEntry) -> _RegistryEntry:
 # Built-ins
 register_tool("search", SearchTool)
 register_tool("visit", VisitTool)
-register_tool("multi_source_search", MultiSourceSearchTool)
-register_tool("multi_source_visit", MultiSourceVisitTool)
 register_tool("mcp", MCPTool)
 
 # ---------------------------------------------------------------------------

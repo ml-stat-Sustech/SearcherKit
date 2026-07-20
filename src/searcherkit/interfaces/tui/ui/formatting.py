@@ -3,9 +3,17 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from searcherkit.runtime.trace import preview_query
+
+try:
+    from prompt_toolkit.utils import get_cwidth as _get_cwidth
+except ImportError:
+    _get_cwidth = None
+
+_prompt_toolkit_cwidth: Callable[[str], int] | None = _get_cwidth
 
 
 def _format_json_compact(value: Any, *, max_chars: int) -> str:
@@ -13,15 +21,49 @@ def _format_json_compact(value: Any, *, max_chars: int) -> str:
     return preview_query(text, max_chars)
 
 
-def _collapse_text(value: str, *, max_lines: int, max_chars: int) -> tuple[str, bool]:
-    lines = value.splitlines()
-    overflow = len(lines) > max_lines or len(value) > max_chars
-    if not overflow:
-        return value, False
-    preview = "\n".join(lines[:max_lines])
-    if len(preview) > max_chars:
-        preview = preview[: max(0, max_chars - 1)]
-    return f"{preview}\n...", True
+def _document_count_label(count: int) -> str:
+    unit = "document" if count == 1 else "documents"
+    return f"{count} {unit}"
+
+
+def _document_display_name(document: Mapping[str, Any]) -> str:
+    title = document.get("title")
+    if isinstance(title, str) and title.strip():
+        return title
+    document_id = document.get("id")
+    if document_id is not None and str(document_id).strip():
+        return str(document_id)
+    return "(untitled)"
+
+
+def _format_document_tree(
+    extensions: dict[str, Any] | None,
+) -> tuple[str, int] | None:
+    """Format collapsed search/visit hits as a tree under the tool call line.
+
+    Returns ``(tree_text, document_count)``, or ``None`` when structured
+    documents are unavailable.
+    """
+    if not isinstance(extensions, dict):
+        return None
+    raw_documents = extensions.get("documents")
+    if not isinstance(raw_documents, list) or not raw_documents:
+        return None
+
+    documents = [item for item in raw_documents if isinstance(item, Mapping)]
+    if not documents:
+        return None
+
+    lines: list[str] = []
+    last_index = len(documents) - 1
+    for index, document in enumerate(documents):
+        branch = "└─ " if index == last_index else "├─ "
+        lines.append(f"{branch}{_document_display_name(document)}")
+    return "\n".join(lines), len(documents)
+
+
+def _tool_detail_documents_hint(count: int) -> str:
+    return f"use /tool-detail to expand details for {_document_count_label(count)}"
 
 
 def _role_prefix(role: str) -> str:
@@ -83,16 +125,16 @@ def _extract_final_answer_body(text: str) -> str:
 
 
 def _char_display_width(char: str) -> int:
-    try:
-        from prompt_toolkit.utils import get_cwidth
-    except ImportError:
-        if unicodedata.combining(char):
-            return 0
-        return 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
-    return max(0, get_cwidth(char))
+    if _prompt_toolkit_cwidth is not None:
+        return max(0, _prompt_toolkit_cwidth(char))
+    if unicodedata.combining(char):
+        return 0
+    return 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
 
 
 def _display_width(text: str) -> int:
+    if _prompt_toolkit_cwidth is not None:
+        return max(0, _prompt_toolkit_cwidth(text))
     return sum(_char_display_width(char) for char in text)
 
 
@@ -202,7 +244,7 @@ def _tui_style() -> Any:
             "selected": "reverse",
             "separator": "ansibrightblack",
             "scrollbar-track": "ansibrightblack",
-            "scrollbar-thumb": "reverse",
+            "scrollbar-thumb": "ansicyan",
             "status": "reverse",
             "status-label": "reverse bold",
             "status-model": "reverse ansicyan bold",
@@ -211,6 +253,8 @@ def _tui_style() -> Any:
             "slash-menu": "ansibrightblack",
             "slash-selected": "reverse",
             "running-kicker": "ansibrightblack",
+            "new-below": "ansiyellow",
+            "streaming-cursor": "ansicyan",
             "meta": "ansibrightblack",
             "turn": "ansibrightblack",
             "user-shadow": "bg:#102a38",

@@ -29,6 +29,18 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
 DOC_ID = "source_files.md"
 
 
+def _expected_visit_extensions() -> dict[str, object]:
+    return {
+        "documents": [
+            {
+                "id": DOC_ID,
+                "title": DOC_ID,
+                "url": None,
+            }
+        ],
+    }
+
+
 def _summary_response(*, evidence: str, summary: str) -> httpx.Response:
     return httpx.Response(
         200,
@@ -184,13 +196,14 @@ def _config_tool(
 def test_run(tool_factory: ToolFactory) -> None:
     async def run() -> None:
         tool = tool_factory(test_name="run")
+        assert "source" not in tool.inputSchema["properties"]
 
         result = await tool.run(document_id=DOC_ID, goal="confirm runtime wiring")
         content, extensions = result
 
         assert f"[{DOC_ID}](None)" in content
         assert "pluggable runtime for source-backed tools" in content
-        assert extensions == {}
+        assert extensions == _expected_visit_extensions()
 
     asyncio.run(run())
 
@@ -206,7 +219,7 @@ def test_missing_document_returns_error_message(
             document_id="missing", goal="confirm runtime wiring"
         )
 
-        assert content == "file document not found: 'missing'"
+        assert content == "[Tool] file document not found: 'missing'"
         assert extensions == {}
 
     asyncio.run(run())
@@ -234,7 +247,7 @@ def test_summary(tool_factory: ToolFactory) -> None:
             "Summary:\n"
             f"{SUMMARY_TEXT}"
         )
-        assert extensions == {}
+        assert extensions == _expected_visit_extensions()
 
     asyncio.run(run())
 
@@ -256,7 +269,7 @@ def test_summary_retry_success(tool_factory: ToolFactory) -> None:
         content, extensions = result
         assert "after retry" in content
         assert "ok" in content
-        assert extensions == {}
+        assert extensions == _expected_visit_extensions()
 
     asyncio.run(run())
 

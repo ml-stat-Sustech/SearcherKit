@@ -4,24 +4,46 @@ title: Use the CLI Interface
 
 The SearcherKit command-line interface is used to run configurations, evaluate outputs, inspect configurations, and manage plugins.
 
-### `searcher run`
+| Command | Purpose |
+| --- | --- |
+| `searcher run` | Run an agent from a configuration |
+| `searcher evaluate` | Score saved runs with an LLM judge |
+| `searcher inspect` | Validate a composed configuration without running the agent |
+| `searcher tui` | Run an interactive query in the terminal UI |
+| `searcher plugins list` | List installed plugins |
+| `searcher plugins deploy` | Deploy plugin data to Elasticsearch |
+| `searcher plugins convert` | Convert plugin or training datasets |
+
+### Resolving `--config-path`
+
+`run`, `inspect`, and `tui` accept a path or a packaged configuration name.
+SearcherKit first checks the path relative to the current directory, then an
+absolute path, and finally the packaged configuration directory. A missing
+`.yaml` suffix is tried automatically. Once loaded, Hydra-style overrides are
+applied last:
+
+```bash
+searcher inspect --config-path searchagent agent.llm_client.model=demo
+```
+
+### searcher run {#cli-run}
 
 Run a SearcherKit configuration.
 
 ```bash
-searcher run
-searcher run --config-path webexplorer
+searcher run --config-path searchagent
 ```
 
-Additional arguments are passed as Hydra-style overrides:
+Arguments:
 
-```bash
-searcher run \
-  --config-path webexplorer \
-  agent.llm_client.model=demo
-```
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--config-path PATH` | `None` (uses `config.yaml`) | Configuration file path or packaged configuration name. |
+| `--debug` | `false` | Set the log level to `DEBUG`. |
 
-### `searcher evaluate`
+See [Batch Run and Evaluate](../01-searching/04-batch-run-and-evaluate.qmd) for a complete batch workflow.
+
+### searcher evaluate {#cli-evaluate}
 
 Evaluate saved run records using an LLM judge.
 
@@ -32,7 +54,16 @@ searcher evaluate outputs/webexplorer outputs/webexplorer_eval \
 
 The evaluation process uses the `OPENAI_BASE_URL` and `OPENAI_API_KEY` environment variables.
 
-### `searcher inspect`
+Arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `input_dir` | Required | Directory containing run record JSON files. |
+| `output_dir` | Required | Directory in which to write evaluation result JSON files. |
+| `--max-concurrency N` | `None` (runtime default) | Maximum number of records to evaluate concurrently. |
+| `--answer-pattern REGEX` | Built-in answer regex | Regex used to extract the final answer before evaluation. It must contain a named capture group, `(?P<answer>...)`. |
+
+### `searcher inspect` {#cli-inspect}
 
 Recursively validate configuration fields against their corresponding structured config types without running the agent.
 
@@ -41,9 +72,15 @@ searcher inspect \
   --config-path webexplorer
 ```
 
+Arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--config-path PATH` | `None` (uses `config.yaml`) | Configuration file path or packaged configuration name. |
+
 - Raise **ERROR** when unexpected field in config (not in target dataclass) or required field missing (no default value in target dataclass)
 
-Hydra-style overrides are also supported:
+Hydra-style overrides are also supported, the error would be raised when overriden config is invalid:
 
 ```bash
 searcher inspect \
@@ -51,13 +88,55 @@ searcher inspect \
   agent.llm_client.model=demo
 ```
 
-### `searcher plugins`
+### searcher plugins {#cli-plugins}
+
+#### searcher plugins list {#cli-plugins-list}
 
 List plugins or run plugin deployment tools.
 
 ```bash
 searcher plugins list
 ```
+
+Arguments: none.
+
+#### searcher plugins deploy local-wiki / browsecomp-plus {#cli-plugins-deploy}
+
+See [Build the Index](../01-searching/03-search-with-elasticsearch.qmd#build-index) for the full indexing workflow.
+
+Common arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--es_host URL` | Required | Elasticsearch URL. |
+| `--es_username TEXT` | `None` | Elasticsearch username. Must be provided together with the password. |
+| `--es_password TEXT` | `None` | Elasticsearch password. Must be provided together with the username. |
+| `--index_name TEXT` | Required | Elasticsearch index name. |
+| `--model_name TEXT` | `""` | SentenceTransformer model name or path. Required with `--dense-vector`. |
+| `--embedding_dim N` | `0` | Dense-vector dimension. |
+| `--prompt_strategy {none,e5,qwen3}` | `none` | Embedding prompt strategy. |
+| `--batch_size N` (alias `--cpu_batch_size`) | `200` | CPU document batch size. |
+| `--embedding_batch_size N` (alias `--gpu_batch_size`) | `16` | Embedding batch size. |
+| `--max_text_chars N` | `32768` | Maximum number of text characters per document. |
+| `--limit N` | `None` | Maximum number of documents to process. |
+| `--shards N` | `1` | Number of Elasticsearch shards. |
+| `--replicas N` | `0` | Number of Elasticsearch replicas. |
+| `--overwrite` | `false` | Replace an existing index. |
+| `--dense-vector` | `false` | Enable dense-vector indexing. |
+
+`browsecomp-plus` arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--dataset_path PATH` | Required | Hugging Face dataset name or local JSON, JSONL, or Parquet path. |
+| `--split TEXT` | `train` | Dataset split. |
+
+`local-wiki` arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--wiki_dump_path PATH` | Required | Path to a MediaWiki XML or XML.bz2 dump. |
+| `--base_url URL` | `https://en.wikipedia.org/wiki/` | Base URL used to construct Wiki page links. |
 
 Deploy a local Wiki index:
 
@@ -69,15 +148,39 @@ searcher plugins deploy local-wiki \
   --overwrite
 ```
 
-Deploy BrowseComp Plus:
-
-```bash
-searcher plugins deploy browsecomp-plus \
-  --dataset_path data/browsecomp_plus_corpus.jsonl \
-  --es_host http://127.0.0.1:9200 \
-  --index_name browsecomp_plus \
-  --overwrite
-```
-
 Add `--dense-vector --model_name Qwen3-Embedding-0.6B --embedding_dim 1024`
 to enable dense-vector indexing.
+
+#### searcher plugins convert{#cli-plugins-convert}
+
+Run the dataset conversion command provided by the plugin. Remaining arguments are forwarded to the conversion tool:
+
+```bash
+searcher plugins convert --help
+```
+
+Arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `input_path` | Required | Input OpenSeeker JSONL dataset path. |
+| `output_path` | Required | Output MS-Swift JSONL dataset path. |
+| `--max-records N` | `0` (unlimited) | Maximum number of records to convert. |
+
+### searcher tui`{#cli-tui}
+
+Run queries in the terminal UI. See [Use the Interactive TUI](02-use-the-interactive-tui.qmd) for the complete workflow.
+
+```bash
+searcher tui --config-path configs/demo/config.yaml
+```
+
+Arguments:
+
+| Argument | Default | Purpose |
+| --- | --- | --- |
+| `--config-path PATH` | `None` (uses `config.yaml`) | Configuration file path or packaged configuration name. |
+| `--debug` | `false` | Set the log level to `DEBUG`. |
+| `--env-file PATH` | `.env` | Dotenv file from which to load LLM environment variables. |
+| `--query TEXT` | `None` | Run one query non-interactively. |
+| `--interactive-output-path PATH` | `None` | Directory for interactive run records. |

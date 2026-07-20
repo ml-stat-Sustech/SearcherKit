@@ -4,7 +4,7 @@ SearcherKit is a modular system for building AI agents that rely heavily on sear
 
 
 
-![SearcherKit](docs/images/searcherkit_1.png){width=80% fig-align="center"}
+![SearcherKit](docs/images/searcherkit_1.png)
 
 
 ## What it does
@@ -49,7 +49,7 @@ If SearcherKit helps your research or simplifies your agent stack, please give u
 
 ### 👤 The Team
 
-SearcherKit is built and maintained by the group of Assistant Professor [Wei Hongxin](https://hongxin001.github.io/) and Professor [Jing Bingyi](https://hongxin001.github.io/) in SUSTech and CUHK-SZ.  
+SearcherKit is built and maintained by the group of Assistant Professor [Wei Hongxin](https://hongxin001.github.io/) and Professor [Jing Bingyi](https://sai.cuhk.edu.cn/en/teacher/162) in SUSTech and CUHK-SZ.  
 Core maintainers: [Li Hanyang](https://justinliii.github.io/), Zhang Haotian, Yang Hanjie, Wang Shuoyuan, Lan Zijie, and Yu Zhengye.
 
 ### 📜 License

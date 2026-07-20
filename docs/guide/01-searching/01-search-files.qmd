@@ -90,7 +90,7 @@ $env:FILE_SEARCH_ROOT = ".\docs"
 To keep the configuration across terminal sessions, create a `.env` file in
 the directory where you run SearcherKit:
 
-```dotenv
+```bash
 LLM_MODEL=YOUR_MODEL
 LLM_API_KEY=YOUR_API_KEY
 LLM_BASE_URL=https://your-endpoint.example/v1
@@ -112,10 +112,9 @@ The source searches exact text fragments with smart case. Search results use
 paths relative to `FILE_SEARCH_ROOT`; the visit tool reads those relative paths.
 Paths outside the configured root are rejected.
 
-Use `/tool-detail` to inspect tool arguments and results. Interactive records,
-the global log, and trace logs are written under
+Type `/` in the TUI to view available commands. Use `/tool-detail` to inspect tool arguments and results. For general controls and record behavior, see [Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
+
+Interactive records, the global log, and trace logs are written under
 `outputs/file-search-tui/interactive`.
 
-For general controls and record behavior, see
-[Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd). For the complete
-source/tool model, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).
+For the complete source/tool guidance, see [Sources and Tools](../03-customizing/03-sources-and-tools.qmd).

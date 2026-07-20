@@ -64,15 +64,7 @@ agent:
       embedding_max_concurrency: 256
 ```
 
-Check whether the embedding server applies query prompts automatically. Apply
-`embedding_prefix` exactly once, and use the same embedding model and vector
-dimension that were used to build the index.
-
-Highlighting builds compact snippets from matching fragments. Tune fragment
-size, fragment count, and `snippet_chars` against the context budget rather
-than returning entire documents from search.
-
-### Model-visible tool contract
+### Agent tools
 
 The tool name, description, and `inputSchema` are visible to the model. The
 schema should expose only arguments the model can use correctly.
@@ -98,16 +90,90 @@ agent:
 ```
 
 `argument_mapping` translates model-visible names to implementation arguments.
-When validation errors are not raised, the tool returns an actionable schema
-error to the model so it can correct the call.
+
+Set `raise_argument_validation_error: true` for training or RL workflows when
+the upstream RL engine should receive an exception and penalize invalid calls. For
+runs / evaluation, `false` would return the validation as a tool result to guide the agent to correct its request.
 
 ### Built-in tools
 
-SearcherKit registers `search`, `visit`, `multi_source_search`,
-`multi_source_visit`, and `mcp`. MCP tools share the same initialization,
-validation, concurrency, and shutdown lifecycle as native tools.
+SearcherKit registers `search`, `visit`, and `mcp`.
 
-Large search or visit results can be passed through a summarizer model:
+#### `search`: retrieve candidate documents
+
+`search` runs retrieval against a configured source. Its usual arguments are
+`query` and `top_k`; `query` may also be a list, in which case queries are run
+concurrently. Results contain titles, identifiers, links, and snippets. The
+result metadata can include `searched_ids`, which is useful for recall analysis.
+
+```yaml
+agent:
+  tools:
+    - type: search
+      name: search_docs
+      source: [project_docs]
+      response_char_limit: 20000
+      inputSchema:
+        type: object
+        properties:
+          query: {type: string, description: A focused search query.}
+          top_k: {type: integer, minimum: 1}
+        required: [query]
+        additionalProperties: false
+```
+
+#### `visit`: fetch complete documents
+
+`visit` fetches a document by `document_id` after `search` has identified a
+candidate. `document_id` may be a list for concurrent fetches, and `goal` can be
+passed to a configured summarizer.
+
+```yaml
+agent:
+  tools:
+    - type: visit
+      name: visit_doc
+      source: [project_docs]
+      inputSchema:
+        type: object
+        properties:
+          document_id: {type: string}
+          goal: {type: string}
+        required: [document_id]
+        additionalProperties: false
+```
+
+#### `mcp`: call a remote tool
+
+`mcp` adapts one remote MCP tool. `streamable-http` and `sse` transports are
+supported. If `inputSchema` is omitted, it is discovered from the MCP server.
+
+```yaml
+agent:
+  tools:
+    - type: mcp
+      name: remote_search
+      endpoint: https://mcp.example.com/mcp
+      transport: streamable-http
+      mcp_tool_name: search
+      auth_header: "Bearer ${MCP_TOKEN}"
+      max_concurrency: 16
+```
+
+`search` and `visit` support `response_char_limit`. Results above the limit are
+hard-truncated and marked `[Truncated]`; truncation is not summarization.
+
+### Summerizer
+
+Large search or visit results can be passed through a summarizer model so the agent could get the key information, and save context window. Summerizer requires an Openai Competable API, which requires the model to return:
+
+```json
+{"evidence": "Evidence realted to goal", "summary": "Concise summary"}
+```
+
+The result would be formatted and return as tool result string. Original tool extention field would be left unchanged.
+
+Full config example:
 
 ```yaml
 agent:
@@ -128,6 +194,12 @@ agent:
           max_tries: 3
 ```
 
-Summarization reduces context growth but adds latency, cost, and another failure
-boundary. Use it when documents are substantially larger than the evidence the
-agent needs.
+`max_chars` limits the length of the raw content sent to the summarizer model;
+it affects only the summarization request and does not change the tool's own
+`response_char_limit`. `max_concurrency` uses a semaphore to limit the number
+of summarization requests running at the same time. `default_kwargs` are merged
+unchanged into the chat-completion request, for example `temperature` or
+`max_tokens`. `summary_goal_key` specifies which tool argument supplies the
+summarization goal: `search` usually uses `query`, while `visit` usually uses
+`goal`. When `argument_mapping` is configured, use the mapped implementation
+parameter name.

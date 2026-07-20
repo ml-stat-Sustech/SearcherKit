@@ -6,7 +6,7 @@ from typing import Sequence
 
 from omegaconf import OmegaConf
 
-from searcherkit.cli.config import compose_config
+from searcherkit.common.config import compose_config
 from searcherkit.common.log import setup_logger
 from searcherkit.runtime.runner import AgentRunner, RunConfig
 

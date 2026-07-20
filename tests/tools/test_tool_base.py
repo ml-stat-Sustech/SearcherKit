@@ -20,6 +20,20 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "files"
 DOC_ID = "source_files.md"
 
 
+def _expected_search_extensions(query: str = "source-backed-tools") -> dict[str, object]:
+    return {
+        "searched_ids": [DOC_ID],
+        "documents": [
+            {
+                "id": DOC_ID,
+                "title": DOC_ID,
+                "url": None,
+                "query": query,
+            }
+        ],
+    }
+
+
 def _custom_search_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -99,7 +113,7 @@ def test_tool_argument_mapping(tool_factory: ToolFactory) -> None:
         content, extensions = result
 
         assert DOC_ID in content
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 
@@ -109,7 +123,12 @@ def test_argument_mapping_translates_default_input_schema(tool_factory: ToolFact
     async def run() -> None:
         tool = tool_factory(test_name="default-schema-argument-mapping")
 
-        assert tool.inputSchema["properties"]["q"]["type"] == "string"
+        assert tool.inputSchema["properties"]["q"] == {
+            "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "string"},
+            ]
+        }
         assert "query" not in tool.inputSchema["properties"]
         assert tool.inputSchema["properties"]["top_k"]["type"] == "integer"
         assert tool.inputSchema["required"] == ["q"]
@@ -118,7 +137,7 @@ def test_argument_mapping_translates_default_input_schema(tool_factory: ToolFact
         content, extensions = result
 
         assert DOC_ID in content
-        assert extensions == {"searched_ids": [DOC_ID]}
+        assert extensions == _expected_search_extensions()
 
     asyncio.run(run())
 
@@ -131,7 +150,12 @@ def test_input_schema_is_derived_from_run_signature() -> None:
 
     assert tool.description == "Search the configured data source."
     assert tool.inputSchema is not None
-    assert tool.inputSchema["properties"]["query"]["type"] == "string"
+    assert tool.inputSchema["properties"]["query"] == {
+        "anyOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"type": "string"},
+        ]
+    }
     assert tool.inputSchema["properties"]["top_k"]["type"] == "integer"
     assert tool.inputSchema["required"] == ["query"]
     assert tool.inputSchema["additionalProperties"] is False

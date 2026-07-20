@@ -24,7 +24,7 @@ See `scripts/sft/sft_convert.sh` for conversion setting references.
 
 ### Configure MS-Swift
 
-Edit `scripts/sft/sft_training.yaml`. Put semantic training choices in YAML:
+Edit `scripts/sft/sft_training.yaml`. Put training choices in YAML:
 
 - model and chat or agent template;
 - loss scale and full or adapter training mode;
@@ -57,4 +57,4 @@ bash scripts/sft/sft_train.sh
 
 The wrapper prepares repository paths and CUDA library locations before calling
 `python -m searcherkit.training.sft`. Treat its host-specific defaults as
-overridable deployment settings, not portable model configuration.
+overridable deployment settings, not realiable model configuration.

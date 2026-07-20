@@ -5,7 +5,8 @@ from collections.abc import Sequence
 from searcherkit.interfaces.tui.chat.conversation_entry import ConversationEntry
 from searcherkit.interfaces.tui.ui.formatting import (
     _body_style,
-    _collapse_text,
+    _format_document_tree,
+    _tool_detail_documents_hint,
     _display_width,
     _format_json_compact,
     _indent_multiline,
@@ -14,6 +15,8 @@ from searcherkit.interfaces.tui.ui.formatting import (
     _formatted_lines,
 )
 from searcherkit.runtime.trace import preview_query
+
+STREAMING_CURSOR = "▌"
 
 
 class ChatRenderer:
@@ -37,6 +40,7 @@ class ChatRenderer:
                 not entry.body.strip()
                 and not reasoning.strip()
                 and entry.role in {"assistant", "thinking"}
+                and not (entry.title == "FINAL ANSWER" and entry.status == "streaming")
             ):
                 continue
             self._append_entry_parts(
@@ -89,6 +93,10 @@ class ChatRenderer:
                 chat_width=chat_width,
             )
             return
+        if entry.role == "assistant":
+            # Intermediate assistant message: body only, no rule divider.
+            self._append_assistant_body_parts(parts, entry, chat_width=chat_width)
+            return
         title = self._entry_title(entry)
         if entry.role != "thinking":
             parts.append((entry.style or "class:meta", f"{self._rule_title(title, chat_width=chat_width)}\n"))
@@ -100,6 +108,8 @@ class ChatRenderer:
                 indent=thinking_indent,
             )
             parts.append(("class:reasoning-body", wrapped_thinking))
+            if entry.role == "thinking" and entry.status == "running":
+                parts.append(("class:streaming-cursor", STREAMING_CURSOR))
             if not wrapped_thinking.endswith("\n"):
                 parts.append(("class:reasoning-body", "\n"))
         if entry.body:
@@ -113,6 +123,29 @@ class ChatRenderer:
             parts.append((body_style, wrapped))
             if not wrapped.endswith("\n"):
                 parts.append((body_style, "\n"))
+        parts.append(("", "\n"))
+
+    def _append_assistant_body_parts(
+        self,
+        parts: list[tuple[str, str]],
+        entry: ConversationEntry,
+        *,
+        chat_width: int,
+    ) -> None:
+        """Render intermediate assistant content without a rule divider."""
+        if not entry.body:
+            return
+        body_indent = "  "
+        wrapped = _indent_multiline(
+            entry.body,
+            width=self._body_wrap_width(chat_width=chat_width, indent=body_indent),
+            indent=body_indent,
+        )
+        parts.append(("class:assistant-body", wrapped))
+        if entry.status == "streaming":
+            parts.append(("class:streaming-cursor", STREAMING_CURSOR))
+        if not wrapped.endswith("\n"):
+            parts.append(("class:assistant-body", "\n"))
         parts.append(("", "\n"))
 
     def _append_shaded_entry_parts(
@@ -188,27 +221,38 @@ class ChatRenderer:
         self._append_tool_call_block_text(parts, wrapped_call, tool_name=entry.title or "tool", chat_width=chat_width)
 
         if entry.result:
-            parts.append(("class:tool-shadow", f"{self._block_shadow_line(chat_width=chat_width)}\n"))
-            if show_tool_detail:
-                result_text = entry.result
-                overflow = False
-            else:
-                result_text, overflow = _collapse_text(entry.result, max_lines=6, max_chars=2000)
-            body_style = "class:tool-error-body" if entry.status == "failed" else "class:tool-result-body"
-            result_indent = "  "
-            wrapped = _indent_multiline(
-                result_text,
-                width=self._body_wrap_width(chat_width=chat_width, indent=result_indent),
-                indent=result_indent,
-            )
-            self._append_block_text(parts, body_style, wrapped, chat_width=chat_width)
-            if overflow:
+            document_tree = None if show_tool_detail else _format_document_tree(entry.extensions)
+            if document_tree is not None:
+                tree_text, document_count = document_tree
+                tree_indent = "  "
+                wrapped_tree = _indent_multiline(
+                    tree_text,
+                    width=self._body_wrap_width(chat_width=chat_width, indent=tree_indent),
+                    indent=tree_indent,
+                )
+                body_style = (
+                    "class:tool-error-body" if entry.status == "failed" else "class:tool-result-body"
+                )
+                self._append_block_text(parts, body_style, wrapped_tree, chat_width=chat_width)
                 self._append_block_text(
                     parts,
                     "class:tool-muted",
-                    "  ... truncated; use /tool-detail to show full tool details",
+                    f"  {_tool_detail_documents_hint(document_count)}",
                     chat_width=chat_width,
                 )
+            else:
+                parts.append(("class:tool-shadow", f"{self._block_shadow_line(chat_width=chat_width)}\n"))
+                result_text = entry.result
+                body_style = (
+                    "class:tool-error-body" if entry.status == "failed" else "class:tool-result-body"
+                )
+                result_indent = "  "
+                wrapped = _indent_multiline(
+                    result_text,
+                    width=self._body_wrap_width(chat_width=chat_width, indent=result_indent),
+                    indent=result_indent,
+                )
+                self._append_block_text(parts, body_style, wrapped, chat_width=chat_width)
         parts.append(("class:tool-shadow", f"{self._block_shadow_line(chat_width=chat_width)}\n"))
         parts.append(("", "\n"))
 

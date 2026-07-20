@@ -82,7 +82,7 @@ def test_tui_hides_thinking_content_without_truncating_transcript() -> None:
     assert "Tool result: search" in text
 
 
-def test_tui_shows_thinking_by_default() -> None:
+def test_tui_hides_thinking_by_default() -> None:
     app = _make_app()
     app.chat_history._entries = [
         ConversationEntry(
@@ -96,16 +96,22 @@ def test_tui_shows_thinking_by_default() -> None:
 
     text = _render_text(app)
 
-    assert "default visible thinking" in text
+    assert "default visible thinking" not in text
 
 
 def test_tui_can_show_thinking_when_toggled() -> None:
     app = _make_app()
     app.chat_history._entries = [
         ConversationEntry(
-            role="assistant",
-            title="Assistant",
+            role="thinking",
+            title="thinking completed",
             thinking="visible thinking",
+            style="class:thinking",
+            status="completed",
+        ),
+        ConversationEntry(
+            role="assistant",
+            title="ASSISTANT",
             body="visible answer",
             style="class:assistant",
         ),
@@ -116,6 +122,7 @@ def test_tui_can_show_thinking_when_toggled() -> None:
 
     assert "visible thinking" in text
     assert "visible answer" in text
+    assert "──" not in text
 
 
 def test_tui_body_wrap_width_follows_terminal_width() -> None:
@@ -391,6 +398,49 @@ def test_tui_streams_assistant_delta_and_finalizes_existing_entry() -> None:
     assert "hello world" in finalized_text
 
 
+def test_tui_enters_final_answer_block_at_answer_tag() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="",
+            data={"turn": 1, "field": "final_answer", "delta": ""},
+        )
+    )
+    assert "FINAL ANSWER · turn 1" in _render_text(app)
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="Par",
+            data={"turn": 1, "field": "final_answer", "delta": "Par"},
+        )
+    )
+
+    streaming_text = _render_text(app)
+    assert "<answer>" not in streaming_text
+    assert "Par" in streaming_text
+    assert "FINAL ANSWER · turn 1" in streaming_text
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="answer",
+            data={"turn": 1, "content": "<answer>Paris</answer>", "tool_calls": []},
+        )
+    )
+
+    finalized_text = _render_text(app)
+    assert "FINAL ANSWER · turn 1" in finalized_text
+    assert "Paris" in finalized_text
+    assert "<answer>" not in finalized_text
+
+
 def test_tui_streams_thinking_delta_and_respects_visibility_toggle() -> None:
     app = _make_app()
     app.chat_history._entries = []
@@ -486,8 +536,230 @@ def test_tui_does_not_extract_answer_tag_content_for_tool_call_turn() -> None:
 
     text = _render_text(app)
 
-    assert "ASSISTANT · turn 1" in text
+    assert "ASSISTANT" not in text
+    assert "──" not in text
     assert "Use this later: <answer>Paris</answer>" in text
+
+
+def test_tui_shows_requested_tool_count_when_tool_turn_has_no_message() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={
+                "turn": 1,
+                "content": None,
+                "tool_calls": [{"id": "call-1", "name": "search", "arguments": {"query": "demo"}}],
+            },
+        )
+    )
+
+    entries = list(app.chat_history.entries())
+    assert len(entries) == 1
+    assert entries[0].body == "Requested 1 tool call(s)."
+    assert entries[0].title == "ASSISTANT"
+    text = _render_text(app)
+    assert "Requested 1 tool call(s)." in text
+    assert "ASSISTANT ·" not in text
+    assert "──" not in text
+
+
+def test_tui_shows_requested_tool_count_when_content_is_whitespace_only() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={
+                "turn": 1,
+                "content": "\n  \n",
+                "tool_calls": [
+                    {"id": "call-1", "name": "search", "arguments": {}},
+                    {"id": "call-2", "name": "visit", "arguments": {}},
+                ],
+            },
+        )
+    )
+
+    entries = list(app.chat_history.entries())
+    assert len(entries) == 1
+    assert entries[0].body == "Requested 2 tool call(s)."
+    text = _render_text(app)
+    assert "Requested 2 tool call(s)." in text
+    assert "ASSISTANT ·" not in text
+
+
+def test_tui_replaces_streaming_assistant_with_requested_tool_count() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="x",
+            data={"turn": 1, "field": "content", "delta": "partial"},
+        )
+    )
+    assert [entry.role for entry in app.chat_history.entries()] == ["assistant"]
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={
+                "turn": 1,
+                "content": None,
+                "tool_calls": [{"id": "call-1", "name": "search", "arguments": {}}],
+            },
+        )
+    )
+
+    entries = list(app.chat_history.entries())
+    assert len(entries) == 1
+    assert entries[0].body == "Requested 1 tool call(s)."
+    assert entries[0].status == ""
+
+
+def test_tui_drops_streaming_assistant_when_empty_final_answer() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_delta",
+            message="x",
+            data={"turn": 1, "field": "content", "delta": "partial"},
+        )
+    )
+    assert [entry.role for entry in app.chat_history.entries()] == ["assistant"]
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="assistant_message",
+            message="assistant",
+            data={"turn": 1, "content": None, "tool_calls": []},
+        )
+    )
+
+    assert list(app.chat_history.entries()) == []
+
+
+def test_tui_renders_thirty_turn_transcript_without_assistant_dividers() -> None:
+    """Synthetic multi-turn Step-Level Live View stress check (no real LLM)."""
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+
+    total_turns = 30
+    app.chat_history.append_event(
+        LiveEvent(kind="user_message", message="multi-turn display stress query")
+    )
+
+    for turn in range(1, total_turns + 1):
+        is_final = turn == total_turns
+        call_id = f"call-{turn}"
+        if is_final:
+            app.chat_history.append_event(
+                LiveEvent(
+                    kind="assistant_message",
+                    message="final",
+                    data={
+                        "turn": turn,
+                        "content": f"<answer>done after {total_turns} turns</answer>",
+                        "tool_calls": [],
+                    },
+                )
+            )
+            continue
+
+        # Alternate empty-content tool turns and short-preamble tool turns.
+        content = None if turn % 2 == 1 else f"Checking lead {turn}."
+        app.chat_history.append_event(
+            LiveEvent(
+                kind="assistant_message",
+                message="assistant",
+                data={
+                    "turn": turn,
+                    "content": content,
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "name": "search",
+                            "arguments": {"query": [f"topic-{turn}"], "top_k": 3},
+                        }
+                    ],
+                },
+            )
+        )
+        app.chat_history.append_event(
+            LiveEvent(
+                kind="tool_call_started",
+                message="search",
+                data={
+                    "id": call_id,
+                    "name": "search",
+                    "arguments": {"query": [f"topic-{turn}"], "top_k": 3},
+                    "turn": turn,
+                },
+            )
+        )
+        app.chat_history.append_event(
+            LiveEvent(
+                kind="tool_result",
+                message="result",
+                data={
+                    "id": call_id,
+                    "name": "search",
+                    "turn": turn,
+                    "result": f"hit for topic-{turn}",
+                    "status": "completed",
+                    "extensions": {
+                        "documents": [
+                            {
+                                "id": f"doc-{turn}",
+                                "title": f"Doc {turn}",
+                                "url": None,
+                                "query": f"topic-{turn}",
+                            }
+                        ]
+                    },
+                },
+            )
+        )
+
+    text = _render_text(app)
+
+    assert "multi-turn display stress query" in text
+    assert text.count("Requested 1 tool call(s).") == 15  # odd turns 1..29
+    for turn in range(2, total_turns, 2):
+        assert f"Checking lead {turn}." in text
+    assert "ASSISTANT ·" not in text
+    assert text.count("FINAL ANSWER ·") == 1
+    assert f"FINAL ANSWER · turn {total_turns}" in text
+    assert "done after 30 turns" in text
+    assert "reasoning summary" not in text  # answer-tag extraction
+    assert text.count("TOOL · turn") == total_turns - 1
+    assert "Doc 1" in text
+    assert "Doc 29" in text
 
 
 def test_tui_tool_detail_toggles_preview_and_full_result() -> None:
@@ -509,7 +781,19 @@ def test_tui_tool_detail_toggles_preview_and_full_result() -> None:
         LiveEvent(
             kind="tool_result",
             message="result",
-            data={"id": "call-1", "name": "search", "result": long_result, "status": "completed"},
+            data={
+                "id": "call-1",
+                "name": "search",
+                "result": long_result,
+                "status": "completed",
+                "extensions": {
+                    "searched_ids": ["doc-a", "doc-b"],
+                    "documents": [
+                        {"id": "doc-a", "title": "Doc A", "url": None, "query": "demo"},
+                        {"id": "doc-b", "title": "Doc B", "url": None, "query": "demo"},
+                    ],
+                },
+            },
         )
     )
 
@@ -518,14 +802,189 @@ def test_tui_tool_detail_toggles_preview_and_full_result() -> None:
     full_text = _render_text(app)
 
     assert "TOOL" in preview_text
-    assert "line-0" in preview_text
-    assert "line-4" in preview_text
-    assert "line-6" not in preview_text
-    assert "truncated; use /tool-detail" in preview_text
+    assert "├─ Doc A" in preview_text
+    assert "└─ Doc B" in preview_text
+    assert "line-0" not in preview_text
+    assert "use /tool-detail to expand details for 2 documents" in preview_text
     assert 'search "demo", 5' in preview_text
     assert "TOOL" in full_text
     assert "line-7" in full_text
     assert 'search "demo", 5' in full_text
+    assert "├─ Doc A" not in full_text
+
+
+def test_tui_collapses_search_results_to_document_summary() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+    search_result = (
+        "1. [02-rl-slime.qmd](None)\n"
+        "guide/03-training/02-rl-slime.qmd:2:title: RL with slime\n\n"
+        "2. [03-sft.qmd](None)\n"
+        "guide/03-training/03-sft.qmd:2:title: SFT\n\n"
+        "3. [None](https://example.com/doc)\n"
+        "snippet text\n"
+    )
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_call_started",
+            message="search",
+            data={"id": "call-1", "name": "search", "arguments": {"query": "slime", "top_k": 5}},
+        )
+    )
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_result",
+            message="result",
+            data={
+                "id": "call-1",
+                "name": "search",
+                "result": search_result,
+                "status": "completed",
+                "extensions": {
+                    "searched_ids": [
+                        "guide/03-training/02-rl-slime.qmd",
+                        "guide/03-training/03-sft.qmd",
+                        "https://example.com/doc",
+                    ],
+                    "documents": [
+                        {
+                            "id": "guide/03-training/02-rl-slime.qmd",
+                            "title": "02-rl-slime.qmd",
+                            "url": None,
+                            "query": "slime",
+                        },
+                        {
+                            "id": "guide/03-training/03-sft.qmd",
+                            "title": "03-sft.qmd",
+                            "url": None,
+                            "query": "slime",
+                        },
+                        {
+                            "id": "https://example.com/doc",
+                            "title": None,
+                            "url": "https://example.com/doc",
+                            "query": "slime",
+                        },
+                    ],
+                },
+            },
+        )
+    )
+
+    preview_text = _render_text(app)
+    app.view_state.show_tool_detail = True
+    full_text = _render_text(app)
+
+    assert "├─ 02-rl-slime.qmd" in preview_text
+    assert "├─ 03-sft.qmd" in preview_text
+    assert "└─ https://example.com/doc" in preview_text
+    assert "use /tool-detail to expand details for 3 documents" in preview_text
+    assert "guide/03-training/02-rl-slime.qmd:2:title" not in preview_text
+    assert "guide/03-training/02-rl-slime.qmd:2:title" in full_text
+    assert app.chat_history.entries()[0].extensions["documents"][0]["title"] == "02-rl-slime.qmd"
+
+
+def test_tui_collapses_summarized_search_to_document_count() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+    summary_result = (
+        "The useful information for query slime as follows:\n\n"
+        "Evidence in page:\n"
+        "evidence\n\n"
+        "Summary:\n"
+        "summary text"
+    )
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_call_started",
+            message="search",
+            data={"id": "call-1", "name": "search", "arguments": {"query": "slime"}},
+        )
+    )
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_result",
+            message="result",
+            data={
+                "id": "call-1",
+                "name": "search",
+                "result": summary_result,
+                "status": "completed",
+                "extensions": {
+                    "searched_ids": ["a.md", "b.md"],
+                    "documents": [
+                        {"id": "a.md", "title": "a.md", "url": None, "query": "slime"},
+                        {"id": "b.md", "title": "b.md", "url": None, "query": "slime"},
+                    ],
+                },
+            },
+        )
+    )
+
+    preview_text = _render_text(app)
+    assert "├─ a.md" in preview_text
+    assert "└─ b.md" in preview_text
+    assert "Evidence in page" not in preview_text
+    assert "use /tool-detail to expand details for 2 documents" in preview_text
+
+
+def test_tui_collapses_visit_results_to_document_tree() -> None:
+    app = _make_app()
+    app.chat_history._entries = []
+    app.view_state.show_thinking = False
+    app.view_state.show_tool_detail = False
+    app._pt_app = None
+    visit_result = "[source_files.md](None)\nfull document body\n"
+
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_call_started",
+            message="visit",
+            data={
+                "id": "call-1",
+                "name": "visit",
+                "arguments": {"document_id": "source_files.md", "goal": "read it"},
+            },
+        )
+    )
+    app.chat_history.append_event(
+        LiveEvent(
+            kind="tool_result",
+            message="result",
+            data={
+                "id": "call-1",
+                "name": "visit",
+                "result": visit_result,
+                "status": "completed",
+                "extensions": {
+                    "documents": [
+                        {
+                            "id": "source_files.md",
+                            "title": "source_files.md",
+                            "url": None,
+                        }
+                    ],
+                },
+            },
+        )
+    )
+
+    preview_text = _render_text(app)
+    app.view_state.show_tool_detail = True
+    full_text = _render_text(app)
+
+    assert "└─ source_files.md" in preview_text
+    assert "use /tool-detail to expand details for 1 document" in preview_text
+    assert "full document body" not in preview_text
+    assert "full document body" in full_text
 
 
 def test_tui_chat_viewport_does_not_pad_lines_so_terminal_selection_copies_clean_text() -> None:
@@ -579,11 +1038,56 @@ def test_tui_scrollbar_uses_visible_to_content_ratio() -> None:
     app._scroll_chat(-1000)
     top_text = "".join(text for _, text in app.render_scrollbar())
 
-    assert "#" in bottom_text
-    assert bottom_text.count("#") > 1
-    assert bottom_text.count("#") < bottom_text.count("|")
+    assert "█" in bottom_text
+    assert bottom_text.count("█") > 1
+    assert bottom_text.count("█") < bottom_text.count("│")
     assert top_text != bottom_text
-    assert top_text.startswith("#")
+    assert top_text.startswith("█")
+
+
+
+def test_tui_kicker_hints_lines_below_only_when_scrolled_up() -> None:
+    app = _make_app()
+    app.chat_history._entries = [
+        ConversationEntry(role="assistant", title=f"Assistant {index}", body="line", style="class:assistant")
+        for index in range(30)
+    ]
+    app.view_state.show_thinking = False
+    app._pt_app = None
+    app.view_state.chat_scroll_top = None
+
+    assert "more" not in "".join(text for _, text in app.render_kicker())
+
+    app._scroll_chat(-1000)
+    kicker = "".join(text for _, text in app.render_kicker())
+    assert "↓" in kicker
+    assert "more (PgDn to bottom)" in kicker
+
+    app._scroll_chat(1000)
+    assert "more" not in "".join(text for _, text in app.render_kicker())
+
+
+def test_tui_streaming_cursor_shows_while_streaming_and_stays_out_of_plain_lines() -> None:
+    app = _make_app()
+    app.chat_history.clear()
+    app.view_state.show_thinking = True
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_delta", message="think", data={"turn": 1, "field": "thinking", "delta": "think"}
+    ))
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_delta", message="body", data={"turn": 1, "field": "content", "delta": "body"}
+    ))
+
+    rendered = _render_text(app)
+    assert rendered.count("▌") == 2  # thinking + content both streaming
+    assert "▌" not in "\n".join(app._render_chat_plain_lines())
+
+    app.chat_history.append_event(LiveEvent(
+        kind="assistant_message", message="assistant",
+        data={"turn": 1, "thinking": "think", "content": "body", "tool_calls": []},
+    ))
+    assert "▌" not in _render_text(app)
 
 
 def test_tui_detail_scroll_can_move_up_and_return_to_tail() -> None:
@@ -606,6 +1110,89 @@ def test_tui_detail_scroll_can_move_up_and_return_to_tail() -> None:
     assert "line-29" not in upper_text
     assert "line-29" in bottom_again
     assert app.view_state.chat_scroll_top is None
+
+
+def test_tui_reuses_chat_layout_until_render_inputs_change(monkeypatch) -> None:
+    app = _make_app()
+    app.chat_history.clear()
+    app.chat_history.append(
+        role="tool-interaction",
+        title="visit",
+        body="result",
+        status="completed",
+    )
+    render_calls = 0
+    original_render_full = app.renderer.render_full
+
+    def counted_render_full(*args, **kwargs):
+        nonlocal render_calls
+        render_calls += 1
+        return original_render_full(*args, **kwargs)
+
+    monkeypatch.setattr(app.renderer, "render_full", counted_render_full)
+
+    app.render_chat_viewport()
+    app.render_scrollbar()
+    app._render_chat_plain_lines()
+    app._scroll_chat(-1)
+
+    assert render_calls == 1
+
+    app.view_state.show_tool_detail = True
+    app.render_scrollbar()
+    assert render_calls == 2
+
+    app.chat_history.append(role="assistant", title="Assistant", body="new content")
+    app.render_chat_viewport()
+    assert render_calls == 3
+
+
+def test_tui_chat_layout_cache_invalidates_when_terminal_width_changes(monkeypatch) -> None:
+    app = _make_app()
+    render_calls = 0
+    original_render_full = app.renderer.render_full
+
+    class FakeOutput:
+        columns = 40
+
+        def get_size(self):
+            class Size:
+                rows = 30
+                columns = FakeOutput.columns
+
+            return Size()
+
+    class FakeApp:
+        output = FakeOutput()
+
+    def counted_render_full(*args, **kwargs):
+        nonlocal render_calls
+        render_calls += 1
+        return original_render_full(*args, **kwargs)
+
+    app._pt_app = FakeApp()
+    monkeypatch.setattr(app.renderer, "render_full", counted_render_full)
+
+    app.render_chat_viewport()
+    FakeOutput.columns = 100
+    app.render_chat_viewport()
+
+    assert render_calls == 2
+
+
+def test_display_width_uses_prompt_toolkit_for_whole_string(monkeypatch) -> None:
+    import searcherkit.interfaces.tui.ui.formatting as formatting
+
+    calls: list[str] = []
+
+    def fake_cwidth(text: str) -> int:
+        calls.append(text)
+        return len(text)
+
+    monkeypatch.setattr(formatting, "_prompt_toolkit_cwidth", fake_cwidth)
+
+    assert formatting._display_width("whole string") == 12
+    assert calls == ["whole string"]
 
 
 def test_slash_command_menu_filters_by_prefix_and_moves_selection() -> None:
@@ -892,12 +1479,12 @@ def test_tui_dynamic_input_height_and_fixed_slash_height_share_terminal_rows() -
 
     assert app.input_view_height() == 1
     assert app.slash_candidates_height() == 5
-    assert app.chat_view_height() == 21
+    assert app.chat_view_height() == 19
 
     app.input_field.set_text("123456789\nsecond\nthird")
 
     assert app.input_view_height() == 4
-    assert app.chat_view_height() == 23
+    assert app.chat_view_height() == 21
 
 
 def test_tui_renders_slash_candidates_below_input() -> None:

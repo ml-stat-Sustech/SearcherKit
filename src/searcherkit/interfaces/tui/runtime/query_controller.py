@@ -121,7 +121,7 @@ class QueryController:
         return self.running or self._chat_history.has_unfinished_thinking_or_tool()
 
     async def _spinner_loop(self) -> None:
-        frames = ("[|]", "[/]", "[-]", "[\\]")
+        frames = ("|", "/", "-", "\\")
         try:
             while self._should_spin():
                 await asyncio.sleep(0.12)
