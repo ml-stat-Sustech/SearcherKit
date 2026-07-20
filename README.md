@@ -1,6 +1,6 @@
 # 🔎 SearcherKit
 
-SearcherKit is a modular system for building AI agents that rely heavily on search. It handles everything from agent rollouts, LLM backends, tool calls, and benchmark evaluation, to training pipelines — all in one package.
+SearcherKit is a modular system for building AI agents that rely heavily on search. It handles everything from agent rollouts, LLM backends, tool calls, and benchmark evaluation, to training pipelines — all in one project.
 
 
 
@@ -9,7 +9,7 @@ SearcherKit is a modular system for building AI agents that rely heavily on sear
 
 ## What it does
 
-- **Build and run search agents** – Define agent behavior once, then use it for prototyping, evaluation, interactive demos, and large‑scale rollout generation.
+- **Build and run search agents** – Define agent behavior once, then use it for prototyping, evaluation, interactive demos, and large‑scale post training.
 - **Connect to any data source** – Plug in web APIs, Elasticsearch, internal knowledge bases, or local files through a unified interface. Combine sources freely without touching agent code.
 - **Scale without pain** – Async execution, flexible concurrency, checkpoint recovery, and detailed traces make batch jobs fast and debuggable. Swap models and backends easily.
 - **Training‑ready** – The same agent and tool configuration can be used for evaluation, offline analysis, and integration with training pipelines, without needing to refactor code.
