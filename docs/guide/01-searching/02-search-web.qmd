@@ -113,7 +113,9 @@ values in the dotenv file.
 searcher tui --config-path web_search
 ```
 
-Type `/` in the TUI to view available commands. Use `/tool-detail` to inspect tool arguments and results. For general controls and record behavior, see [Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
+Type `/` in the TUI to view available commands. Use `Ctrl+O` to expand tool
+arguments and results (or `/tool-detail` for tool detail alone). For general
+controls and record behavior, see [Use the Interactive TUI](../04-interface/02-use-the-interactive-tui.qmd).
 
 Interactive records, the global log, and trace logs are written under
 `outputs/file-search-tui/interactive`.
