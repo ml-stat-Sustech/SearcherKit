@@ -27,16 +27,16 @@ SearcherKit is a modular system for building AI agents that rely heavily on sear
 
 ### 🚀 Quick Start
 
-Jump right in with the [Quick Start guide](docs/guide/index.qmd) — you’ll have a search agent running in minutes.
+Jump right in with the [Quick Start guide](https://searcherkit.readthedocs.io/en/latest/docs/guide/index.html) — you’ll have a search agent running in minutes.
 
 ### 📖 Documentation
 
 Browse the docs by topic:
 
-- **Getting started** – [Quick Start](docs/guide/index.qmd) · [Searching files](docs/guide/01-searching/01-search-files.qmd) · [Searching webpages](docs/guide/01-searching/02-search-web.qmd)  
-- **Training** – [Overview of SFT & RL workflows](docs/guide/02-training/01-training-overview.qmd)  
-- **Customization** – [Project architecture and extending components](docs/guide/03-customizing/01-project-architecture.qmd)  
-- **Interfaces** – [CLI reference](docs/guide/04-interface/01-use-the-cli-interface.qmd) · [Interactive TUI](docs/guide/04-interface/02-use-the-interactive-tui.qmd)
+- **Getting started** – [Quick Start](https://searcherkit.readthedocs.io/en/latest/docs/guide/index.html) · [Searching files](https://searcherkit.readthedocs.io/en/latest/docs/guide/searching/search-files.html) · [Searching webpages](https://searcherkit.readthedocs.io/en/latest/docs/guide/searching/search-web.html)
+- **Training** – [Overview of SFT & RL workflows](https://searcherkit.readthedocs.io/en/latest/docs/guide/training/training-overview.html)
+- **Customization** – [Project architecture and extending components](https://searcherkit.readthedocs.io/en/latest/docs/guide/customizing/project-architecture.html)
+- **Interfaces** – [CLI reference](https://searcherkit.readthedocs.io/en/latest/docs/guide/interface/use-the-cli-interface.html) · [Interactive TUI](https://searcherkit.readthedocs.io/en/latest/docs/guide/interface/use-the-interactive-tui.html)
 
 
 ---

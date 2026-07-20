@@ -26,23 +26,19 @@ environment:
 #### pip
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searcherkit.git
-cd searcherkit
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -e .
+pip install searcherkit
 ```
 
 #### uv
 
 ```bash
-git clone https://github.com/ml-stat-Sustech/searcherkit.git
-cd searcherkit
 uv venv --python 3.12
 source .venv/bin/activate  # macOS/Linux
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-uv pip install -e .
+uv pip install searcherkit
 ```
 ::::
 

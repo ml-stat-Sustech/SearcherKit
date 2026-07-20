@@ -266,7 +266,7 @@ class ElasticsearchSource(DataSource):
             kwargs.setdefault("request_timeout", self.request_timeout)
         if not AsyncElasticsearch:
             raise ImportError(
-                "AsyncElasticsearch client not available, use uv sync --extra elasticsearch-source to install dependency for Elasticsearch source"
+                "AsyncElasticsearch client not available; install it with `pip install searcherkit` for the Elasticsearch source"
             )
         return AsyncElasticsearch(hosts, **kwargs)
 
