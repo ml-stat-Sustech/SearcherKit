@@ -1,10 +1,10 @@
-# 🔎 SearcherKit
+![](docs/images/searcherkit_title.png)
 
 SearcherKit is a modular system for building AI agents that rely heavily on search. It handles everything from agent rollouts, LLM backends, tool calls, and benchmark evaluation, to training pipelines — all in one project.
 
 
 
-![](docs/images/searcherkit_1.png)
+![](docs/images/searcherkit.png)
 
 
 ## What it does
