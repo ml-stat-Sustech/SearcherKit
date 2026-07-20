@@ -18,7 +18,7 @@ agent:
   sources:
     - type: file
       name: local_files
-      root_path: ${oc.env:FILE_SEARCH_ROOT,./docs}
+      root_path: ${oc.env:FILE_SEARCH_ROOT,.}
       file_encoding: utf-8
 
   tools:
