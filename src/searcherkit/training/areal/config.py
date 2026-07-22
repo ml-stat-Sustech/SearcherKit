@@ -11,7 +11,7 @@ from searcherkit.training.config import WorkFlowConfig
 class SearchAgentPPOActorConfig(PPOActorConfig):
     enable_igpo_reward: bool = field(
         default=False,
-        metadata={"help": "Enable the IGPO information-gain reward."},
+        metadata={"help": "Enable the IGPO reward."},
     )
 
 

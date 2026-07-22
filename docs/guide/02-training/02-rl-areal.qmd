@@ -13,17 +13,10 @@ into that environment. Every participating node must be able to access the
 model, tokenizer, dataset, name-resolution storage, output paths, and retrieval
 services referenced by the config.
 
-The main entry points are:
-
-| Reward mode | Python entry point | Example configuration |
-| --- | --- | --- |
-| Outcome reward | `searcherkit.training.areal.train_dist` | `src/searcherkit/config/training/train_areal.yaml` |
-| Information-gain reward | `searcherkit.training.areal.train_dist` | `src/searcherkit/config/training/train_dist_areal_igpo.yaml` |
-
 ### Configure the rollout agent
 
 Start with `src/searcherkit/config/training/train_areal.yaml` for outcome reward
-or `train_dist_areal_igpo.yaml` for information-gain reward.
+or `train_dist_areal_igpo.yaml` for the IGPO algorithm.
 
 Configure `workflow.agent` and `eval_workflow.agent` to define agents. For other configurations, check [AReaL Manual](https://areal-ai.io/en/cli_reference.html)
 
@@ -44,9 +37,8 @@ bash scripts/areal/train_dist_areal.sh \
 
 ### IGPO
 
-SearcherKit reproduces the [IGPO reward](https://arxiv.org/abs/2510.14967) as
-an optional information-gain reward. Set `actor.enable_igpo_reward=true` and use
-the standard `searcherkit.training.areal.train_dist` entry point.
+SearcherKit provides an optional [IGPO reward](https://arxiv.org/abs/2510.14967).
+Set `actor.enable_igpo_reward=true.
 
 ```bash
 PYTHONPATH=src python -m searcherkit.training.areal.train_dist \
