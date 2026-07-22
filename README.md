@@ -50,7 +50,7 @@ If SearcherKit helps your research or simplifies your agent stack, please give u
 ### 👤 The Team
 
 SearcherKit is built and maintained by the group of Assistant Professor [Wei Hongxin](https://hongxin001.github.io/) and Professor [Jing Bingyi](https://sai.cuhk.edu.cn/en/teacher/162) in SUSTech and CUHK-SZ.  
-Core maintainers: [Li Hanyang](https://justinliii.github.io/), [Zhang Haotian](https://github.com/Claritin0930), [Yang Hanjie](https://github.com/Foo1szz), [Wang Shuoyuan](https://github.com/Claritin0930), [Chen Yiyang](https://github.com/0xPabloxx), [Lan Zijie](https://github.com/zzekelan), and [Yu Zhengye](https://github.com/NZhengye).
+Core maintainers: [Li Hanyang](https://justinliii.github.io/), [Zhang Haotian](https://github.com/Claritin0930), [Yang Hanjie](https://github.com/Foo1szz), [Wang Shuoyuan](https://github.com/Claritin0930), [Yu Zhengye](https://github.com/NZhengye), [Lan Zijie](https://github.com/zzekelan), and [Chen Yiyang](https://github.com/0xPabloxx).
 
 ### 📜 License
 

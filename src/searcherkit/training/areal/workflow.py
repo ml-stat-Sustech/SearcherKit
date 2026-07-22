@@ -36,7 +36,7 @@ from searcherkit.training.rewards import (
 logger = get_logger(__name__)
 
 # _ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
-_ANSWER_PATTERN = re.compile(r'\\boxed\{(?P<answer>[^}]*)\}', re.DOTALL)
+_ANSWER_PATTERN = re.compile(r"\\boxed\{(?P<answer>[^}]*)\}", re.DOTALL)
 
 
 class ARealSearchAgentWorkflow(RolloutWorkflow):
@@ -62,6 +62,12 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         engine: InferenceEngine,
         data: dict[str, Any],
     ) -> dict[str, Any] | None | dict[str, InteractionWithTokenLogpReward]:
+        ground_truth = data.get("answer")
+        if not isinstance(ground_truth, str) or not ground_truth.strip():
+            raise ValueError(
+                "AReaL training samples require a non-empty 'answer' string."
+            )
+
         agent_config = self.agent_config
         areal_client = ArealOpenAI(
             engine=engine,
@@ -113,10 +119,14 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             num_turns=agent.turn,
             context_tokens=agent.context_token_size,
             context_limit_prompted=agent.max_token_reminder_prompted,
-            searched_query_count=max(int(repeated_query), count_repeated_tool_queries(history)),
+            searched_query_count=max(
+                int(repeated_query), count_repeated_tool_queries(history)
+            ),
             tool_parser_error_count=int(tool_parser_error),
             too_many_tool_call_count=int(too_many_tool_call),
-            too_many_turn_count=int(getattr(agent, "max_turn_reminder_prompted", False)),
+            too_many_turn_count=int(
+                getattr(agent, "max_turn_reminder_prompted", False)
+            ),
             response_truncated_count=count_truncated_tool_responses(history),
             too_long_seq_truncated_count=int(context_error),
             duplicate_search_result_count=count_duplicate_tool_results(history),
@@ -124,7 +134,11 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
 
         visit_cnt = 0
         for msg in history:
-            if msg.role == "assistant" and msg.thinking and "<tool_call>" in msg.thinking:
+            if (
+                msg.role == "assistant"
+                and msg.thinking
+                and "<tool_call>" in msg.thinking
+            ):
                 format_error = True
             if msg.role == "assistant":
                 for tool in msg.tool_calls or []:
@@ -152,7 +166,9 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             agent.max_tokens,
             agent.max_tokens_prompt_margin / 2,
         )
-        outcome_score = f1_score(answer.lower(), data["answer"].lower()) if answer else 0.0
+        outcome_score = (
+            f1_score(answer.lower(), data["answer"].lower()) if answer else 0.0
+        )
         tool_call_count = count_tool_calls(history)
         reward_parts = searcherkit_reward_components(
             outcome_score=outcome_score,
@@ -179,4 +195,11 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         areal_client.set_last_reward(final_reward)
         areal_client.apply_reward_discount(self.reward_discount)
 
-        return areal_client.export_interactions(style=self.export_style)
+        trajectory = areal_client.export_interactions(style=self.export_style)
+        if trajectory is None:
+            return None
+        for interaction in trajectory.values():
+            tensor_dict = interaction.to_tensor_dict()
+            tensor_dict["ground_truth"] = [ground_truth]
+            interaction._cache = tensor_dict
+        return trajectory

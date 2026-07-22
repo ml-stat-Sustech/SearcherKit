@@ -245,6 +245,7 @@ eval_gconfig:
   top_p: ${eval_workflow.agent.llm_client.default_kwargs.top_p}
 
 actor:
+  enable_igpo_reward: true
   # enable_tree_training: true
   # pad_to_maximum: true # Must be set to true for tree training
   weight_update_mode: xccl
@@ -296,7 +297,7 @@ actor:
       gpu: 1
       mem: 32
       cmd: python3 -m areal.infra.rpc.rpc_server
-      env_vars: {SEARCHERKIT_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1", AREAL_ENABLE_STEP_LEVEL_CLIPPING: "1", PYTHONPATH: "${oc.env:PWD}/step_level_clipping:${oc.env:PWD}/src:${oc.env:PYTHONPATH,''}"}
+      env_vars: {SEARCHERKIT_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1", PYTHONPATH: "${oc.env:PWD}/src:${oc.env:PYTHONPATH,''}"}
 
 ref:
   experiment_name: ${experiment_name}

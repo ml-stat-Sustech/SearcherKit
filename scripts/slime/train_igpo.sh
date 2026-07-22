@@ -67,7 +67,6 @@ export KL_LOSS_COEF="${KL_LOSS_COEF:-0.0}"
 if [ "${IGPO_MODE}" = "async" ]; then
     # Keep AReal's behavior-ratio correction as token-level clamp via Slime TIS.
     # The PPO ratio can be switched to contiguous valid-token step spans to match
-    # the temp AReal step-level clipping patch.
     export SEARCHERKIT_PPO_RATIO_MODE="${SEARCHERKIT_PPO_RATIO_MODE:-step}"
     export USE_TIS="${USE_TIS:-1}"
     export TIS_CLIP="${TIS_CLIP:-5.0}"

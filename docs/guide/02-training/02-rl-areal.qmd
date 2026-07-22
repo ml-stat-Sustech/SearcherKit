@@ -15,15 +15,15 @@ services referenced by the config.
 
 The main entry points are:
 
-| Algorithm | Python entry point | Example Script |
+| Reward mode | Python entry point | Example configuration |
 | --- | --- | --- |
-| GRPO | `searcherkit.training.areal.train_dist` | `scripts/areal/train_dist_areal.sh` |
-| IGPO | `searcherkit.training.areal.train_igpo` | `scripts/areal/train_dist_areal_igpo.sh` |
+| Outcome reward | `searcherkit.training.areal.train_dist` | `src/searcherkit/config/training/train_areal.yaml` |
+| Information-gain reward | `searcherkit.training.areal.train_dist` | `src/searcherkit/config/training/train_dist_areal_igpo.yaml` |
 
 ### Configure the rollout agent
 
-Start with `src/searcherkit/config/training/train_areal.yaml` for GRPO or
-`train_dist_areal_igpo.yaml` for IGPO. 
+Start with `src/searcherkit/config/training/train_areal.yaml` for outcome reward
+or `train_dist_areal_igpo.yaml` for information-gain reward.
 
 Configure `workflow.agent` and `eval_workflow.agent` to define agents. For other configurations, check [AReaL Manual](https://areal-ai.io/en/cli_reference.html)
 
@@ -44,10 +44,13 @@ bash scripts/areal/train_dist_areal.sh \
 
 ### IGPO
 
-IGPO recipe contains SearcherKit's reproduction of the [IGPO reward](https://arxiv.org/abs/2510.14967). Run with the `searcherkit.training.areal.train_igpo` entry point or start from the `train_dist_areal_igpo.sh`
+SearcherKit reproduces the [IGPO reward](https://arxiv.org/abs/2510.14967) as
+an optional information-gain reward. Set `actor.enable_igpo_reward=true` and use
+the standard `searcherkit.training.areal.train_dist` entry point.
 
 ```bash
-bash scripts/areal/train_dist_areal_igpo.sh \
+PYTHONPATH=src python -m searcherkit.training.areal.train_dist \
+  --config src/searcherkit/config/training/train_dist_areal_igpo.yaml \
   actor.path=/models/Qwen3-8B \
   ...
 ```
