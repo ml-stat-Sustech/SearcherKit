@@ -7,6 +7,8 @@ from areal.utils.functional import (
     reward_overlong_penalty,
 )
 
+from searcherkit.training.areal.termination import TerminationReason
+
 # TODO: make answer format configurable instead of hardcoded
 _ANSWER_FORMAT = r"\boxed{{{answer}}}"
 # Qwen chat template wraps assistant content as
@@ -16,6 +18,36 @@ _ASSISTANT_END_TOKENS = 2
 
 
 class SearchAgentPPOActor(PPOActor):
+    def _punish_bad_last_turns(
+        self,
+        advantages: torch.Tensor,
+        loss_mask: torch.Tensor,
+        termination_reasons: list[str],
+    ) -> None:
+        if len(termination_reasons) != advantages.shape[0]:
+            raise ValueError(
+                "termination_reason must contain one value per trajectory"
+            )
+
+        for batch_index, raw_reason in enumerate(termination_reasons):
+            try:
+                reason = TerminationReason(raw_reason)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Unknown termination_reason: {raw_reason!r}"
+                ) from exc
+            if reason is not TerminationReason.BAD_LAST_TURN:
+                continue
+
+            trainable_positions = torch.where(loss_mask[batch_index].bool())[0]
+            if trainable_positions.numel() == 0:
+                continue
+            last_position = int(trainable_positions[-1].item())
+            first_position = last_position
+            while first_position > 0 and loss_mask[batch_index, first_position - 1]:
+                first_position -= 1
+            advantages[batch_index, first_position : last_position + 1] = -1.0
+
     def _compute_turn_end_pos(
         self, data: dict[str, Any]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -215,7 +247,9 @@ class SearchAgentPPOActor(PPOActor):
     def _compute_advantages(
         self, data: dict[str, Any], meta: Any | None = None
     ) -> dict[str, Any]:
-        if not self.config.enable_igpo_reward:
+        if not (
+            self.config.enable_igpo_reward or self.config.punish_last_turn
+        ):
             return super()._compute_advantages(data, meta=meta)
 
         bs = data["input_ids"].shape[0]
@@ -224,15 +258,19 @@ class SearchAgentPPOActor(PPOActor):
             bs, device=data["input_ids"].device, dtype=torch.long
         )
 
-        # IGPO: turn boundaries from eos token ordering
-        turn_end_pos, response_end_pos, n_turns = self._compute_turn_end_pos(data)
-        data["turn_end_pos"] = turn_end_pos
-        data["response_end_pos"] = response_end_pos
-        data["n_turns"] = n_turns
+        ig_token_rewards = torch.zeros(
+            bs, max_seqlen, dtype=torch.float32, device=data["input_ids"].device
+        )
+        if self.config.enable_igpo_reward:
+            # IGPO: turn boundaries from eos token ordering
+            turn_end_pos, response_end_pos, n_turns = self._compute_turn_end_pos(data)
+            data["turn_end_pos"] = turn_end_pos
+            data["response_end_pos"] = response_end_pos
+            data["n_turns"] = n_turns
 
-        # IGPO: compute information-gain rewards per turn
-        ig_token_rewards = self._compute_ig_rewards(data)
-        data["ig_token_rewards"] = ig_token_rewards
+            # IGPO: compute information-gain rewards per turn
+            ig_token_rewards = self._compute_ig_rewards(data)
+            data["ig_token_rewards"] = ig_token_rewards
 
         # Reward Penalty on length
         if self.config.overlong_reward_penalty:
@@ -323,6 +361,17 @@ class SearchAgentPPOActor(PPOActor):
 
         advantages = torch.stack(advantages_reversed[::-1], dim=1)
         data["returns"] = advantages + values
+
+        if self.config.punish_last_turn:
+            termination_reasons = data.get("termination_reason")
+            if termination_reasons is None:
+                raise ValueError(
+                    "data['termination_reason'] is required when "
+                    "punish_last_turn=True"
+                )
+            self._punish_bad_last_turns(
+                advantages, loss_mask, termination_reasons
+            )
 
         # Optionally perform advantage normalization.
         if self.adv_norm is not None:

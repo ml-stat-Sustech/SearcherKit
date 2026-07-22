@@ -22,6 +22,7 @@ from searcherkit.training.agent import (
     TooManyToolCallsError,
 )
 from searcherkit.training.areal.client import ARealClient
+from searcherkit.training.areal.termination import TerminationReason
 from searcherkit.training.config import WorkFlowConfig
 from searcherkit.training.rewards import (
     assign_overlong_penalty,
@@ -198,8 +199,11 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         trajectory = areal_client.export_interactions(style=self.export_style)
         if trajectory is None:
             return None
+        # TODO: derive BAD_LAST_TURN from the workflow's final agent state.
+        termination_reason = TerminationReason.NORMAL
         for interaction in trajectory.values():
             tensor_dict = interaction.to_tensor_dict()
             tensor_dict["ground_truth"] = [ground_truth]
+            tensor_dict["termination_reason"] = [termination_reason.value]
             interaction._cache = tensor_dict
         return trajectory

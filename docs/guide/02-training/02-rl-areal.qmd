@@ -38,7 +38,7 @@ bash scripts/areal/train_dist_areal.sh \
 ### IGPO
 
 SearcherKit provides an optional [IGPO reward](https://arxiv.org/abs/2510.14967).
-Set `actor.enable_igpo_reward=true.
+Set `actor.enable_igpo_reward=true`.
 
 ```bash
 PYTHONPATH=src python -m searcherkit.training.areal.train_dist \
@@ -46,6 +46,26 @@ PYTHONPATH=src python -m searcherkit.training.areal.train_dist \
   actor.path=/models/Qwen3-8B \
   ...
 ```
+
+IGPO uses critic-free training. Configuration fails at startup if
+`actor.enable_igpo_reward=true` and a `critic` configuration is present.
+
+### Penalize a bad final turn
+
+Set `actor.punish_last_turn=true` to penalize the final assistant turn when the
+workflow marks a trajectory with the `bad_last_turn` termination reason. All
+normal reward and advantage calculations still run. Before the configured
+advantage normalization, every trainable token in the final assistant turn has
+its raw advantage replaced with `-1`. The critic return target is not changed.
+
+The workflow currently emits `normal` by default. Its termination reasons are
+`normal` and `bad_last_turn`; classifying bad final turns is reserved for a
+future workflow update.
+
+Final-turn punishment is independent of IGPO, but both features require
+critic-free training. Configuration fails at startup if either
+`actor.punish_last_turn` or `actor.enable_igpo_reward` is enabled while a
+`critic` configuration is present.
 
 ### Failure and reward accounting
 
