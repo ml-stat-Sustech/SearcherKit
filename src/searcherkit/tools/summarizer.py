@@ -8,13 +8,14 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, overload
 
 import json_repair
-from openai import AsyncOpenAI, APIError, APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
+from openai import APIError, APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
 
-from searcherkit.common.retry import RetryConfig, RetryPolicy, retry_async
+from searcherkit.common.retry import RetryPolicy, retry_async
 from searcherkit.common.errors import RecoverableError
 from searcherkit.sources.base import Document
 
 if TYPE_CHECKING:
+    from searcherkit.llm.base import Client
     from searcherkit.tools.base import SummarizerConfig
 
 SUMMARY_PROMPT = """Please process the following webpage content and user goal to extract relevant information.
@@ -73,9 +74,7 @@ class Summarizer:
     def __init__(
         self,
         *,
-        model: str,
-        api_key: str | None = None,
-        base_url: str | None = None,
+        client: "Client",
         max_chars: int = 400000,
         timeout: float = 3600,
         max_concurrency: int | None = None,
@@ -87,9 +86,7 @@ class Summarizer:
         self,
         *,
         config: "SummarizerConfig | None" = None,
-        model: str = "",
-        api_key: str | None = None,
-        base_url: str | None = None,
+        client: "Client | None" = None,
         max_chars: int = 400000,
         timeout: float = 3600,
         max_concurrency: int | None = None,
@@ -97,31 +94,30 @@ class Summarizer:
         retry_policy: RetryPolicy | None = None,
     ) -> None:
         if config is not None:
-            model = config.model
-            api_key = api_key or config.api_key
-            base_url = base_url or config.base_url
             max_chars = config.max_chars
             timeout = config.timeout
-            if max_concurrency is None:
-                max_concurrency = config.max_concurrency
             default_kwargs = default_kwargs or config.default_kwargs
             retry_policy = retry_policy or (RetryPolicy(config=config.retry_config) if config.retry_config is not None else None)
 
-        if not model:
-            raise ValueError("summary tool requires summarizer.model")
-        
-        client_kwargs: dict[str, Any] = {"api_key": api_key}
-        if base_url:
-            client_kwargs["base_url"] = base_url
-        summary_client = AsyncOpenAI(**client_kwargs)
+            if client is None:
+                from searcherkit.llm.base import ClientConfig, get_client
 
-        self.model = model
+                client = get_client(ClientConfig(
+                    type="openai",
+                    model=config.model,
+                    api_key=config.api_key,
+                    base_url=config.base_url,
+                    default_kwargs=config.default_kwargs,
+                    concurrency_limit=max_concurrency
+                ))
+        if client is None:
+            raise ValueError("summarizer requires a client")
+
         self.timeout = timeout
         self.max_chars = max_chars
         self.default_kwargs = dict(default_kwargs or {})
-        self._semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
         self.retry_policy = retry_policy or RetryPolicy(exceptions=(*_OPENAI_ERRORS, SummaryError, ValueError))
-        self.client = summary_client
+        self.client = client
 
     async def summarize(self, *, goal: str, content: str) -> tuple[str, str]:
         try:
@@ -137,16 +133,14 @@ class Summarizer:
 
     async def _request_summary(self, goal: str, content: str) -> tuple[str, str]:
         prompt = SUMMARY_PROMPT.format(goal=goal or "N/A", webpage_content=content)
+        messages = [{"role": "user", "content": prompt}]
         payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
             "response_format": {"type": "json_object"},
             "timeout": self.timeout,
             **self.default_kwargs,
         }
-        async with _limit_request(self._semaphore):
-            response = await self.client.chat.completions.create(**payload)
-        raw = response.choices[0].message.content if response.choices else None
+        response = await self.client.complete(messages, **payload)
+        raw = response.get("content")
         if not raw:
             raise SummaryError("summary model returned empty content")
         data = json_repair.loads(raw)

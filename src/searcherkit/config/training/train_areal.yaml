@@ -108,12 +108,11 @@ workflow:
           - elasticsearch
         raise_argument_validation_error: false
         summarizer:
-          model: /home/jovyan/Qwen3-8B
-          api_key: api_key
+          model: ${actor.path}
           max_chars: 100000
-          base_url: http://10.32.64.11:6010/v1
           max_concurrency: 1024
           default_kwargs:
+            store: false
             max_tokens: 1024
             extra_body:
               chat_template_kwargs:
@@ -191,12 +190,11 @@ eval_workflow:
           - elasticsearch
         raise_argument_validation_error: false
         summarizer:
-          model: /home/jovyan/Qwen3-8B
-          api_key: api_key
+          model: ${actor.path}
           max_chars: 100000
-          base_url: http://10.32.64.11:6010/v1
           max_concurrency: 1024
           default_kwargs:
+            store: false
             max_tokens: 1024
             extra_body:
               chat_template_kwargs:

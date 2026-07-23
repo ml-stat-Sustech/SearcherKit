@@ -93,16 +93,6 @@ workflow:
         embedding_model: /home/jovyan/Qwen3-Embedding-8B
         embedding_api_key: api_key
         embedding_base_url: http://10.32.29.237:8004/v1
-        search_summary_enabled: true
-        summary_model: /home/jovyan/Qwen3-8B
-        summary_api_key: api_key
-        summary_max_chars: 100000
-        summary_base_url: http://10.32.29.237:6010/v1
-        summary_default_kwargs:
-          max_tokens: 1024
-          extra_body:
-            chat_template_kwargs:
-              enable_thinking: false
     tools:
       - type: search
         name: search
@@ -118,6 +108,17 @@ workflow:
         source: elasticsearch
         response_char_limit: null
         raise_argument_validation_error: false
+        summarizer:
+          model: ${actor.path}
+          max_chars: 100000
+          max_concurrency: 1024
+          default_kwargs:
+            store: false
+            max_tokens: 1024
+            extra_body:
+              chat_template_kwargs:
+                enable_thinking: false
+          retry_config: null
 
 eval_workflow:
   answer_pattern: ${workflow.answer_pattern}
@@ -175,16 +176,7 @@ eval_workflow:
         embedding_model: /home/jovyan/Qwen3-Embedding-8B
         embedding_api_key: api_key
         embedding_base_url: http://10.32.29.237:8004/v1
-        search_summary_enabled: true
-        summary_model: /home/jovyan/Qwen3-8B
-        summary_api_key: api_key
-        summary_max_chars: 100000
-        summary_base_url: http://10.32.29.237:6010/v1
-        summary_default_kwargs:
-          max_tokens: 1024
-          extra_body:
-            chat_template_kwargs:
-              enable_thinking: false
+
     tools:
       - type: search
         name: search
@@ -200,6 +192,17 @@ eval_workflow:
         source: elasticsearch
         response_char_limit: null
         raise_argument_validation_error: false
+        summarizer:
+          model: ${actor.path}
+          max_chars: 100000
+          max_concurrency: 1024
+          default_kwargs:
+            store: false
+            max_tokens: 1024
+            extra_body:
+              chat_template_kwargs:
+                enable_thinking: false
+          retry_config: null
 
 rollout:
   experiment_name: ${experiment_name}

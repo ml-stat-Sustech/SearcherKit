@@ -11,6 +11,7 @@ from searcherkit.llm.base import Client, get_client
 from searcherkit.llm.parsers import get_parser
 from searcherkit.sources import add_source_cfg
 from searcherkit.tools import build_tool
+from searcherkit.tools.summarizer import Summarizer
 from searcherkit.training.config import AgentConfig
 from searcherkit.training.rewards import normalize_query
 
@@ -76,6 +77,25 @@ class SearchAgentTraining(SearchAgent):
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
             )
+            for tool_config in config.tools:
+                summarizer_config = tool_config.summarizer
+                if summarizer_config is None:
+                    continue
+                tool = self.tool_dict[tool_config.name]
+                tool.configure_summarizer(
+                    summarizer=Summarizer(
+                        client=client,
+                        max_chars=summarizer_config.max_chars,
+                        timeout=summarizer_config.timeout,
+                        max_concurrency=summarizer_config.max_concurrency,
+                        default_kwargs=summarizer_config.default_kwargs,
+                        retry_policy=(
+                            RetryPolicy(config=summarizer_config.retry_config)
+                            if summarizer_config.retry_config is not None
+                            else None
+                        ),
+                    )
+                )
             self.raise_repeat_tool_call = config.raise_repeat_tool_call
             self.previous_tool_queries: set[tuple[str, str]] = set()
             return

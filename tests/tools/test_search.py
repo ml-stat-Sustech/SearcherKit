@@ -13,6 +13,7 @@ import respx
 
 from searcherkit.common.retry import RetryConfig, RetryPolicy
 from searcherkit.common.errors import RecoverableError
+from searcherkit.llm.openai_client import OpenAIClient
 from searcherkit.sources import SourceConfig, add_source_cfg
 from searcherkit.sources.file import FileSource
 from searcherkit.tools import SummarizerConfig, ToolConfig, build_tool
@@ -145,9 +146,7 @@ def _direct_tool(
     summarizer = None
     if with_summary:
         summarizer = Summarizer(
-            model="fake-summary-model",
-            api_key="test-key",
-            base_url=BASE_URL,
+            client=OpenAIClient(model="fake-summary-model", api_key="test-key", base_url=BASE_URL),
             timeout=1,
             retry_policy=(
                 RetryPolicy(config=retry_config)

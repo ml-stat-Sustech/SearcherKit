@@ -124,7 +124,7 @@ class BaseTool(abc.ABC):
             self.inputSchema = self._resolve_input_schema(config.inputSchema)
             self.raise_argument_validation_error = config.raise_argument_validation_error
             if config.summarizer is not None:
-                self._configure_summarizer(config=config.summarizer)
+                self.configure_summarizer(config=config.summarizer)
                 self.summary_goal_key = config.summary_goal_key
         else:
             if not name:
@@ -136,10 +136,10 @@ class BaseTool(abc.ABC):
             self.inputSchema = self._resolve_input_schema(inputSchema)
             self.raise_argument_validation_error = raise_argument_validation_error
             if summarizer is not None:
-                self._configure_summarizer(summarizer=summarizer)
+                self.configure_summarizer(summarizer=summarizer)
                 self.summary_goal_key = summary_goal_key
 
-    def _configure_summarizer(
+    def configure_summarizer(
         self,
         *,
         config: SummarizerConfig | None = None,
