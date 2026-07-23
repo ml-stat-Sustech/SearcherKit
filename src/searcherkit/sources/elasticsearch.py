@@ -96,6 +96,8 @@ class ElasticsearchSource(DataSource):
         index: str = "",
         *,
         client: Any | None = None,
+        username: str | None = None,
+        password: str | None = None,
         search_fields: Sequence[str] | None = None,
         title_field: str = "title",
         text_field: str = "text",
@@ -129,6 +131,8 @@ class ElasticsearchSource(DataSource):
         index: str = "",
         *,
         client: Any | None = None,
+        username: str | None = None,
+        password: str | None = None,
         search_fields: Sequence[str] | None = None,
         title_field: str = "title",
         text_field: str = "text",
@@ -159,6 +163,10 @@ class ElasticsearchSource(DataSource):
         if config is not None:
             hosts = hosts or config.hosts
             index = index or (config.index or "")
+            if username is None:
+                username = config.username
+            if password is None:
+                password = config.password
             search_fields = search_fields or config.search_fields
             title_field = config.title_field
             text_field = config.text_field
@@ -190,6 +198,8 @@ class ElasticsearchSource(DataSource):
             raise ValueError("ElasticsearchSource requires index")
         if client is None and not hosts:
             raise ValueError("ElasticsearchSource requires hosts or client")
+        if (username is None) != (password is None):
+            raise ValueError("username and password must be provided together")
         if highlight_fragment_size <= 0:
             raise ValueError("highlight_fragment_size must be positive")
         if highlight_number_of_fragments < 0:
@@ -252,6 +262,8 @@ class ElasticsearchSource(DataSource):
         self._embedding_client = embedding_client
         self.client = client or self._build_client(
             hosts=hosts,
+            username=username,
+            password=password,
             client_kwargs=client_kwargs or {},
         )
 
@@ -259,9 +271,13 @@ class ElasticsearchSource(DataSource):
         self,
         *,
         hosts: str | Sequence[str] | None,
+        username: str | None,
+        password: str | None,
         client_kwargs: Mapping[str, Any],
     ) -> Any:
         kwargs = dict(client_kwargs)
+        if username is not None:
+            kwargs["basic_auth"] = (username, password)
         if self.request_timeout is not None:
             kwargs.setdefault("request_timeout", self.request_timeout)
         if not AsyncElasticsearch:

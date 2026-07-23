@@ -199,8 +199,8 @@ agent:
       request_timeout: 30
       es_max_concurrency: 8
       # For authenticated Elasticsearch:
-      # client_kwargs:
-      #   basic_auth: [${oc.env:ES_USERNAME}, ${oc.env:ES_PASSWORD}]
+      # username: ${oc.env:ES_USERNAME}
+      # password: ${oc.env:ES_PASSWORD}
 
   tools:
     - type: search
@@ -330,7 +330,7 @@ convention; query embeddings must use its query prompt convention.
 | Search returns no matches | `search_fields`, analyzers, indexed content, and whether the query language matches the corpus |
 | `visit` cannot find a result | `document_id_field` and `fetch_field`; use `_id` by omitting both when no stable field exists |
 | Vector dimension error | Index mapping dimension versus the embedding endpoint's returned vector dimension |
-| Authentication failure | Elasticsearch `client_kwargs`, embedding API key, or LLM API key |
+| Authentication failure | Elasticsearch `username` and `password`, embedding API key, or LLM API key |
 | Vector mode rejects the config | `embedding_model`, `embedding_api_key`, `vector_field`, and `highlight: false` |
 | Model rejects tool calls | Model chat template, provider tool-call support, and parser configuration |
 

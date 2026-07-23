@@ -64,6 +64,8 @@ class SourceConfig:
     # -- Elasticsearch -------------------------------------------------------
     hosts: Any = None
     index: str | None = None
+    username: str | None = None
+    password: str | None = None
     search_fields: list[str] | None = None
     title_field: str = "title"
     text_field: str = "text"
