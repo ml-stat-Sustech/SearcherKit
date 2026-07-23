@@ -2,12 +2,18 @@ from typing import Any
 
 import torch
 
+import areal.trainer.ppo.actor as areal_ppo_actor
 from areal.trainer.ppo.actor import PPOActor
 from areal.utils.functional import (
     reward_overlong_penalty,
 )
 
 from searcherkit.training.areal.termination import TerminationReason
+from searcherkit.training.areal.step_level_loss import make_step_level_ppo_loss
+
+areal_ppo_actor.ppo_actor_loss_fn = make_step_level_ppo_loss(
+    areal_ppo_actor.ppo_actor_loss_fn
+)
 
 # TODO: make answer format configurable instead of hardcoded
 _ANSWER_FORMAT = r"\boxed{{{answer}}}"

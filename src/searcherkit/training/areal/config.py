@@ -9,6 +9,16 @@ from searcherkit.training.config import WorkFlowConfig
 
 @dataclass
 class SearchAgentPPOActorConfig(PPOActorConfig):
+    importance_sampling_level: str = field(
+        default="token",
+        metadata={
+            "help": (
+                "PPO ratio granularity: token, sequence (GSPO), or step. "
+                "Step aggregates each contiguous span selected by loss_mask."
+            ),
+            "choices": ["token", "sequence", "step"],
+        },
+    )
     enable_igpo_reward: bool = field(
         default=False,
         metadata={"help": "Enable the IGPO reward."},

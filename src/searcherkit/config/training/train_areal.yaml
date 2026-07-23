@@ -271,6 +271,7 @@ actor:
   overlong_reward_penalty: false
   kl_ctl: 0.0
   ppo_n_minibatches: 4
+  importance_sampling_level: step
   rejection_sampling:
     level: token
     upper: 5.0
