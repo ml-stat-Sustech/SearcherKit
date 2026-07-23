@@ -84,8 +84,10 @@ class BrowseCompPlusSource:
         if path.exists():
             if path.suffix in (".jsonl", ".json"):
                 dataset = load_dataset("json", data_files=str(path), split=self.split, streaming=True)
-            else:
+            elif path.suffix == ".parquet": 
                 dataset = load_dataset("parquet", data_files=str(path), split=self.split, streaming=True)
+            else:
+                dataset = load_dataset(self.dataset_path, split=self.split, streaming=True)
         else:
             dataset = load_dataset(self.dataset_path, split=self.split, streaming=True)
 

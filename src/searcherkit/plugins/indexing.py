@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from logging import getLogger
 
+logger = getLogger()
 
 @dataclass(slots=True)
 class IndexDocument:
@@ -137,7 +139,7 @@ def create_elasticsearch_index(
                     "url": {"type": "keyword", "index": False},
                 },
             },
-            "metadata": {"type": "object", "enabled": True},
+            "metadata": {"type": "object", "enabled": False},
         }
     }
     if embedding_dim is not None:
@@ -216,7 +218,7 @@ def index_documents(
     max_text_chars: int = 32768,
 ) -> int:
     try:
-        from elasticsearch.helpers import bulk
+        from elasticsearch.helpers import bulk, BulkIndexError
     except ImportError as exc:
         raise ImportError(
             "Bulk indexing requires the 'elasticsearch' package. "
@@ -247,7 +249,15 @@ def index_documents(
                     "_source": source,
                 }
             )
-        bulk(client.options(request_timeout=100), actions, raise_on_error=True)
+        try:
+            bulk(client.options(request_timeout=100), actions, raise_on_error=True)
+        except BulkIndexError as e:
+            # 关键：从异常中提取 errors 列表
+            errors = e.errors
+            # 遍历并打印每一个错误详情
+            for index, error in enumerate(errors):
+                logger.error(error)
+            raise
         total += len(actions)
     return total
 
