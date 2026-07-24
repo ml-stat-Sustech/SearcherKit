@@ -24,12 +24,9 @@ from searcherkit.training.agent import (
 from searcherkit.training.areal.client import ARealClient
 from searcherkit.training.areal.termination import TerminationReason
 from searcherkit.training.config import WorkFlowConfig
-from searcherkit.training.rewards import (
+from searcherkit.training.areal.rewards import (
     assign_overlong_penalty,
-    count_duplicate_tool_results,
-    count_repeated_tool_queries,
     count_tool_calls,
-    count_truncated_tool_responses,
     f1_score,
     searcherkit_reward_components,
 )
@@ -87,7 +84,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
 
         format_error = False
         context_error = False
-        tool_parser_error = False
         repeated_query = False
         too_many_tool_call = False
         try:
@@ -103,7 +99,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             logger.warning(repr(exc))
         except (LLMOutputError, ValidationError, ParsingError) as exc:
             format_error = True
-            tool_parser_error = True
             logger.warning(repr(exc))
         except LLMContextError:
             context_error = True
@@ -120,17 +115,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             num_turns=agent.turn,
             context_tokens=agent.context_token_size,
             context_limit_prompted=agent.max_token_reminder_prompted,
-            searched_query_count=max(
-                int(repeated_query), count_repeated_tool_queries(history)
-            ),
-            tool_parser_error_count=int(tool_parser_error),
-            too_many_tool_call_count=int(too_many_tool_call),
-            too_many_turn_count=int(
-                getattr(agent, "max_turn_reminder_prompted", False)
-            ),
-            response_truncated_count=count_truncated_tool_responses(history),
-            too_long_seq_truncated_count=int(context_error),
-            duplicate_search_result_count=count_duplicate_tool_results(history),
         )
 
         visit_cnt = 0
@@ -175,23 +159,20 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             outcome_score=outcome_score,
             overlong_penalty=overlong_penalty,
             format_error=format_error,
-            tool_call_count=tool_call_count,
-            repeated_query=repeated_query,
-            too_many_tool_call=too_many_tool_call,
         )
 
         stats_tracker.get(workflow_context.stat_scope()).scalar(
             format_score=reward_parts["format_score"],
-            search_score=reward_parts["search_score"],
-            repeated_query_penalty=reward_parts["repeated_query_penalty"],
-            too_many_tool_call_penalty=reward_parts["too_many_tool_call_penalty"],
             tool_call_count=tool_call_count,
             overlong_penalty=overlong_penalty,
             outcome_score=outcome_score,
         )
 
-        final_reward = reward_parts["reward"]
+        final_reward = reward_parts["outcome_score"] + reward_parts["overlong_penalty"]
+        termination_reason = TerminationReason.NORMAL if not format_error else TerminationReason.BAD_LAST_TURN
+
         stats_tracker.get(workflow_context.stat_scope()).scalar(reward=final_reward)
+        stats_tracker.get(workflow_context.stat_scope()).scalar(bad_last_turn= 1.0 if termination_reason == TerminationReason.BAD_LAST_TURN else 0.0)
 
         areal_client.set_last_reward(final_reward)
         areal_client.apply_reward_discount(self.reward_discount)
@@ -199,7 +180,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         trajectory = areal_client.export_interactions(style=self.export_style)
         if trajectory is None:
             return None
-        # TODO: derive BAD_LAST_TURN from the workflow's final agent state.
         termination_reason = TerminationReason.NORMAL
         for interaction in trajectory.values():
             tensor_dict = interaction.to_tensor_dict()

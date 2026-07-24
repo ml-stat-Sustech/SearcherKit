@@ -37,7 +37,7 @@ class SearchAgentTrainingConfig(GRPOConfig):
     workflow: WorkFlowConfig = field(default_factory=WorkFlowConfig)
     eval_workflow: WorkFlowConfig = field(default_factory=WorkFlowConfig)
     dynamic_filter_fn: str | None = field(
-        default="searcherkit.training.rewards.should_accept"
+        default="searcherkit.training.areal.rewards.should_accept"
     )
 
     def __post_init__(self) -> None:
