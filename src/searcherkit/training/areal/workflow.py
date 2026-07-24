@@ -13,7 +13,7 @@ from areal.experimental.openai import ArealOpenAI
 from areal.experimental.openai.types import InteractionWithTokenLogpReward
 from areal.utils import stats_tracker
 
-from searcherkit.agent.search_agent import LLMContextError, LLMOutputError
+from searcherkit.common.errors import LLMError
 from searcherkit.llm.parsers import ParsingError
 from searcherkit.common.log import get_logger
 from searcherkit.training.agent import (
@@ -34,7 +34,7 @@ from searcherkit.training.areal.rewards import (
 logger = get_logger(__name__)
 
 # _ANSWER_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
-_ANSWER_PATTERN = re.compile(r"\\boxed\{(?P<answer>[^}]*)\}", re.DOTALL)
+# _ANSWER_PATTERN = re.compile(r"\\boxed\{(?P<answer>[^}]*)\}", re.DOTALL)
 
 
 class ARealSearchAgentWorkflow(RolloutWorkflow):
@@ -89,20 +89,18 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         try:
             agent.reset()
             await agent.run(data["question"])
-        except RepeatedToolCallError as exc:
-            format_error = True
-            repeated_query = True
+        except LLMError as exc:
             logger.warning(repr(exc))
-        except TooManyToolCallsError as exc:
             format_error = True
-            too_many_tool_call = True
-            logger.warning(repr(exc))
-        except (LLMOutputError, ValidationError, ParsingError) as exc:
-            format_error = True
-            logger.warning(repr(exc))
-        except LLMContextError:
-            context_error = True
-            raise
+            if exc is RepeatedToolCallError:
+                repeated_query = True
+            elif exc is TooManyToolCallsError:
+                too_many_tool_call = True
+            elif exc is ParsingError:
+                pass
+            elif exc is LLMContextError:
+                context_error = True
+                raise
         finally:
             stats = stats_tracker.get(workflow_context.stat_scope())
             stats.scalar(context_error=float(context_error))
@@ -152,23 +150,20 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             agent.max_tokens_prompt_margin / 2,
         )
         outcome_score = (
-            f1_score(answer.lower(), data["answer"].lower()) if answer else 0.0
+            f1_score(answer, data["answer"]) if answer else 0.0
         )
         tool_call_count = count_tool_calls(history)
-        reward_parts = searcherkit_reward_components(
-            outcome_score=outcome_score,
-            overlong_penalty=overlong_penalty,
-            format_error=format_error,
-        )
+
+        format_score = 0.0 if format_error else 0.1
 
         stats_tracker.get(workflow_context.stat_scope()).scalar(
-            format_score=reward_parts["format_score"],
+            format_score=format_score,
             tool_call_count=tool_call_count,
             overlong_penalty=overlong_penalty,
             outcome_score=outcome_score,
         )
 
-        final_reward = reward_parts["outcome_score"] + reward_parts["overlong_penalty"]
+        final_reward = outcome_score + overlong_penalty
         termination_reason = TerminationReason.NORMAL if not format_error else TerminationReason.BAD_LAST_TURN
 
         stats_tracker.get(workflow_context.stat_scope()).scalar(reward=final_reward)

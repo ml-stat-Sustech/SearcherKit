@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
-from typing import overload
+from typing import overload, Any, TYPE_CHECKING
 
-from searcherkit.agent.search_agent import LLMOutputError, SearchAgent
+from searcherkit.agent.search_agent import SearchAgent
 from searcherkit.common.messages import ToolCall
 from searcherkit.common.retry import RetryPolicy
+from searcherkit.common.errors import LLMError
 from searcherkit.llm.base import Client, get_client
 from searcherkit.llm.parsers import get_parser
 from searcherkit.sources import add_source_cfg
@@ -15,13 +17,32 @@ from searcherkit.tools.summarizer import Summarizer
 from searcherkit.training.config import AgentConfig
 from searcherkit.training.rewards import normalize_query
 
+if TYPE_CHECKING:
+    from searcherkit.common.messages import ChatMessage
 
-class TooManyToolCallsError(LLMOutputError):
+
+class TooManyToolCallsError(LLMError):
     """Raised when the model issues too many parallel tool calls."""
+    pass
 
 
-class RepeatedToolCallError(LLMOutputError):
+class RepeatedToolCallError(LLMError):
     """Raised when the model repeats a tool call with identical arguments."""
+    pass
+
+
+class LLMContextError(LLMError):
+    """Raised when the LLM request exceeds the context limit."""
+    pass
+
+
+_AREAL_CONTEXT_LENGTH_ERROR = re.compile(
+    r"^len of prompt tokens \d+ exceeds max_total_tokens \d+$"
+)
+
+
+def _is_areal_context_length_error(exc: ValueError) -> bool:
+    return _AREAL_CONTEXT_LENGTH_ERROR.fullmatch(str(exc)) is not None
 
 
 class SearchAgentTraining(SearchAgent):
@@ -71,9 +92,6 @@ class SearchAgentTraining(SearchAgent):
                 max_tokens=config.max_tokens,
                 max_tokens_prompt=config.max_tokens_prompt,
                 max_tokens_prompt_margin=config.max_tokens_prompt_margin,
-                run_timeout_seconds=config.run_timeout_seconds,
-                run_timeout_prompt=config.run_timeout_prompt,
-                run_timeout_prompt_margin_seconds=config.run_timeout_prompt_margin_seconds,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
             )
@@ -107,13 +125,21 @@ class SearchAgentTraining(SearchAgent):
         super().reset()
         self.previous_tool_queries = set()
 
-    async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[str]:
+    async def parse_and_call_llm(self, history: list[ChatMessage]):
+        try:
+            return await super().parse_and_call_llm(history)
+        except ValueError as exc:
+            if not _is_areal_context_length_error(exc):
+                raise
+            raise LLMContextError(str(exc)) from exc
+
+    async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[tuple[str, Any]]:
         tool_calls_list = list(tool_calls)
         if len(tool_calls_list) > 1:
             raise TooManyToolCallsError("Too many parallel tool calls")
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:
-                raise LLMOutputError(f"Tool {tc.name} not found")
+                raise LLMError(f"Tool {tc.name} not found")
             if isinstance(tc.arguments, dict) and "query" in tc.arguments:
                 argument_str = normalize_query(tc.arguments["query"])
             else:

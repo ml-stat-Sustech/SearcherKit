@@ -180,8 +180,6 @@ reference:
       - common.errors.RecoverableError
       - common.errors.FatalError
       - common.errors.LLMError
-      - agent.search_agent.LLMOutputError
-      - agent.search_agent.LLMContextError
       - llm.parsers.base.ParsingError
       - sources.base.SourceError
 

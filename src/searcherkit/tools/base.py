@@ -11,6 +11,7 @@ from jsonschema import validate, ValidationError
 
 from searcherkit.common.json_schema import schema_from_signature
 from searcherkit.common.retry import RetryConfig
+from searcherkit.llm.parsers import ParsingError
 from searcherkit.tools.summarizer import Summarizer
 from searcherkit.common.log import get_logger
 
@@ -194,7 +195,7 @@ class BaseTool(abc.ABC):
                 exc,
             )
             if self.raise_argument_validation_error:
-                raise
+                raise ParsingError from exc
             return (
                 f"[Tool] invalid type for tool call argument.\n"
                 f"Problem:{exc!r}\n\n"

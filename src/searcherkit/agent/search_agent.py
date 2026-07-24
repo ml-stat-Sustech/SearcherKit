@@ -22,15 +22,6 @@ from searcherkit.common.log import append_trace_interaction, get_logger, log_con
 from searcherkit.common.retry import retry_async, RetryPolicy, RetryConfig
 from searcherkit.common.live_events import LiveEvent, LiveEventSink, emit_live_event
 
-# TODO
-class LLMOutputError(LLMError):
-    """Raised when there's a problem with the LLM output."""
-    pass
-
-class LLMContextError(LLMError):
-    """Raised when llm exceeds context limit."""
-    pass
-
 if TYPE_CHECKING:
     from searcherkit.llm.base import Client
 
@@ -77,9 +68,6 @@ class SearchAgentConfig:
     max_tokens: int = 1024
     max_tokens_prompt: str | None = None
     max_tokens_prompt_margin: int = 128
-    run_timeout_seconds: float | None = None
-    run_timeout_prompt: str | None = None
-    run_timeout_prompt_margin_seconds: float | None = None
     llm_retry_config: RetryConfig | None = field(default_factory=RetryConfig)
     tool_retry_config: RetryConfig | None = field(default_factory=RetryConfig)
     stream_llm: bool = False
@@ -106,12 +94,7 @@ class SearchAgent(BaseAgent):
         max_tokens_prompt: Optional user prompt injected near token limit.
         max_tokens_prompt_margin: Safety margin before `max_tokens` to trigger
             the token-limit reminder prompt.
-        run_timeout_seconds: Optional wall-clock run budget in seconds. The
-            agent uses this for wrap-up prompting; callers may still enforce
-            a hard timeout around `run`.
-        run_timeout_prompt: Optional user prompt injected near run timeout.
-        run_timeout_prompt_margin_seconds: Remaining-time margin before
-            `run_timeout_seconds` to trigger the timeout reminder prompt.
+        # TODO: timeout reminding rework
         llm_retry_policy: Retry policy for LLM parsing/call steps. If `None`,
             retries are disabled.
         tool_retry_policy: Retry policy for tool execution. If `None`, retries
@@ -135,9 +118,6 @@ class SearchAgent(BaseAgent):
                  max_tokens: int = 1024,
                  max_tokens_prompt: str | None = None,
                  max_tokens_prompt_margin: int = 128,
-                 run_timeout_seconds: float | None = None,
-                 run_timeout_prompt: str | None = None,
-                 run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
                  stream_llm: bool = False):
@@ -154,9 +134,6 @@ class SearchAgent(BaseAgent):
                  max_tokens: int = 1024,
                  max_tokens_prompt: str | None = None,
                  max_tokens_prompt_margin: int = 128,
-                 run_timeout_seconds: float | None = None,
-                 run_timeout_prompt: str | None = None,
-                 run_timeout_prompt_margin_seconds: float | None = None,
                  llm_retry_policy: RetryPolicy | None = None,
                  tool_retry_policy: RetryPolicy | None = None,
                  stream_llm: bool = False,
@@ -186,9 +163,6 @@ class SearchAgent(BaseAgent):
                 max_tokens=config.max_tokens,
                 max_tokens_prompt=config.max_tokens_prompt,
                 max_tokens_prompt_margin=config.max_tokens_prompt_margin,
-                run_timeout_seconds=config.run_timeout_seconds,
-                run_timeout_prompt=config.run_timeout_prompt,
-                run_timeout_prompt_margin_seconds=config.run_timeout_prompt_margin_seconds,
                 llm_retry_policy=llm_retry_policy,
                 tool_retry_policy=tool_retry_policy,
                 stream_llm=config.stream_llm,
@@ -211,16 +185,10 @@ class SearchAgent(BaseAgent):
         self.max_tokens = max_tokens
         self.max_tokens_prompt = max_tokens_prompt
         self.max_tokens_prompt_margin = max_tokens_prompt_margin
-        self.run_timeout_seconds = run_timeout_seconds
-        self.run_timeout_prompt = run_timeout_prompt
-        self.run_timeout_prompt_margin_seconds = run_timeout_prompt_margin_seconds
         self.stream_llm = stream_llm
         self.llm_retry_policy = llm_retry_policy
         self.tool_retry_policy = tool_retry_policy
         self.context_max_token_exceeded = False
-        self.run_timeout_exceeded = False
-        self.run_elapsed_seconds = 0.0
-        self.run_timeout_remaining_seconds: float | None = None
         self.history = []
         self.live_event_sink: LiveEventSink | None = None
         self._timing = LogTiming()
@@ -242,35 +210,35 @@ class SearchAgent(BaseAgent):
     def timing_report(self) -> dict[str, Any]:
         return self._timing.to_dict()
 
-    @staticmethod
-    def _is_context_length_error(exc: BadRequestError | InternalServerError) -> bool:
-        response = getattr(exc, "response", None)
-        body = getattr(response, "json", None)
-        error_payload = {}
-        if callable(body):
-            try:
-                error_payload = body()
-            except (TypeError, ValueError):
-                error_payload = {}
-        error = error_payload.get("error", {}) if isinstance(error_payload, dict) else {}
-        message = str(error.get("message", "")).lower()
-        code = str(error.get("code", "")).lower()
-        param = str(error.get("param", "")).lower()
-        response_text = str(getattr(response, "text", "") or "").lower()
-        text = " ".join(
-            part for part in [message, code, param, response_text, str(exc).lower()] if part
-        )
-        return any(
-            marker in text
-            for marker in (
-                "context length",
-                "maximum context length",
-                "max context length",
-                "context window",
-                "context_length_exceeded",
-                "too many tokens",
-            )
-        )
+    # @staticmethod
+    # def _is_context_length_error(exc: BadRequestError | InternalServerError) -> bool:
+    #     response = getattr(exc, "response", None)
+    #     body = getattr(response, "json", None)
+    #     error_payload = {}
+    #     if callable(body):
+    #         try:
+    #             error_payload = body()
+    #         except (TypeError, ValueError):
+    #             error_payload = {}
+    #     error = error_payload.get("error", {}) if isinstance(error_payload, dict) else {}
+    #     message = str(error.get("message", "")).lower()
+    #     code = str(error.get("code", "")).lower()
+    #     param = str(error.get("param", "")).lower()
+    #     response_text = str(getattr(response, "text", "") or "").lower()
+    #     text = " ".join(
+    #         part for part in [message, code, param, response_text, str(exc).lower()] if part
+    #     )
+    #     return any(
+    #         marker in text
+    #         for marker in (
+    #             "context length",
+    #             "maximum context length",
+    #             "max context length",
+    #             "context window",
+    #             "context_length_exceeded",
+    #             "too many tokens",
+    #         )
+    #     )
 
     async def init_tools(self) -> None:
         tools = list(self.tool_dict.values())
@@ -442,16 +410,6 @@ class SearchAgent(BaseAgent):
                 "Agent loop naturally ends without more tool calls",
             )
             return True
-
-        if self.run_timeout_exceeded and (
-            not self.run_timeout_prompt or self.run_timeout_reminder_prompted
-        ):
-            logger.info(
-                "Stopping agent loop due to agent run timeout, elapsed=%.1fs limit=%s",
-                self.run_elapsed_seconds,
-                self.run_timeout_seconds,
-            )
-            return True
         
         if self.context_max_token_exceeded:
             if self.max_tokens_prompt and not self.max_token_reminder_prompted:
@@ -470,9 +428,6 @@ class SearchAgent(BaseAgent):
                 self.turn + 1
             )
             return True
-
-        if self.run_timeout_exceeded:
-            return False
         
         return False
     
@@ -629,42 +584,42 @@ class SearchAgent(BaseAgent):
 
 
                         # 2. Execute agent turn and set stop flags
-                        try:
-                            should_stream_llm = (
-                                self.stream_llm
-                                and live_event_sink is not None
-                                and callable(getattr(self.client, "stream_complete_with_usage", None))
+                        # try:
+                        should_stream_llm = (
+                            self.stream_llm
+                            and live_event_sink is not None
+                            and callable(getattr(self.client, "stream_complete_with_usage", None))
+                        )
+                        if should_stream_llm and self.llm_retry_policy is None:
+                            new_call_result = await self.stream_parse_and_call_llm(
+                                self.history,
+                                turn=self.turn + 1,
                             )
-                            if should_stream_llm and self.llm_retry_policy is None:
-                                new_call_result = await self.stream_parse_and_call_llm(
-                                    self.history,
-                                    turn=self.turn + 1,
-                                )
-                            elif should_stream_llm:
-                                new_call_result = await retry_async(
-                                    self.stream_parse_and_call_llm,
-                                    self.history,
-                                    policy=self.llm_retry_policy,
-                                    op_name="searcherkit.stream_parse_and_call_llm",
-                                    log=logger,
-                                    turn=self.turn + 1,
-                                )
-                            elif self.llm_retry_policy is None:
-                                new_call_result = await self.parse_and_call_llm(self.history)
-                            else:
-                                new_call_result = await retry_async(
-                                    self.parse_and_call_llm,
-                                    self.history,
-                                    policy=self.llm_retry_policy,
-                                    op_name="searcherkit.parse_and_call_llm",
-                                    log=logger,
-                                )
-                        except (BadRequestError, InternalServerError) as exc:
-                            if self._is_context_length_error(exc):
-                                logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
-                                raise LLMContextError from exc
-                            logger.warning("LLM request failed: %s", exc)
-                            raise
+                        elif should_stream_llm:
+                            new_call_result = await retry_async(
+                                self.stream_parse_and_call_llm,
+                                self.history,
+                                policy=self.llm_retry_policy,
+                                op_name="searcherkit.stream_parse_and_call_llm",
+                                log=logger,
+                                turn=self.turn + 1,
+                            )
+                        elif self.llm_retry_policy is None:
+                            new_call_result = await self.parse_and_call_llm(self.history)
+                        else:
+                            new_call_result = await retry_async(
+                                self.parse_and_call_llm,
+                                self.history,
+                                policy=self.llm_retry_policy,
+                                op_name="searcherkit.parse_and_call_llm",
+                                log=logger,
+                            )
+                        # except (BadRequestError, InternalServerError) as exc:
+                        #     if self._is_context_length_error(exc):
+                        #         logger.warning("LLM context length error, stop agent loop, context token=%s", self.context_token_size)
+                        #         raise LLMContextError from exc
+                        #     logger.warning("LLM request failed: %s", exc)
+                        #     raise
 
                         await emit_live_event(
                             live_event_sink,
