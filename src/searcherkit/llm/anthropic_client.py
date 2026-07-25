@@ -207,7 +207,7 @@ class AnthropicClient(Client):
                 model=config.model,
                 api_key=config.api_key,
                 base_url=config.base_url,
-                retry_policy=config.retry_policy,
+                retry_policy=RetryPolicy(config=config.retry_policy) if config.retry_policy else None,
                 concurrency_limit=config.concurrency_limit,
                 default_kwargs=config.default_kwargs,
                 **(config.extra_client_kwargs or {}),

@@ -20,6 +20,7 @@ from searcherkit.training.agent import (
     RepeatedToolCallError,
     SearchAgentTraining,
     TooManyToolCallsError,
+    LLMContextError,
 )
 from searcherkit.training.areal.client import ARealClient
 from searcherkit.training.areal.termination import TerminationReason
@@ -91,16 +92,16 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             await agent.run(data["question"])
         except LLMError as exc:
             logger.warning(repr(exc))
-            format_error = True
-            if exc is RepeatedToolCallError:
-                repeated_query = True
-            elif exc is TooManyToolCallsError:
-                too_many_tool_call = True
-            elif exc is ParsingError:
-                pass
-            elif exc is LLMContextError:
+            if isinstance(exc, LLMContextError):
                 context_error = True
                 raise
+            format_error = True
+            if isinstance(exc, RepeatedToolCallError):
+                repeated_query = True
+            elif isinstance(exc, TooManyToolCallsError):
+                too_many_tool_call = True
+            elif isinstance(exc, ParsingError):
+                pass
         finally:
             stats = stats_tracker.get(workflow_context.stat_scope())
             stats.scalar(context_error=float(context_error))

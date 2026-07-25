@@ -12,10 +12,10 @@ tokenizer_path: ${actor.path}
 cluster:
   n_nodes: 2
   n_gpus_per_node: 8
-  fileroot: /home/jovyan1/wsy/searcherkit/searcherkit-slime/logs
+  fileroot: /data/hanyang_dev/searchagent/outputs
   name_resolve:
     type: nfs
-    nfs_record_root: /home/jovyan1/wsy/searcherkit/searcherkit-slime/logs/name_resolve
+    nfs_record_root: /data/hanyang_dev/searchagent/outputs/name_resolve
 
 scheduler:
   type: ray
@@ -26,7 +26,8 @@ workflow:
     llm_client:
       type: openai
       model: ${actor.path}
-      retry_policy: null
+      retry_policy: 
+        max_tries: 1
       default_kwargs:
         temperature: 1.0
         max_completion_tokens: 8192
@@ -36,7 +37,7 @@ workflow:
             enable_thinking: true
     parser:
       type: upstream
-    max_tokens: 65536
+    max_tokens: 40960
     system_prompt: |
       You are a helpful AI assistant that can search for information to answer questions accurately.
       
@@ -53,8 +54,8 @@ workflow:
     # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
     query_prompt: "{query}"
 
-    max_tokens_prompt_margin: 11000
-    max_turn: 50
+    max_tokens_prompt_margin: 4096
+    max_turn: 10000
     max_turn_prompt: |
       You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
       \boxed{your final answer, in a few words}
@@ -75,12 +76,13 @@ workflow:
     sources:
       - name: elasticsearch
         type: elasticsearch
-        hosts: ["http://10.32.34.135:9200"]
-        index: wiki20251101_qwen3-embedding-8b
+        hosts: ["http://10.60.101.2:10108"]
+        index: enwiki-20260601_qwen3-8b
         search_fields: ["title", "text"]
-        es_max_concurrency: 1024
+        es_max_concurrency: 256
         embedding_max_concurrency: 2048
-        summary_max_concurrency: 1024
+        username: elastic
+        password: ${oc.env:ES_PASSWORD}
         title_field: title
         text_field: text
         url_field: url
@@ -92,7 +94,7 @@ workflow:
           Query:
         embedding_model: /home/jovyan/Qwen3-Embedding-8B
         embedding_api_key: api_key
-        embedding_base_url: http://10.32.29.237:8004/v1
+        embedding_base_url: http://${oc.env:MASTER_ADDR}:8004/v1
     tools:
       - type: search
         name: search
@@ -105,16 +107,16 @@ workflow:
           required:
             - query
           additionalProperties: false
-        source: elasticsearch
+        source: [elasticsearch]
         response_char_limit: null
-        raise_argument_validation_error: false
+        raise_argument_validation_error: true
         summarizer:
           model: ${actor.path}
           max_chars: 100000
           max_concurrency: 1024
           default_kwargs:
             store: false
-            max_tokens: 1024
+            max_completion_tokens: 1024
             extra_body:
               chat_template_kwargs:
                 enable_thinking: false
@@ -139,7 +141,7 @@ eval_workflow:
     max_tokens: ${workflow.agent.max_tokens}
     system_prompt: ${workflow.agent.system_prompt}
     query_prompt: ${workflow.agent.query_prompt}
-    max_tokens_prompt_margin: 11000
+    max_tokens_prompt_margin: 4096
     max_turn: 1000
     max_turn_prompt: ${workflow.agent.max_turn_prompt}
     max_tokens_prompt: ${workflow.agent.max_tokens_prompt}
@@ -158,12 +160,11 @@ eval_workflow:
     sources:
       - name: elasticsearch
         type: elasticsearch
-        hosts: ["http://10.32.34.135:9200"]
+        hosts: ["http://10.60.101.2:10108"]
         index: browsecomp_plus_qwen3-embedding-8b
         search_fields: ["title", "text"]
-        es_max_concurrency: 1024
+        es_max_concurrency: 256
         embedding_max_concurrency: 2048
-        summary_max_concurrency: 1024
         title_field: title
         text_field: text
         url_field: url
@@ -175,7 +176,7 @@ eval_workflow:
           Query:
         embedding_model: /home/jovyan/Qwen3-Embedding-8B
         embedding_api_key: api_key
-        embedding_base_url: http://10.32.29.237:8004/v1
+        embedding_base_url: http://${oc.env:MASTER_ADDR}:8004/v1
 
     tools:
       - type: search
@@ -189,7 +190,7 @@ eval_workflow:
           required:
             - query
           additionalProperties: false
-        source: elasticsearch
+        source: [elasticsearch]
         response_char_limit: null
         raise_argument_validation_error: false
         summarizer:
@@ -198,7 +199,7 @@ eval_workflow:
           max_concurrency: 1024
           default_kwargs:
             store: false
-            max_tokens: 1024
+            max_completion_tokens: 1024
             extra_body:
               chat_template_kwargs:
                 enable_thinking: false
@@ -212,7 +213,7 @@ rollout:
   queue_size: null
   consumer_batch_size: ${train_dataset.batch_size}
   max_head_offpolicyness: 3
-  enable_rollout_tracing: true
+  enable_rollout_tracing: false
   scheduling_spec: ${actor.scheduling_spec}
   fileroot: ${cluster.fileroot}
   tokenizer_path: ${tokenizer_path}
@@ -256,14 +257,14 @@ actor:
   experiment_name: ${experiment_name}
   trial_name: ${trial_name}
   path: /home/jovyan1/Qwen3-8B
-  attn_impl: "flash_attention_3"
+  attn_impl: "flash_attention_4"
   init_from_scratch: false
   disable_dropout: true
   gradient_checkpointing: true
   dtype: bfloat16
   mb_spec:
     # max_tokens_per_mb: ${workflow.agent.max_tokens}
-    max_tokens_per_mb: 90000
+    max_tokens_per_mb: 70000
   optimizer:
     type: adam
     lr: 5e-6
@@ -271,7 +272,7 @@ actor:
     gradient_clipping: 1.0
     warmup_steps_proportion: 0.001
   eps_clip: 0.2
-  eps_clip_higher: 0.28
+  eps_clip_higher: 0.34
   temperature: ${gconfig.temperature}
   overlong_reward_penalty: false
   kl_ctl: 0.0
@@ -294,6 +295,8 @@ actor:
     mean_level: batch
     std_level: batch
   max_new_tokens: ${workflow.agent.llm_client.default_kwargs.max_completion_tokens}
+  megatron:
+    bridge_type: megatron-bridge
   scheduling_spec:
     - task_type: worker
       port_count: 2
@@ -307,12 +310,12 @@ ref:
   trial_name: ${trial_name}
   backend: ${actor.backend}
   path: ${actor.path}
-  attn_impl: "flash_attention_3"
+  attn_impl: "flash_attention_4"
   init_from_scratch: false
   dtype: ${actor.dtype}
   mb_spec:
     # max_tokens_per_mb: ${workflow.agent.max_tokens}
-    max_tokens_per_mb: 70000
+    max_tokens_per_mb: 120000
   optimizer: null
   scheduling_strategy:
     type: colocation
@@ -327,7 +330,8 @@ sglang:
   dtype: ${actor.dtype}
   max_running_requests: null
   context_length: ${workflow.agent.max_tokens}
-  mem_fraction_static: 0.8
+  mem_fraction_static: 0.9
+  attention_backend: fa4
   max_prefill_tokens: ${workflow.agent.max_tokens}
 
 # datasets
@@ -343,7 +347,7 @@ valid_dataset:
   batch_size: 256
   pin_memory: true
   num_workers: 16
-  path: /home/jovyan1/browsecomp_plus_decrypted_qa.jsonl
+  path: /data/hanyang_dev/datasets/browsecomp_plus_decrypted_qa.jsonl
   type: rl
 
 # Utilities
@@ -377,11 +381,7 @@ stats_logger:
   trial_name: ${trial_name}
   fileroot: ${cluster.fileroot}
   wandb:
-    mode: disabled
-    project: ${experiment_name}
-    name: ${trial_name}
-  swanlab:
-    mode: cloud
+    mode: online
     project: ${experiment_name}
     name: ${trial_name}
 

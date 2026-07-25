@@ -6,7 +6,7 @@ import abc
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterable
 
-from searcherkit.common.retry import RetryPolicy
+from searcherkit.common.retry import RetryConfig
 from searcherkit.common.messages import ChatMessage
 
 if TYPE_CHECKING:
@@ -44,7 +44,7 @@ class ClientConfig:
     base_url: Any | None = None
     concurrency_limit: int | None = None
     extra_client_kwargs: dict[str, Any] | None = None
-    retry_policy: RetryPolicy | None = None
+    retry_policy: RetryConfig | None = None
     default_kwargs: dict[str, Any] | None = None
 
 

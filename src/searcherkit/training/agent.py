@@ -39,10 +39,26 @@ class LLMContextError(LLMError):
 _AREAL_CONTEXT_LENGTH_ERROR = re.compile(
     r"^len of prompt tokens \d+ exceeds max_total_tokens \d+$"
 )
+_AREAL_NON_POSITIVE_MAX_NEW_TOKENS_ERROR = re.compile(
+    r"^max_new_tokens \(-?\d+\) is non-positive! "
+    r"max_tokens=\d+, prompt_len=\d+, max_new_tokens=\d+\.$"
+)
+_AREAL_GENERATE_BAD_REQUEST = re.compile(
+    r"^Failed after \d+ retries each\. .*Endpoint: /generate\. "
+    r"Last error: ClientResponseError\(.*status=400, message='Bad Request'",
+    re.DOTALL,
+)
 
 
-def _is_areal_context_length_error(exc: ValueError) -> bool:
-    return _AREAL_CONTEXT_LENGTH_ERROR.fullmatch(str(exc)) is not None
+def _is_areal_context_length_error(exc: ValueError | RuntimeError) -> bool:
+    message = str(exc)
+    return (
+        _AREAL_CONTEXT_LENGTH_ERROR.fullmatch(message) is not None
+        or _AREAL_NON_POSITIVE_MAX_NEW_TOKENS_ERROR.fullmatch(message) is not None
+        # AReaL discards the SGLang response body when /generate returns 400,
+        # leaving this wrapper as the only context-overflow signal available.
+        or _AREAL_GENERATE_BAD_REQUEST.match(message) is not None
+    )
 
 
 class SearchAgentTraining(SearchAgent):
@@ -128,14 +144,14 @@ class SearchAgentTraining(SearchAgent):
     async def parse_and_call_llm(self, history: list[ChatMessage]):
         try:
             return await super().parse_and_call_llm(history)
-        except ValueError as exc:
+        except (ValueError, RuntimeError) as exc:
             if not _is_areal_context_length_error(exc):
                 raise
             raise LLMContextError(str(exc)) from exc
 
     async def call_tools(self, tool_calls: Iterable[ToolCall]) -> list[tuple[str, Any]]:
         tool_calls_list = list(tool_calls)
-        if len(tool_calls_list) > 1:
+        if len(tool_calls_list) > 10:
             raise TooManyToolCallsError("Too many parallel tool calls")
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:

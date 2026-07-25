@@ -235,7 +235,7 @@ def register_config_store() -> None:
     cs.store(group="llm", name="VllmClient", node=ClientConfig)
     cs.store(group="llm", name="TongyiDeepResearchParser", node=ParserConfig)
     cs.store(group="llm", name="UpstreamParser", node=ParserConfig)
-    cs.store(group="common", name="RetryPolicy", node=RetryConfig)
+    cs.store(group="common", name="RetryConfig", node=RetryConfig)
     cs.store(group="common", name="GenericDataLoader", node=DataConfig)
     cs.store(name="__tool_config__", node=ToolConfig())
     cs.store(name="__summarizer_config__", node=SummarizerConfig())
