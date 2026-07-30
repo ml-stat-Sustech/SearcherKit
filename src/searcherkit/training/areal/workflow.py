@@ -176,7 +176,6 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         trajectory = areal_client.export_interactions(style=self.export_style)
         if trajectory is None:
             return None
-        termination_reason = TerminationReason.NORMAL
         for interaction in trajectory.values():
             tensor_dict = interaction.to_tensor_dict()
             tensor_dict["ground_truth"] = [ground_truth]

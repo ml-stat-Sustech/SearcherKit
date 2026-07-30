@@ -54,7 +54,7 @@ workflow:
     # system_prompt: "You are a information seeking master. Seek information using the tools provided to answer the question.\n\nWhile calling the tools, abey the following rules:\n\n1. Think carefully about next tool call. Query different keywords for more information.\n2. Be parsistant in making different queries to gather as enough information as possible to answer the question.\n3. Always try to make tool calls to verify your assumptions before moving on and before answering.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>"
     query_prompt: "{query}"
 
-    max_tokens_prompt_margin: 4096
+    max_tokens_prompt_margin: 8192
     max_turn: 10000
     max_turn_prompt: |
       You have now reached the maximum tool call turns you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
@@ -62,7 +62,7 @@ workflow:
     max_tokens_prompt: |
       You have now reached the maximum context length you can handle. You should stop making tool calls and, based on all the information above, think again and provide what you consider the most likely answer in the following format:
       \boxed{your final answer, in a few words}
-    raise_repeat_tool_call: false
+    raise_repeat_tool_call: true
     llm_retry_config: null
     tool_retry_config:
       max_tries: 3
@@ -112,11 +112,11 @@ workflow:
         raise_argument_validation_error: true
         summarizer:
           model: ${actor.path}
-          max_chars: 100000
+          max_chars: 40000
           max_concurrency: 1024
           default_kwargs:
             store: false
-            max_completion_tokens: 1024
+            max_completion_tokens: 8192
             extra_body:
               chat_template_kwargs:
                 enable_thinking: false
@@ -141,7 +141,7 @@ eval_workflow:
     max_tokens: ${workflow.agent.max_tokens}
     system_prompt: ${workflow.agent.system_prompt}
     query_prompt: ${workflow.agent.query_prompt}
-    max_tokens_prompt_margin: 4096
+    max_tokens_prompt_margin: 8192
     max_turn: 1000
     max_turn_prompt: ${workflow.agent.max_turn_prompt}
     max_tokens_prompt: ${workflow.agent.max_tokens_prompt}
@@ -161,8 +161,10 @@ eval_workflow:
       - name: elasticsearch
         type: elasticsearch
         hosts: ["http://10.60.101.2:10108"]
-        index: browsecomp_plus_qwen3-embedding-8b
+        index: browsecomp-plus_qwen3-8b
         search_fields: ["title", "text"]
+        username: elastic
+        password: ${oc.env:ES_PASSWORD}
         es_max_concurrency: 256
         embedding_max_concurrency: 2048
         title_field: title
@@ -195,11 +197,11 @@ eval_workflow:
         raise_argument_validation_error: false
         summarizer:
           model: ${actor.path}
-          max_chars: 100000
+          max_chars: 40000
           max_concurrency: 1024
           default_kwargs:
             store: false
-            max_completion_tokens: 1024
+            max_completion_tokens: 8192
             extra_body:
               chat_template_kwargs:
                 enable_thinking: false
@@ -218,7 +220,8 @@ rollout:
   fileroot: ${cluster.fileroot}
   tokenizer_path: ${tokenizer_path}
   dump_to_file: true
-  request_timeout: 7200
+  request_timeout: 10000
+  setup_timeout: 1800
   agent:
     agent_cls_path: areal.experimental.openai.proxy.online_agent._OnlineAgent
     mode: inline
@@ -228,7 +231,7 @@ rollout:
     chat_template_type: concat
     turn_discount: 1.0
     engine_max_tokens: ${workflow.agent.max_tokens}
-    session_timeout_seconds: 7200
+    session_timeout_seconds: 10000
 
 gconfig:
   n_samples: 8
@@ -277,7 +280,7 @@ actor:
   overlong_reward_penalty: false
   kl_ctl: 0.0
   ppo_n_minibatches: 4
-  importance_sampling_level: step
+  importance_sampling_level: token
   rejection_sampling:
     level: token
     upper: 5.0
@@ -303,7 +306,12 @@ actor:
       gpu: 1
       mem: 32
       cmd: python3 -m areal.infra.rpc.rpc_server
-      env_vars: {SEARCHERKIT_LOG_LEVEL: "WARN", SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1", PYTHONPATH: "${oc.env:PWD}/src:${oc.env:PYTHONPATH,''}"}
+      env_vars: 
+        SEARCHERKIT_LOG_LEVEL: "WARN"
+        SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN: "1"
+        PYTHONPATH: "${oc.env:PWD}/src:${oc.env:PYTHONPATH,''}"
+        PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+        NCCL_NVLS_ENABLE: "0"
 
 ref:
   experiment_name: ${experiment_name}

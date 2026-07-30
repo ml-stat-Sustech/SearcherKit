@@ -143,9 +143,10 @@ class Summarizer:
         raw = response.get("content")
         if not raw:
             raise SummaryError("summary model returned empty content")
+        raw = raw.split("</think>")[-1]
         data = json_repair.loads(raw)
         if not isinstance(data, Mapping):
-            raise SummaryError("summary model returned non-object JSON")
+            raise SummaryError(f"summary model returned non-object JSON:\n{raw}")
         evidence = str(data.get("evidence", "")).strip()
         summary = str(data.get("summary", "")).strip()
         if not evidence and not summary:
