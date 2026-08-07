@@ -39,15 +39,115 @@ workflow:
       type: upstream
     max_tokens: 40960
     system_prompt: |
-      You are a helpful AI assistant that can search for information to answer questions accurately.
+      You are a helpful AI assistant that can use the available tools to find relevant and reliable information to answer questions accurately.
       
       When answering questions:
-      1. Use the available tools to find relevant and reliable information
-      2. Synthesize information from multiple sources when needed
-      3. Provide accurate and comprehensive answers based on your search results
-      4. Do not search the same query multiple times
-      5. Make exactly one tool call at a time
-      6. Always put your final answer in \boxed{} format
+      1. Think carefully and break down the question. Make assumptions on what you should find out to answer the question before making tool calls. Then, use search and visit tools to find out the informations.
+      2. When using search, provide concise keywords as query terms, Remove question words (why, how, does), conjunctions (and, but), and modal verbs (could, would). Keep only nouns, numbers, and technical terms, and provide relevent modifiers (e.g. comparison, 2025(dates), China(locations)).
+      3. Do not search the same query multiple times
+      4. Always visit webpages provided by search results. Visiting pages not exist in search results are STRICTLY FORBIDDEN.
+      5. Use visit tool with goal to confirm search results.
+      6. Use visit tool to get relevent information of concepts.
+      7. Provide accurate and comprehensive answers based on your search results
+      8. Always put your final answer in \boxed{} format
+
+      BEGIN OF EXAMPLE:
+
+      User: In which city, recognized for its historical significance and cultural heritage, did the individual who became a titular member of the Romanian Academy in the late 19th century and later served as a high-ranking official in the Academy's scientific section, complete his high school education before attending the medical faculty of Vienna University?
+
+      
+      Assistant:
+      To answer the question:
+      1. I need to know who is the person refered in this question
+      2. I need to know in which city did the person completed his high school education
+      3. I need to provide the city's name as the answer
+
+      Fisrt, I need to indentify the person:
+      1. Who became as a titular member of the Romanian Academy in the late 19th century
+      2. Did any of the members served as a high-ranking official in the Academy's scientific section
+      3. Did any of the members attended the medical faculty of Vienna University?
+      
+      After finding out who the person is, I need to indentify the city:
+      1. Where did the person complete his high school?
+      2. Is the city recognized for its historical significance and cultural heritage?
+
+      Finally, after indentifing the city, I need to verify all the informations and provide the city name as the answer.
+      
+      To begin with, I need to know who became as a titular member of the Romanian Academy in the late 19th century
+
+      <tool_call>{"name": "search", "arguments": {"query": "Romanian Academy  late 19th century  titular member"}}</tool_call>
+      
+
+      Tool: 
+      1. [Romanian Academy - Wikipedia](url: https://en.wikipedia.org/wiki/Romanian_Academy): The Romanian Academy is a cultural forum founded in Bucharest, Romania, in 1866. It covers the scientific, artistic and literary domains. The academy has 181 active members who are elected for life. According to its bylaws, the academy's main goals are the
+
+
+      Assistant:
+      ... the page [Romanian Academy - Wikipedia] seens useful, I will use visit tool to try to find the list of titular members in the late 19th century
+      
+      <tool_call>{"name": "visit", "arguments": {"url": "https://en.wikipedia.org/wiki/Romanian_Academy", "goal": "Find the list of titular members of the Romanian Academy in the late 19th century"}}</tool_call>
+
+
+      Tool:
+      The useful information for query Find the list of titular members of the Romanian Academy in the late 19th century as follows:
+
+      Evidence in page:
+      The founding members of the Academy:...
+      The Presidents of the Academy:...
+      Summary:
+
+      The page only provides list of founding members and presidents of the academy, no titular members provided 
+
+
+      Assistant:
+      Maybe I should find the full list of members of the Romanian Academy
+
+      <tool_call>{"name": "search", "arguments": {"query": "Romanian Academy list of members"}}</tool_call>
+
+
+      Tool:  
+      1. [List of members of the Romanian Academy](https://en.wikipedia.org/wiki/List_of_members_of_the_Romanian_Academy) This is a list of members of the Romanian Academy
+
+
+      Assistant:
+      <tool_call>{"name": "visit", "arguments": {"url": "https://en.wikipedia.org/wiki/List_of_members_of_the_Romanian_Academy", "goal": "Find the list of titular members of the Romanian Academy in the late 19th century"}}</tool_call>
+
+
+      Tool:
+      The useful information for query Find the list of titular members of the Romanian Academy in the late 19th century as follows:
+
+      Evidence in page:
+      ...
+      Summary:
+      The titular members of the Romanian Academy in the late 19th century are:
+      Mihail Kogălniceanu, Alexandru Papiu-Ilarian ...
+
+
+      Assistant:
+      ... Now I have the titular members of the Romanian Academy in the late 19th century, I should check:
+      2. Did any of the members served as a high-ranking official in the Academy's scientific section
+      3. Did any of the members attended the medical faculty of Vienna University?
+
+      <tool_call>{"name": "search", "arguments": {"query": "Mihail Kogălniceanu"}}</tool_call>
+
+
+      ...(many tool calls & responses)
+
+      
+      Assistant:
+      ... Now I've identified the person, I need to know in which city did the person completed his high school education ...
+
+
+      ...(many tool calls & responses)
+
+
+      Assistant:
+      ... I have gathered enough information, putting them together ... Note that the question is asking me about the city, NOT the person ...
+
+      According to my search results, ...
+      the answer is \boxed{Prague}
+
+      END OF EXAMPLE
       
       Remember to search thoroughly and provide your final answer clearly within the \boxed{} format. 
     # system_prompt: "You are a helpfule assistant, answer the question with tools.\n\nWhile calling the tools, avoid making identical tool calls that had been called before.\nAvoid making more than 5 tool calls in a single response, but always make more tool calls in the next turn if more information is needed.\n\nYour final answer should be in the following format:\n<answer>{{your succinct, final answer, in a few words}}</answer>\n\n"
@@ -86,13 +186,15 @@ workflow:
         title_field: title
         text_field: text
         url_field: url
-        highlight: false
+        fetch_field: url
+        highlight: true
+        highlight_number_of_fragments: 1
         snippet_chars: 8192
-        vector_search_mode: vector
+        vector_search_mode: hybrid
         embedding_prefix: |
           Instruct: Given a web search query, retrieve relevant passages that answer the query
           Query:
-        embedding_model: /home/jovyan/Qwen3-Embedding-8B
+        embedding_model: /data/hanyang_dev/models/Qwen3-Embedding-8B
         embedding_api_key: api_key
         embedding_base_url: http://${oc.env:MASTER_ADDR}:8004/v1
     tools:
@@ -110,6 +212,27 @@ workflow:
         source: [elasticsearch]
         response_char_limit: null
         raise_argument_validation_error: true
+
+      - type: visit
+        name: visit
+        description: "Visit webpage and return the summary of the content."
+        source:
+          - elasticsearch
+        inputSchema:
+          type: object
+          properties:
+            url:
+              type: string
+              description: "The URL of the webpage to visit."
+            goal:
+              type: string
+              description: "The goal of the visit for webpage(s)."
+          required:
+            - url
+            - goal
+        argument_mapping:
+          url: document_id
+        summary_goal_key: goal
         summarizer:
           model: ${actor.path}
           max_chars: 40000
@@ -146,6 +269,7 @@ eval_workflow:
     max_turn_prompt: ${workflow.agent.max_turn_prompt}
     max_tokens_prompt: ${workflow.agent.max_tokens_prompt}
     raise_repeat_tool_call: false
+    check_visit_in_search_results: false
     llm_retry_config: null
     tool_retry_config:
       max_tries: 3
@@ -163,20 +287,22 @@ eval_workflow:
         hosts: ["http://10.60.101.2:10108"]
         index: browsecomp-plus_qwen3-8b
         search_fields: ["title", "text"]
-        username: elastic
-        password: ${oc.env:ES_PASSWORD}
         es_max_concurrency: 256
         embedding_max_concurrency: 2048
+        username: elastic
+        password: ${oc.env:ES_PASSWORD}
         title_field: title
         text_field: text
         url_field: url
-        highlight: false
+        fetch_field: url
+        highlight: true
+        highlight_number_of_fragments: 1
         snippet_chars: 8192
-        vector_search_mode: vector
+        vector_search_mode: hybrid
         embedding_prefix: |
           Instruct: Given a web search query, retrieve relevant passages that answer the query
           Query:
-        embedding_model: /home/jovyan/Qwen3-Embedding-8B
+        embedding_model: /data/hanyang_dev/models/Qwen3-Embedding-8B
         embedding_api_key: api_key
         embedding_base_url: http://${oc.env:MASTER_ADDR}:8004/v1
 
@@ -194,7 +320,28 @@ eval_workflow:
           additionalProperties: false
         source: [elasticsearch]
         response_char_limit: null
-        raise_argument_validation_error: false
+        raise_argument_validation_error: true
+
+      - type: visit
+        name: visit
+        description: "Visit webpage and return the summary of the content."
+        source:
+          - elasticsearch
+        inputSchema:
+          type: object
+          properties:
+            url:
+              type: string
+              description: "The URL of the webpage to visit."
+            goal:
+              type: string
+              description: "The goal of the visit for webpage(s)."
+          required:
+            - url
+            - goal
+        argument_mapping:
+          url: document_id
+        summary_goal_key: goal
         summarizer:
           model: ${actor.path}
           max_chars: 40000
@@ -252,7 +399,7 @@ eval_gconfig:
   top_p: ${eval_workflow.agent.llm_client.default_kwargs.top_p}
 
 actor:
-  enable_igpo_reward: true
+  enable_igpo_reward: false
   # enable_tree_training: true
   # pad_to_maximum: true # Must be set to true for tree training
   weight_update_mode: xccl
@@ -275,7 +422,7 @@ actor:
     gradient_clipping: 1.0
     warmup_steps_proportion: 0
   eps_clip: 0.2
-  eps_clip_higher: 0.34
+  eps_clip_higher: 0.28
   temperature: ${gconfig.temperature}
   overlong_reward_penalty: false
   kl_ctl: 0.0

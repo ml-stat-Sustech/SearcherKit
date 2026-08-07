@@ -13,6 +13,7 @@ from searcherkit.llm.base import Client, get_client
 from searcherkit.llm.parsers import get_parser
 from searcherkit.sources import add_source_cfg
 from searcherkit.tools import build_tool
+from searcherkit.tools.base import map_arguments
 from searcherkit.tools.summarizer import Summarizer
 from searcherkit.training.config import AgentConfig
 from searcherkit.training.rewards import normalize_query
@@ -34,6 +35,10 @@ class RepeatedToolCallError(LLMError):
 class LLMContextError(LLMError):
     """Raised when the LLM request exceeds the context limit."""
     pass
+
+
+class VisitNotSearchedError(LLMError):
+    """Raised when the model visits a document absent from prior search results."""
 
 
 _AREAL_CONTEXT_LENGTH_ERROR = re.compile(
@@ -71,11 +76,17 @@ class SearchAgentTraining(SearchAgent):
     ) -> None: ...
 
     @overload
-    def __init__(self, raise_repeat_tool_call: bool = False, **kwargs) -> None: ...
+    def __init__(
+        self,
+        raise_repeat_tool_call: bool = False,
+        check_visit_in_search_results: bool = True,
+        **kwargs,
+    ) -> None: ...
 
     def __init__(
         self,
         raise_repeat_tool_call: bool = False,
+        check_visit_in_search_results: bool = True,
         *,
         config: AgentConfig | None = None,
         llm_client: Client | None = None,
@@ -131,15 +142,20 @@ class SearchAgentTraining(SearchAgent):
                     )
                 )
             self.raise_repeat_tool_call = config.raise_repeat_tool_call
+            self.check_visit_in_search_results = config.check_visit_in_search_results
             self.previous_tool_queries: set[tuple[str, str]] = set()
+            self.searched_documents: set[str] = set()
             return
         super().__init__(**kwargs)
         self.raise_repeat_tool_call = raise_repeat_tool_call
+        self.check_visit_in_search_results = check_visit_in_search_results
         self.previous_tool_queries: set[tuple[str, str]] = set()
+        self.searched_documents: set[str] = set()
 
     def reset(self):
         super().reset()
         self.previous_tool_queries = set()
+        self.searched_documents = set()
 
     async def parse_and_call_llm(self, history: list[ChatMessage]):
         try:
@@ -156,6 +172,24 @@ class SearchAgentTraining(SearchAgent):
         for tc in tool_calls_list:
             if tc.name not in self.tool_dict:
                 raise LLMError(f"Tool {tc.name} not found")
+            if tc.name == "visit" and self.check_visit_in_search_results:
+                # ToolCall arguments use model-visible names. Apply the same
+                # mapping as BaseTool.run before enforcing the visit policy.
+                mapped_arguments = map_arguments(
+                    tc.arguments,
+                    self.tool_dict[tc.name].argument_mapping,
+                )
+                document = mapped_arguments.get("document_id")
+                documents = document if isinstance(document, list) else [document]
+                not_searched = [
+                    item
+                    for item in documents
+                    if not isinstance(item, str) or item not in self.searched_documents
+                ]
+                if not_searched:
+                    raise VisitNotSearchedError(
+                        f"Visit targets were not returned by a prior search: {not_searched!r}"
+                    )
             if isinstance(tc.arguments, dict) and "query" in tc.arguments:
                 argument_str = normalize_query(tc.arguments["query"])
             else:
@@ -167,4 +201,18 @@ class SearchAgentTraining(SearchAgent):
                     )
             else:
                 self.previous_tool_queries.add((tc.name, argument_str))
-        return await super().call_tools(tool_calls_list)
+        results = await super().call_tools(tool_calls_list)
+        for tool_call, (_, extensions) in zip(tool_calls_list, results, strict=True):
+            if tool_call.name != "search":
+                continue
+            documents = extensions.get("documents", [])
+            if not isinstance(documents, list):
+                continue
+            for document in documents:
+                if not isinstance(document, dict):
+                    continue
+                for key in ("id", "url"):
+                    value = document.get(key)
+                    if isinstance(value, str):
+                        self.searched_documents.add(value)
+        return results

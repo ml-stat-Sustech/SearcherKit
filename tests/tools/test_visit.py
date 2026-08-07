@@ -14,7 +14,7 @@ import respx
 from searcherkit.common.retry import RetryConfig, RetryPolicy
 from searcherkit.common.errors import RecoverableError
 from searcherkit.llm.openai_client import OpenAIClient
-from searcherkit.sources import SourceConfig, add_source_cfg
+from searcherkit.sources import DataSource, Document, SourceConfig, add_source_cfg
 from searcherkit.sources.file import FileSource
 from searcherkit.tools import SummarizerConfig, ToolConfig, build_tool
 from searcherkit.tools.summarizer import Summarizer
@@ -219,6 +219,32 @@ def test_missing_document_returns_error_message(
         )
 
         assert content == "[Tool] file document not found: 'missing'"
+        assert extensions == {}
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("multi_source", [False, True])
+def test_key_error_returns_error_message(multi_source: bool) -> None:
+    class MissingSource(DataSource):
+        async def fetch(
+            self,
+            document_id: str,
+            *,
+            goal: str | None = None,
+        ) -> Document:
+            raise KeyError(document_id)
+
+    async def run() -> None:
+        source = MissingSource(config=SourceConfig())
+        tool = VisitTool({"documents": source} if multi_source else source, name="visit")
+
+        kwargs = {"document_id": "missing"}
+        if multi_source:
+            kwargs["source"] = "documents"
+        content, extensions = await tool.run(**kwargs)
+
+        assert content == "[Tool] Document not found: missing"
         assert extensions == {}
 
     asyncio.run(run())

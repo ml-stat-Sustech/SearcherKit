@@ -39,6 +39,9 @@ _ELASTICSEARCH_ERRORS = tuple(
     )
     if isinstance(exc, type)
 )
+_ELASTICSEARCH_NOT_FOUND_ERRORS = (
+    (NotFoundError,) if isinstance(NotFoundError, type) else ()
+)
 
 _OPENAI_ERRORS: tuple[type[Exception], ...] = ()
 SUMMARY_FALLBACK_CHARS = 4096
@@ -108,6 +111,7 @@ class ElasticsearchSource(DataSource):
         highlight: bool = True,
         highlight_fragment_size: int = 256,
         highlight_number_of_fragments: int = 5,
+        highlight_max_analyzed_offset: int = 999_999,
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         es_max_concurrency: int | None = None,
@@ -143,6 +147,7 @@ class ElasticsearchSource(DataSource):
         highlight: bool = True,
         highlight_fragment_size: int = 256,
         highlight_number_of_fragments: int = 5,
+        highlight_max_analyzed_offset: int = 999_999,
         snippet_chars: int = 512,
         request_timeout: float | None = None,
         es_max_concurrency: int | None = None,
@@ -177,6 +182,7 @@ class ElasticsearchSource(DataSource):
             highlight = config.highlight
             highlight_fragment_size = config.highlight_fragment_size
             highlight_number_of_fragments = config.highlight_number_of_fragments
+            highlight_max_analyzed_offset = config.highlight_max_analyzed_offset
             snippet_chars = config.snippet_chars
             request_timeout = request_timeout or config.request_timeout
             if es_max_concurrency is None:
@@ -204,6 +210,8 @@ class ElasticsearchSource(DataSource):
             raise ValueError("highlight_fragment_size must be positive")
         if highlight_number_of_fragments < 0:
             raise ValueError("highlight_number_of_fragments must be non-negative")
+        if highlight_max_analyzed_offset <= 0:
+            raise ValueError("highlight_max_analyzed_offset must be positive")
         if snippet_chars <= 0:
             raise ValueError("snippet_chars must be positive")
         _validate_max_concurrency("es_max_concurrency", es_max_concurrency)
@@ -240,6 +248,7 @@ class ElasticsearchSource(DataSource):
         self.highlight = highlight
         self.highlight_fragment_size = highlight_fragment_size
         self.highlight_number_of_fragments = highlight_number_of_fragments
+        self.highlight_max_analyzed_offset = highlight_max_analyzed_offset
         self.snippet_chars = snippet_chars
         self.request_timeout = request_timeout
         self._es_semaphore = _build_semaphore(es_max_concurrency)
@@ -334,6 +343,13 @@ class ElasticsearchSource(DataSource):
                     index=self.index,
                     id=document_id,
                 )
+        except _ELASTICSEARCH_NOT_FOUND_ERRORS as exc:
+            body = getattr(exc, "body", None)
+            if isinstance(body, Mapping) and body.get("found") is False:
+                raise KeyError(f"document not found: {document_id}") from exc
+            raise SourceError(
+                f"failed to fetch Elasticsearch document {document_id!r}"
+            ) from exc
         except _ELASTICSEARCH_ERRORS as exc:
             raise SourceError(f"failed to fetch Elasticsearch document {document_id!r}") from exc
         return self._document_from_hit(hit)
@@ -347,6 +363,7 @@ class ElasticsearchSource(DataSource):
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "size": top_k,
+            "_source": {"includes": self._source_fields()},
             "query": {
                 "multi_match": {
                     "query": query,
@@ -367,6 +384,7 @@ class ElasticsearchSource(DataSource):
                 body.pop("query")
         if self.highlight:
             body["highlight"] = {
+                "max_analyzed_offset": self.highlight_max_analyzed_offset,
                 "fields": {
                     self.text_field: {
                         "fragment_size": self.highlight_fragment_size,
@@ -375,6 +393,12 @@ class ElasticsearchSource(DataSource):
                 }
             }
         return body
+
+    def _source_fields(self) -> list[str]:
+        fields = [self.title_field, self.text_field, self.url_field, *self.metadata_fields]
+        if self.document_id_field:
+            fields.append(self.document_id_field)
+        return list(dict.fromkeys(fields))
 
     @property
     def _uses_vector_search(self) -> bool:

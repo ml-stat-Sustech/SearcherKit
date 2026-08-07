@@ -169,8 +169,6 @@ class VisitTool(BaseTool):
                 return f"[Tool] {e}", {}
             raise RecoverableError(str(e)) from e
         except KeyError as e:
-            if self.source_map is not None:
-                raise RecoverableError(f"Document not found: {document_id}") from e
             return f"[Tool] Document not found: {document_id}", {}
         ret = []
         for document in documents:

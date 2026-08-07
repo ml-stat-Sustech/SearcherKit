@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from jsonschema import ValidationError
 from transformers import AutoTokenizer
 
 from areal import workflow_context
@@ -21,6 +20,7 @@ from searcherkit.training.agent import (
     SearchAgentTraining,
     TooManyToolCallsError,
     LLMContextError,
+    VisitNotSearchedError,
 )
 from searcherkit.training.areal.client import ARealClient
 from searcherkit.training.areal.termination import TerminationReason
@@ -29,7 +29,6 @@ from searcherkit.training.areal.rewards import (
     assign_overlong_penalty,
     count_tool_calls,
     f1_score,
-    searcherkit_reward_components,
 )
 
 logger = get_logger(__name__)
@@ -87,6 +86,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
         context_error = False
         repeated_query = False
         too_many_tool_call = False
+        visit_not_searched = False
         try:
             agent.reset()
             await agent.run(data["question"])
@@ -100,6 +100,8 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
                 repeated_query = True
             elif isinstance(exc, TooManyToolCallsError):
                 too_many_tool_call = True
+            elif isinstance(exc, VisitNotSearchedError):
+                visit_not_searched = True
             elif isinstance(exc, ParsingError):
                 pass
         finally:
@@ -107,6 +109,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             stats.scalar(context_error=float(context_error))
             stats.scalar(repeated_query=float(repeated_query))
             stats.scalar(too_many_tool_call=float(too_many_tool_call))
+            stats.scalar(visit_not_searched=float(visit_not_searched))
 
         history = agent.history
 
@@ -164,7 +167,7 @@ class ARealSearchAgentWorkflow(RolloutWorkflow):
             outcome_score=outcome_score,
         )
 
-        final_reward = outcome_score + overlong_penalty
+        final_reward = 0.0 if format_error else outcome_score + overlong_penalty
         termination_reason = TerminationReason.NORMAL if not format_error else TerminationReason.BAD_LAST_TURN
 
         stats_tracker.get(workflow_context.stat_scope()).scalar(reward=final_reward)

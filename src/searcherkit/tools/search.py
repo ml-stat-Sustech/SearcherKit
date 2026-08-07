@@ -157,7 +157,7 @@ class SearchTool(BaseTool):
         *,
         query: str | list[str],
         source: str | None = None,
-        top_k: int = 10,
+        top_k: int = 5,
     ) -> tuple[str, dict[str, object]]:
         """Search the configured data source."""
         selected_source = self.source

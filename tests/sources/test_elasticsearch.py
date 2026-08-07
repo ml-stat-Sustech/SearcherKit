@@ -194,8 +194,12 @@ def test_search(source_factory: Callable[[], DataSource]) -> None:
                 request = mocked.requests[("POST", URL(search_url))][0]
                 body = json.loads(request.kwargs["data"])
                 assert body["size"] == 3
+                assert body["_source"] == {
+                    "includes": ["title", "text", "url", "links"]
+                }
                 assert body["query"]["multi_match"]["query"] == "runtime"
                 assert body["highlight"] == {
+                    "max_analyzed_offset": 999_999,
                     "fields": {"text": {"fragment_size": 256, "number_of_fragments": 5}}
                 }
                 assert results[0].document.id == "doc-1"
@@ -203,6 +207,32 @@ def test_search(source_factory: Callable[[], DataSource]) -> None:
                 assert results[0].document.metadata == {"links": ["https://example.test/next"]}
                 assert results[0].snippet == "pluggable runtime"
                 assert results[0].score == 1.5
+        finally:
+            await source.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("source_factory", [_direct_url_source, _config_url_source])
+def test_search_source_filter_includes_custom_document_and_metadata_fields(
+    source_factory: Callable[[], DataSource],
+) -> None:
+    search_url = f"{BASE_URL}/{INDEX}/_search"
+
+    async def run() -> None:
+        source = source_factory()
+        try:
+            with aioresponses() as mocked:
+                mocked.post(search_url, payload=_search_response(), headers=_elastic_headers())
+
+                await source.search("runtime")
+
+                request = mocked.requests[("POST", URL(search_url))][0]
+                body = json.loads(request.kwargs["data"])
+                assert body["_source"] == {
+                    "includes": ["title", "text", "url", "links"]
+                }
+                assert "text_vector" not in body["_source"]["includes"]
         finally:
             await source.close()
 
@@ -232,6 +262,30 @@ def test_fetch_by_field(source_factory: Callable[[], DataSource]) -> None:
                 assert document.url == document_url
                 assert document.title == "SearcherKit"
                 assert document.metadata == {"links": ["https://example.test/next"]}
+        finally:
+            await source.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("source_factory", [_direct_url_source, _config_url_source])
+def test_fetch_by_field_raises_key_error_when_missing(
+    source_factory: Callable[[], DataSource],
+) -> None:
+    search_url = f"{BASE_URL}/{INDEX}/_search"
+
+    async def run() -> None:
+        source = source_factory()
+        try:
+            with aioresponses() as mocked:
+                mocked.post(
+                    search_url,
+                    payload={"hits": {"hits": []}},
+                    headers=_elastic_headers(),
+                )
+
+                with pytest.raises(KeyError, match="document not found: missing"):
+                    await source.fetch("missing")
         finally:
             await source.close()
 
@@ -271,6 +325,7 @@ def test_hybrid_search_with_highlight(source_factory: Callable[..., DataSource])
                     "num_candidates": 2,
                 }
                 assert body["highlight"] == {
+                    "max_analyzed_offset": 999_999,
                     "fields": {"text": {"fragment_size": 256, "number_of_fragments": 5}}
                 }
                 assert results[0].document.id == "doc-1"
@@ -325,6 +380,65 @@ def test_fetch(source_factory: Callable[[], DataSource]) -> None:
                 assert document.title == "Fetched"
                 assert document.text == "full document text"
                 assert document.url == "https://example.test/fetched"
+        finally:
+            await source.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("source_factory", [_direct_source, _config_source])
+def test_fetch_raises_key_error_when_document_is_missing(
+    source_factory: Callable[[], DataSource],
+) -> None:
+    fetch_url = f"{BASE_URL}/{INDEX}/_doc/missing"
+
+    async def run() -> None:
+        source = source_factory()
+        try:
+            with aioresponses() as mocked:
+                mocked.get(
+                    fetch_url,
+                    status=404,
+                    payload={"found": False, "_index": INDEX, "_id": "missing"},
+                    headers=_elastic_headers(),
+                )
+
+                with pytest.raises(KeyError, match="document not found: missing"):
+                    await source.fetch("missing")
+        finally:
+            await source.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("source_factory", [_direct_source, _config_source])
+def test_fetch_raises_source_error_when_index_is_missing(
+    source_factory: Callable[[], DataSource],
+) -> None:
+    fetch_url = f"{BASE_URL}/{INDEX}/_doc/doc-1"
+
+    async def run() -> None:
+        source = source_factory()
+        try:
+            with aioresponses() as mocked:
+                mocked.get(
+                    fetch_url,
+                    status=404,
+                    payload={
+                        "error": {
+                            "type": "index_not_found_exception",
+                            "reason": f"no such index [{INDEX}]",
+                        },
+                        "status": 404,
+                    },
+                    headers=_elastic_headers(),
+                )
+
+                with pytest.raises(
+                    SourceError,
+                    match="failed to fetch Elasticsearch document 'doc-1'",
+                ):
+                    await source.fetch("doc-1")
         finally:
             await source.close()
 

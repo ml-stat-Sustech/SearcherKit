@@ -76,6 +76,7 @@ class SourceConfig:
     highlight: bool = True
     highlight_fragment_size: int = 256
     highlight_number_of_fragments: int = 5
+    highlight_max_analyzed_offset: int = 999_999
     snippet_chars: int = 512
     request_timeout: float | None = None
     es_max_concurrency: int | None = None

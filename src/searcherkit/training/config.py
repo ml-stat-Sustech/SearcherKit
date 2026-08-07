@@ -8,6 +8,7 @@ from searcherkit.agent import SearchAgentConfig
 @dataclass
 class AgentConfig(SearchAgentConfig):
     raise_repeat_tool_call: bool = field(default=True)
+    check_visit_in_search_results: bool = field(default=True)
 
 
 @dataclass

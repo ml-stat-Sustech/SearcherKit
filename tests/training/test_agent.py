@@ -1,11 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
 from searcherkit.agent.search_agent import SearchAgent
-from searcherkit.training.agent import LLMContextError, SearchAgentTraining
+from searcherkit.common.messages import ToolCall
+from searcherkit.training.agent import (
+    LLMContextError,
+    SearchAgentTraining,
+    VisitNotSearchedError,
+)
+from searcherkit.training.config import AgentConfig
+
+
+def test_agent_config_enables_visit_search_result_check_by_default() -> None:
+    assert AgentConfig().check_visit_in_search_results is True
 
 
 def test_parse_and_call_llm_converts_areal_context_length_error(
@@ -103,3 +114,134 @@ def test_parse_and_call_llm_preserves_unrelated_areal_runtime_error(
         assert exc_info.value is error
 
     asyncio.run(exercise())
+
+
+def test_call_tools_allows_documents_returned_by_prior_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = SearchAgentTraining.__new__(SearchAgentTraining)
+    agent.tool_dict = {
+        "search": SimpleNamespace(argument_mapping={}),
+        "visit": SimpleNamespace(argument_mapping={"link": "document_id"}),
+    }
+    agent.previous_tool_queries = set()
+    agent.searched_documents = set()
+    agent.check_visit_in_search_results = True
+
+    async def call_tools(
+        self: SearchAgent,
+        tool_calls: list[ToolCall],
+    ) -> list[tuple[str, dict[str, object]]]:
+        if tool_calls[0].name == "search":
+            return [
+                (
+                    "result",
+                    {
+                        "documents": [
+                            {"id": "doc-1", "url": "https://example.com/doc-1"}
+                        ]
+                    },
+                )
+            ]
+        return [("visited", {})]
+
+    monkeypatch.setattr(SearchAgent, "call_tools", call_tools)
+
+    async def exercise() -> None:
+        await agent.call_tools(
+            [ToolCall(name="search", arguments={"query": "example"})]
+        )
+        result = await agent.call_tools(
+            [
+                ToolCall(
+                    name="visit",
+                    arguments={"link": "https://example.com/doc-1"},
+                )
+            ]
+        )
+        assert result == [("visited", {})]
+
+    asyncio.run(exercise())
+
+
+def test_call_tools_rejects_visit_absent_from_prior_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = SearchAgentTraining.__new__(SearchAgentTraining)
+    agent.tool_dict = {
+        "visit": SimpleNamespace(argument_mapping={"link": "document_id"})
+    }
+    agent.previous_tool_queries = set()
+    agent.searched_documents = set()
+    agent.check_visit_in_search_results = True
+    called = False
+
+    async def call_tools(
+        self: SearchAgent,
+        tool_calls: list[ToolCall],
+    ) -> list[tuple[str, dict[str, object]]]:
+        nonlocal called
+        called = True
+        return [("visited", {})]
+
+    monkeypatch.setattr(SearchAgent, "call_tools", call_tools)
+
+    async def exercise() -> None:
+        with pytest.raises(VisitNotSearchedError, match="not returned"):
+            await agent.call_tools(
+                [
+                    ToolCall(
+                        name="visit",
+                        arguments={"link": "https://example.com/unsearched"},
+                    )
+                ]
+            )
+
+    asyncio.run(exercise())
+    assert called is False
+
+
+def test_call_tools_allows_unsearched_visit_when_check_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = SearchAgentTraining.__new__(SearchAgentTraining)
+    agent.tool_dict = {
+        "visit": SimpleNamespace(argument_mapping={"link": "document_id"})
+    }
+    agent.previous_tool_queries = set()
+    agent.searched_documents = set()
+    agent.check_visit_in_search_results = False
+
+    async def call_tools(
+        self: SearchAgent,
+        tool_calls: list[ToolCall],
+    ) -> list[tuple[str, dict[str, object]]]:
+        return [("visited", {})]
+
+    monkeypatch.setattr(SearchAgent, "call_tools", call_tools)
+
+    async def exercise() -> None:
+        result = await agent.call_tools(
+            [
+                ToolCall(
+                    name="visit",
+                    arguments={"link": "https://example.com/unsearched"},
+                )
+            ]
+        )
+        assert result == [("visited", {})]
+
+    asyncio.run(exercise())
+
+
+def test_reset_clears_searched_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    agent = SearchAgentTraining.__new__(SearchAgentTraining)
+    agent.searched_documents = {"https://example.com/doc-1"}
+    agent.previous_tool_queries = {("search", "example")}
+
+    monkeypatch.setattr(SearchAgent, "reset", lambda self: None)
+
+    agent.reset()
+
+    assert agent.searched_documents == set()
+    assert agent.previous_tool_queries == set()
