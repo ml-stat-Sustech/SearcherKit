@@ -106,7 +106,6 @@ class FileSource(DataSource):
             proc = await asyncio.create_subprocess_exec(
                 "rg",
                 "--json",
-                "--fixed-strings",
                 "--smart-case",
                 "--line-number",
                 "--",

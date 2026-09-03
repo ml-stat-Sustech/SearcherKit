@@ -751,10 +751,8 @@ class SearchAgent(BaseAgent):
                                 self.max_tokens_prompt_margin,
                             )
                             self.history.append(new_call_result)
-                            first_tool_call_id = next(iter(new_tool_results.tool_responses))
-                            new_tool_results.tool_responses = {
-                                first_tool_call_id: self.max_tokens_prompt
-                            }
+                            last_tool_call_id = next(reversed(new_tool_results.tool_responses))
+                            new_tool_results.tool_responses[last_tool_call_id] = self.max_tokens_prompt
                             self.history.append(new_tool_results)
                             self.max_token_reminder_prompted = True
                             continue
@@ -766,10 +764,8 @@ class SearchAgent(BaseAgent):
                             )
                             self.history.append(new_call_result)
                             # self.history.append(user(self.max_turn_prompt))
-                            first_tool_call_id = next(iter(new_tool_results.tool_responses))
-                            new_tool_results.tool_responses = {
-                                first_tool_call_id: self.max_turn_prompt
-                            }
+                            last_tool_call_id = next(reversed(new_tool_results.tool_responses))
+                            new_tool_results.tool_responses[last_tool_call_id] = self.max_turn_prompt
                             self.history.append(new_tool_results)
                             self.max_turn_reminder_prompted = True
                             continue
